@@ -11,3 +11,4 @@ pyvis==0.3.2            # Graph visualization
 torch==2.0.1            # PyTorch (for GPU acceleration)
 scipy==1.11.2           # Scientific computation
 matplotlib==3.7.2       # Plotting capabilities
+sentence-transformers   # Sentence embeddings for graph search

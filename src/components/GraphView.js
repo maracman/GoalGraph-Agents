@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { fetchAgentGraphs, visualizeGraph } from '../services/api';
+import { useSession } from '../contexts/SessionContext';
 
-const GraphView = ({ sessionId, agentData }) => {
+const GraphView = () => {
+  const { sessionId, sessionState } = useSession();
+  const agentData = sessionState.agentData;
   const [agents, setAgents] = useState([]);
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [graphUrl, setGraphUrl] = useState('');
@@ -19,8 +22,8 @@ const GraphView = ({ sessionId, agentData }) => {
       
       // Select the first agent by default if there's no selection and agents are available
       if (!selectedAgentId && graphData.length > 0) {
-        setSelectedAgentId(graphData[0].agent_id);
-        loadGraph(graphData[0].agent_id);
+        setSelectedAgentId(graphData[0].id);
+        loadGraph(graphData[0].id);
       }
     } catch (error) {
       console.error("Error loading agent graphs:", error);
@@ -64,8 +67,8 @@ const GraphView = ({ sessionId, agentData }) => {
           >
             <option value="" disabled>Select an agent</option>
             {agents.map((agent) => (
-              <option key={agent.agent_id} value={agent.agent_id}>
-                {agent.agent_name}
+              <option key={agent.id} value={agent.id}>
+                {agent.name}
               </option>
             ))}
           </select>

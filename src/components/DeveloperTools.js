@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { fetchLogs, debugSession } from '../services/api';
 import { RefreshCw, Download, Trash } from 'lucide-react';
+import { useSession } from '../contexts/SessionContext';
 
-const DeveloperTools = ({ sessionId }) => {
+const DeveloperTools = () => {
+  const { sessionId } = useSession();
   const [logs, setLogs] = useState([]);
   const [sessionDebugInfo, setSessionDebugInfo] = useState({});
   const [lastLogTimestamp, setLastLogTimestamp] = useState(0);

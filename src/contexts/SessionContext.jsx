@@ -45,8 +45,7 @@ export const SessionProvider = ({ children, initialSessionId }) => {
         // If no session ID is provided, fetch one
         let currentSessionId = sessionId;
         if (!currentSessionId) {
-          const response = await fetchSessionId();
-          currentSessionId = response.session_id;
+          currentSessionId = await fetchSessionId();
           setSessionId(currentSessionId);
         }
         
@@ -134,33 +133,35 @@ export const SessionProvider = ({ children, initialSessionId }) => {
   // Generate agent responses
   const generateAgentResponses = async () => {
     try {
-      while (sessionState.isPlaying) {
+      let keepGoing = true;
+      while (keepGoing) {
         const response = await generateResponse();
-        
+
         if (response.error) {
           console.error("Generation error:", response.error);
           setSessionState(prev => ({ ...prev, isPlaying: false }));
           break;
         }
-        
+
         if (response.complete) {
           setSessionState(prev => ({ ...prev, isPlaying: false }));
           break;
         }
-        
+
+        keepGoing = response.play === true;
+
         setSessionState(prev => ({
           ...prev,
           history: response.history || prev.history,
-          isPlaying: response.play,
+          isPlaying: keepGoing,
           currentGeneration: response.current_generation,
           maxGenerations: response.max_generations
         }));
-        
-        if (!response.play) {
+
+        if (!keepGoing) {
           break;
         }
-        
-        // Small delay to avoid hammering the server
+
         await new Promise(resolve => setTimeout(resolve, 100));
       }
     } catch (err) {

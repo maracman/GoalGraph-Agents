@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Play, Pause, ChevronDown, PlusCircle, RefreshCw, Copy, Trash } from 'lucide-react';
 import { submitMessage, generateResponse, interruptTask } from '../services/api';
+import { useSession } from '../contexts/SessionContext';
 
-const ChatInterface = ({ sessionId, sessionState, setSessionState }) => {
+const ChatInterface = () => {
+  const { sessionId, sessionState, setSessionState } = useSession();
   const [userMessage, setUserMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -60,32 +62,35 @@ const ChatInterface = ({ sessionId, sessionState, setSessionState }) => {
   
   const generateAgentResponses = async () => {
     try {
-      while (sessionState.isPlaying) {
+      let keepGoing = true;
+      while (keepGoing) {
         const response = await generateResponse();
-        
+
         if (response.error) {
           console.error("Generation error:", response.error);
           setSessionState(prev => ({ ...prev, isPlaying: false }));
           break;
         }
-        
+
         if (response.complete) {
           setSessionState(prev => ({ ...prev, isPlaying: false }));
           break;
         }
-        
+
+        keepGoing = response.play === true;
+
         setSessionState(prev => ({
           ...prev,
           history: response.history || prev.history,
-          isPlaying: response.play,
+          isPlaying: keepGoing,
           currentGeneration: response.current_generation,
           maxGenerations: response.max_generations
         }));
-        
-        if (!response.play) {
+
+        if (!keepGoing) {
           break;
         }
-        
+
         // Small delay to avoid hammering the server
         await new Promise(resolve => setTimeout(resolve, 100));
       }

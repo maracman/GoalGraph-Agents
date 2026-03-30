@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Save, Trash } from 'lucide-react';
 import { fetchAgents, saveAgentSettings, deleteAgent, addNewAgent } from '../services/api';
+import { useSession } from '../contexts/SessionContext';
 
-const AgentSettings = ({ sessionId, sessionState, setSessionState }) => {
+const AgentSettings = () => {
+  const { sessionId, sessionState, setSessionState } = useSession();
   const [agents, setAgents] = useState([]);
   const [selectedAgentIndex, setSelectedAgentIndex] = useState(0);
   const [formData, setFormData] = useState({

@@ -2,6 +2,37 @@
 JSON schema definitions for validating agent and session data.
 """
 
+# Schema for the LLM judge that reviews subgoal progress
+json_schema_review_goal = {
+    "type": "object",
+    "properties": {
+        "rating": {"type": "integer", "minimum": 1, "maximum": 7},
+        "justification": {"type": "string"},
+        "suggestion": {"type": "string"}
+    },
+    "required": ["rating", "justification", "suggestion"]
+}
+
+# Schema for generating new subgoals
+json_schema_new_subgoal = {
+    "type": "object",
+    "properties": {
+        "new_subgoal": {"type": "string"},
+        "planned_action": {"type": "string"}
+    },
+    "required": ["new_subgoal", "planned_action"]
+}
+
+# Schema for agent responses with optional narration
+json_schema_response = {
+    "type": "object",
+    "properties": {
+        "agent_response": {"type": "string"},
+        "narration": {"type": "string"}
+    },
+    "required": ["agent_response"]
+}
+
 json_schemas = {
     "agent": {
         "type": "object",

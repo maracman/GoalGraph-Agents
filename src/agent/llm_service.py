@@ -15,7 +15,7 @@ logger = logging.getLogger('llm_service_logger')
 
 # Default configuration
 DEFAULT_CONFIG = {
-    'provider': 'openai',  # Default to OpenAI instead of local
+    'provider': 'openai',
     'model': None,
     'temperature': 0.7,
     'max_tokens': 150,
@@ -26,31 +26,57 @@ DEFAULT_CONFIG = {
     'fallback_enabled': True
 }
 
+# Known models per provider
+PROVIDER_MODELS = {
+    'openai': [
+        {'id': 'gpt-4o', 'name': 'GPT-4o'},
+        {'id': 'gpt-4o-mini', 'name': 'GPT-4o Mini'},
+        {'id': 'gpt-4-turbo', 'name': 'GPT-4 Turbo'},
+        {'id': 'gpt-3.5-turbo', 'name': 'GPT-3.5 Turbo'},
+    ],
+    'anthropic': [
+        {'id': 'claude-sonnet-4-20250514', 'name': 'Claude Sonnet 4'},
+        {'id': 'claude-3-5-sonnet-20241022', 'name': 'Claude 3.5 Sonnet'},
+        {'id': 'claude-3-5-haiku-20241022', 'name': 'Claude 3.5 Haiku'},
+    ],
+    'cohere': [
+        {'id': 'command-r-plus', 'name': 'Command R+'},
+        {'id': 'command-r', 'name': 'Command R'},
+    ],
+    'huggingface': [
+        {'id': 'mistralai/Mistral-7B-Instruct-v0.2', 'name': 'Mistral 7B Instruct'},
+    ],
+    'local': [
+        {'id': 'local', 'name': 'Local GGUF Model'},
+    ]
+}
+
 LOCAL_MODELS = {}
 
 
 class LLMService:
     """Service for interacting with various LLM providers with graceful fallbacks"""
-    
+
     def __init__(self, config=None):
         """Initialize the LLM service with the given configuration."""
         self.config = {**DEFAULT_CONFIG, **(config or {})}
         self.api_keys = {}
         self.provider = self.config['provider']
-        
+        self.local_model_path = None
+        self.local_model_filename = None
+
         # Try to load local model support - don't fail if not available
         self.has_local_support = False
         try:
-            import torch
             import llama_cpp
             self.has_local_support = True
             logger.info("Local model support is available")
         except ImportError:
             logger.info("Local model support is not available - will use API providers only")
-        
+
         # Load API keys from environment variables
         self._load_api_keys_from_env()
-    
+
     def _load_api_keys_from_env(self):
         """Load API keys from environment variables."""
         providers = ['openai', 'anthropic', 'cohere', 'huggingface']
@@ -59,27 +85,61 @@ class LLMService:
             if env_var in os.environ:
                 self.api_keys[provider] = os.environ[env_var]
                 logger.info(f"Loaded API key for {provider}")
-    
+
+    def set_provider(self, provider: str):
+        """Set the active LLM provider."""
+        self.provider = provider
+        logger.info(f"Provider set to: {provider}")
+
+    def set_api_key(self, provider: str, api_key: str):
+        """Set an API key for a provider."""
+        self.api_keys[provider] = api_key
+        logger.info(f"API key set for {provider}")
+
+    def list_models(self, provider: str = None) -> List[Dict[str, str]]:
+        """List available models for a provider."""
+        provider = provider or self.provider
+        return PROVIDER_MODELS.get(provider, [])
+
+    def make_api_request(self, url: str, data: Dict[str, Any], headers: Dict[str, str]) -> Dict[str, Any]:
+        """Make an API request with retry logic."""
+        retries = self.config.get('retries', 2)
+        retry_delay = self.config.get('retry_delay', 1)
+        timeout = self.config.get('timeout', 60)
+
+        last_error = None
+        for attempt in range(retries + 1):
+            try:
+                response = requests.post(url, json=data, headers=headers, timeout=timeout)
+                response.raise_for_status()
+                return response.json()
+            except requests.exceptions.RequestException as e:
+                last_error = e
+                logger.warning(f"API request attempt {attempt + 1} failed: {str(e)}")
+                if attempt < retries:
+                    time.sleep(retry_delay)
+
+        raise Exception(f"API request failed after {retries + 1} attempts: {str(last_error)}")
+
     def complete(self, prompt: Union[str, List[Dict[str, str]]], options: Dict[str, Any] = None) -> str:
         """Generate a completion with automatic fallback handling."""
         options = options or {}
         provider = options.get('provider', self.provider)
-        
+
         # Handle local model case
         if provider == 'local':
             if not self.has_local_support:
                 logger.warning("Local model support not available - falling back to API provider")
-                provider = 'openai'  # Fallback to OpenAI
+                provider = 'openai'
                 options['provider'] = provider
             else:
                 return self.complete_with_local_model(prompt, options)
-        
+
         try:
             return self.complete_with_api(prompt, options)
         except Exception as e:
             logger.error(f"Error with provider {provider}: {str(e)}")
             if self.config['fallback_enabled']:
-                # Try alternative providers
                 alternative_providers = ['openai', 'anthropic', 'cohere']
                 for alt_provider in alternative_providers:
                     if alt_provider != provider and alt_provider in self.api_keys:
@@ -89,90 +149,79 @@ class LLMService:
                             return self.complete_with_api(prompt, options)
                         except Exception as fallback_error:
                             logger.error(f"Fallback to {alt_provider} failed: {str(fallback_error)}")
-                
-                # If all API providers fail and local support is available, try local
+
                 if self.has_local_support:
                     try:
                         logger.info("Attempting fallback to local model")
                         return self.complete_with_local_model(prompt, options)
                     except Exception as local_error:
                         logger.error(f"Fallback to local model failed: {str(local_error)}")
-            
-            # If all fallbacks fail or fallbacks are disabled
+
             raise Exception(f"Failed to generate completion with all available providers: {str(e)}")
-    
+
     def complete_with_api(self, prompt: Union[str, List[Dict[str, str]]], options: Dict[str, Any]) -> str:
         """Generate a completion using an API provider."""
         provider = options.get('provider', self.provider)
-        
-        # Format the API request
-        url = f"{self.get_base_url(provider)}"
+
+        url = self.get_base_url(provider)
         headers = self.create_headers(provider)
         data = self.format_request(prompt, options)
-        
-        # Make API request with retry logic
+
         response = self.make_api_request(url, data, headers)
-        
-        # Parse and return the response
+
         return self.parse_response(response, provider)
-    
+
     def complete_with_local_model(self, prompt: str, options: Dict[str, Any]) -> str:
         """Generate a completion using a local model."""
         model_path = options.get('model_path', self.local_model_path)
         model_file = options.get('model_file', self.local_model_filename)
-        
+
         if not model_file:
-            # Find any .gguf file in the model path
-            from pathlib import Path
             model_files = list(Path(model_path).glob("*.gguf"))
             if not model_files:
                 raise ValueError(f"No GGUF model files found in {model_path}")
             model_file = str(model_files[0])
         else:
             model_file = os.path.join(model_path, model_file)
-        
-        # Check if model exists
+
         if not os.path.exists(model_file):
             raise FileNotFoundError(f"Model file not found: {model_file}")
-        
+
         try:
             import llama_cpp
-            import torch
-            
-            # Use cached model or create a new one
+
             model_key = model_file
             if model_key not in LOCAL_MODELS:
                 logger.info(f"Loading local model: {model_file}")
-                
-                # Settings for llama-cpp-python
+
                 model_kwargs = {
                     'model_path': model_file,
                     'n_ctx': 2048,
                     'n_batch': 512,
-                    'n_gpu_layers': 0  # CPU only by default
+                    'n_gpu_layers': 0
                 }
-                
-                # Use GPU if requested and available
-                if options.get('use_gpu', False) and torch.cuda.is_available():
-                    model_kwargs['n_gpu_layers'] = -1  # Use all layers on GPU
-                    logger.info("Using GPU for local model inference")
-                
+
+                try:
+                    import torch
+                    if options.get('use_gpu', False) and torch.cuda.is_available():
+                        model_kwargs['n_gpu_layers'] = -1
+                        logger.info("Using GPU for local model inference")
+                except ImportError:
+                    pass
+
                 LOCAL_MODELS[model_key] = llama_cpp.Llama(**model_kwargs)
-            
+
             model = LOCAL_MODELS[model_key]
-            
-            # Extract parameters from options
+
             max_tokens = options.get('max_tokens', 150)
             temperature = options.get('temperature', 0.7)
             top_p = options.get('top_p', 0.9)
             stop = options.get('stop', [])
-            
-            # Format the prompt properly
-            request_data = self.format_request(prompt, options)
-            prompt_text = request_data['prompt']
-            
+
+            prompt_text = prompt if isinstance(prompt, str) else json.dumps(prompt)
+
             logger.info(f"Generating completion with local model, prompt length: {len(prompt_text)}")
-            
+
             result = model(
                 prompt_text,
                 max_tokens=max_tokens,
@@ -180,70 +229,121 @@ class LLMService:
                 top_p=top_p,
                 stop=stop
             )
-            
-            # Extract and return the generated text
+
             return result['choices'][0]['text']
-            
+
         except Exception as e:
             logger.error(f"Error with local model: {str(e)}")
             raise
-    
-    # Helper methods for API interaction
+
     def get_base_url(self, provider: str) -> str:
         """Get the base URL for the provider's API."""
         urls = {
             'openai': 'https://api.openai.com/v1/chat/completions',
-            'anthropic': 'https://api.anthropic.com/v1/complete',
-            'cohere': 'https://api.cohere.ai/v1/generate',
+            'anthropic': 'https://api.anthropic.com/v1/messages',
+            'cohere': 'https://api.cohere.ai/v1/chat',
             'huggingface': 'https://api-inference.huggingface.co/models'
         }
         return urls.get(provider, '')
-    
+
     def create_headers(self, provider: str) -> Dict[str, str]:
         """Create headers for API requests."""
         api_key = self.api_keys.get(provider)
         if not api_key:
             raise ValueError(f"No API key found for provider: {provider}")
-            
+
         headers = {
             'Content-Type': 'application/json'
         }
-        
+
         if provider == 'openai':
             headers['Authorization'] = f"Bearer {api_key}"
         elif provider == 'anthropic':
             headers['x-api-key'] = api_key
+            headers['anthropic-version'] = '2023-06-01'
         elif provider == 'cohere':
             headers['Authorization'] = f"Bearer {api_key}"
         elif provider == 'huggingface':
             headers['Authorization'] = f"Bearer {api_key}"
-            
+
         return headers
-    
+
     def format_request(self, prompt: Union[str, List[Dict[str, str]]], options: Dict[str, Any]) -> Dict[str, Any]:
         """Format the request based on the provider's requirements."""
         provider = options.get('provider', self.provider)
-        
+        temperature = options.get('temperature', 0.7)
+        max_tokens = options.get('max_tokens', 150)
+
         if provider == 'openai':
             messages = [{'role': 'user', 'content': prompt}] if isinstance(prompt, str) else prompt
             return {
-                'model': options.get('model', 'gpt-3.5-turbo'),
+                'model': options.get('model', 'gpt-4o-mini'),
                 'messages': messages,
-                'temperature': options.get('temperature', 0.7),
-                'max_tokens': options.get('max_tokens', 150)
+                'temperature': temperature,
+                'max_tokens': max_tokens
             }
-        # Add formatting for other providers as needed
-        return {}
-    
+        elif provider == 'anthropic':
+            if isinstance(prompt, list):
+                # Extract system message and user messages
+                system_msg = ''
+                messages = []
+                for msg in prompt:
+                    if msg['role'] == 'system':
+                        system_msg = msg['content']
+                    else:
+                        messages.append(msg)
+                # Ensure messages alternate user/assistant properly
+                if not messages:
+                    messages = [{'role': 'user', 'content': 'Hello'}]
+            else:
+                system_msg = ''
+                messages = [{'role': 'user', 'content': prompt}]
+
+            data = {
+                'model': options.get('model', 'claude-sonnet-4-20250514'),
+                'messages': messages,
+                'max_tokens': max_tokens,
+                'temperature': temperature,
+            }
+            if system_msg:
+                data['system'] = system_msg
+            return data
+        elif provider == 'cohere':
+            message = prompt if isinstance(prompt, str) else prompt[-1]['content'] if prompt else ''
+            return {
+                'model': options.get('model', 'command-r'),
+                'message': message,
+                'temperature': temperature,
+                'max_tokens': max_tokens
+            }
+        elif provider == 'huggingface':
+            text = prompt if isinstance(prompt, str) else prompt[-1]['content'] if prompt else ''
+            return {
+                'inputs': text,
+                'parameters': {
+                    'temperature': temperature,
+                    'max_new_tokens': max_tokens
+                }
+            }
+
+        return {'prompt': prompt if isinstance(prompt, str) else json.dumps(prompt)}
+
     def parse_response(self, response: Dict[str, Any], provider: str) -> str:
         """Parse the response from the provider."""
         try:
             if provider == 'openai':
                 return response['choices'][0]['message']['content'].strip()
-            # Add parsing for other providers as needed
+            elif provider == 'anthropic':
+                return response['content'][0]['text'].strip()
+            elif provider == 'cohere':
+                return response.get('text', '').strip()
+            elif provider == 'huggingface':
+                if isinstance(response, list) and response:
+                    return response[0].get('generated_text', '').strip()
+                return str(response)
             return str(response)
         except (KeyError, IndexError) as e:
-            logger.error(f"Error parsing response: {str(e)}")
+            logger.error(f"Error parsing response from {provider}: {str(e)}")
             raise
 
 # Create a singleton instance

@@ -2,6 +2,17 @@
 
 Thinking Agents is an interactive multi-agent chat platform where you can create, configure, and interact with multiple AI agents. The platform provides a unique environment for agent-to-agent and user-to-agent conversations, with a powerful visualization system to track agent decision-making processes.
 
+## Screenshots
+
+### Chat Interface
+![Chat Interface](screenshots/chat_interface.png)
+
+### Graph Visualization
+![Graph Visualization](screenshots/graph_visualization.png)
+
+### Agent Settings
+![Agent Settings](screenshots/agent_settings.png)
+
 ## Features
 
 - **Multi-Agent Conversations**: Create and manage multiple AI agents with unique personalities, goals, and behaviors.
@@ -69,7 +80,7 @@ thinking-agents/
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/thinking-agents.git
+   git clone https://github.com/maracman/thinking-agents.git
    cd thinking-agents
    ```
 

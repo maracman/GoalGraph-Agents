@@ -23,3 +23,12 @@ eggs/
 
 # Flask session files
 flask_session/
+
+# Node
+node_modules/
+
+# Chat cache
+chat_cache/
+
+# IDE / Claude
+.claude/

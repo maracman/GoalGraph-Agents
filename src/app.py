@@ -6,6 +6,7 @@ import queue
 import logging
 import subprocess
 import os
+import sys
 import json
 import uuid
 import networkx as nx
@@ -88,7 +89,7 @@ cache_dir = os.path.join(os.getcwd(), 'chat_cache')
 graph_directory = os.path.join(cache_dir, 'graphs')
 
 # Model configuration
-local_model_path = "/content/local_model"
+local_model_path = os.path.join(os.getcwd(), "local_model")
 model_filename = os.path.join(local_model_path, "Meta-Llama-3-8B.Q8_0.gguf")
 model_url = "https://huggingface.co/TheBloke/Meta-Llama-3-8B-GGUF/resolve/main/Meta-Llama-3-8B.Q8_0.gguf?download=true"
 
@@ -117,18 +118,14 @@ def download_model():
 
 
 
+import agent.agent as agent_module_ref
+
 def reload_agent():
     """Reload the agent module dynamically"""
     try:
-        if 'agent' in sys.modules:
-            del sys.modules['agent']
-        script_path = os.path.join('agent', 'agent.py')
-        spec = importlib.util.spec_from_file_location("agent", script_path)
-        agent = importlib.util.module_from_spec(spec)
-        sys.modules["agent"] = agent
-        spec.loader.exec_module(agent)
+        importlib.reload(agent_module_ref)
         flask_logger.info("Agent module reloaded successfully")
-        return agent
+        return agent_module_ref
     except Exception as e:
         flask_logger.error(f"Failed to reload agent: {str(e)}")
         raise
@@ -938,6 +935,165 @@ def delete_agent():
     else:
         return jsonify({"success": False, "message": "Agent not found"}), 404
 
+@app.route('/import_graph', methods=['POST'])
+def import_graph_route():
+    """Import one agent's graph into another agent's graph."""
+    if 'state' not in session:
+        return jsonify({"error": "No active session"}), 400
+
+    from agent.graph_intelligence import import_graph as gi_import, link_similar_nodes
+
+    target_agent_id = request.form.get('target_agent_id')
+    source_agent_id = request.form.get('source_agent_id')
+    namespace = request.form.get('namespace', '')  # empty = merge nodes by name
+    link_similar = request.form.get('link_similar', 'true').lower() == 'true'
+
+    agents_df = pd.DataFrame(session['state']['agents_df'])
+
+    target_row = agents_df[agents_df['agent_id'] == target_agent_id]
+    source_row = agents_df[agents_df['agent_id'] == source_agent_id]
+
+    if target_row.empty or source_row.empty:
+        return jsonify({"success": False, "message": "Agent not found"}), 404
+
+    target_path = target_row.iloc[0]['graph_file_path']
+    source_path = source_row.iloc[0]['graph_file_path']
+
+    try:
+        target_G = nx.read_graphml(target_path)
+        source_G = nx.read_graphml(source_path)
+
+        gi_import(target_G, source_G, namespace=namespace or None)
+
+        if link_similar:
+            link_similar_nodes(target_G, similarity_threshold=0.8)
+
+        nx.write_graphml(target_G, target_path)
+
+        return jsonify({
+            "success": True,
+            "message": f"Imported graph from {source_agent_id} into {target_agent_id}",
+            "nodes": target_G.number_of_nodes(),
+            "edges": target_G.number_of_edges()
+        })
+    except Exception as e:
+        flask_logger.error(f"Error importing graph: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route('/combine_graphs', methods=['POST'])
+def combine_graphs_route():
+    """Combine multiple agents' graphs into a target agent's graph."""
+    if 'state' not in session:
+        return jsonify({"error": "No active session"}), 400
+
+    from agent.graph_intelligence import combine_graphs as gi_combine, link_similar_nodes
+
+    data = request.get_json() or {}
+    target_agent_id = data.get('target_agent_id')
+    source_agent_ids = data.get('source_agent_ids', [])
+    link_similar = data.get('link_similar', True)
+
+    agents_df = pd.DataFrame(session['state']['agents_df'])
+
+    target_row = agents_df[agents_df['agent_id'] == target_agent_id]
+    if target_row.empty:
+        return jsonify({"success": False, "message": "Target agent not found"}), 404
+
+    target_path = target_row.iloc[0]['graph_file_path']
+
+    graphs = []
+    names = []
+    for aid in source_agent_ids:
+        row = agents_df[agents_df['agent_id'] == aid]
+        if row.empty:
+            continue
+        path = row.iloc[0]['graph_file_path']
+        try:
+            G = nx.read_graphml(path)
+            graphs.append(G)
+            names.append(row.iloc[0]['agent_name'])
+        except Exception as e:
+            flask_logger.warning(f"Could not read graph for {aid}: {e}")
+
+    if not graphs:
+        return jsonify({"success": False, "message": "No valid source graphs found"}), 400
+
+    try:
+        combined = gi_combine(graphs)
+
+        if link_similar:
+            link_similar_nodes(combined, similarity_threshold=0.8)
+
+        nx.write_graphml(combined, target_path)
+
+        return jsonify({
+            "success": True,
+            "message": f"Combined {len(graphs)} graphs into {target_agent_id}",
+            "source_agents": names,
+            "nodes": combined.number_of_nodes(),
+            "edges": combined.number_of_edges()
+        })
+    except Exception as e:
+        flask_logger.error(f"Error combining graphs: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@app.route('/graph_info/<agent_id>', methods=['GET'])
+def graph_info(agent_id):
+    """Get info about an agent's graph: nodes, edges, and path to goal."""
+    if 'state' not in session:
+        return jsonify({"error": "No active session"}), 400
+
+    from agent.graph_intelligence import find_path_to_goal
+
+    agents_df = pd.DataFrame(session['state']['agents_df'])
+    row = agents_df[agents_df['agent_id'] == agent_id]
+
+    if row.empty:
+        return jsonify({"error": "Agent not found"}), 404
+
+    agent = row.iloc[0]
+    graph_path = agent['graph_file_path']
+
+    try:
+        G = nx.read_graphml(graph_path)
+    except Exception:
+        return jsonify({"nodes": 0, "edges": 0, "path_to_goal": None})
+
+    # Try finding a path to goal
+    path_info = None
+    current_node = agent['current_node_location']
+    goal = agent['goal']
+
+    result = find_path_to_goal(G, current_node, goal)
+    if result:
+        path, target, similarity = result
+        path_info = {
+            "path": path,
+            "target_node": target,
+            "similarity": round(similarity, 3)
+        }
+
+    # Collect node info
+    go_nodes = []
+    nogo_nodes = []
+    for u, v, data in G.edges(data=True):
+        if data.get('label') == 'Go':
+            go_nodes.append(v)
+        elif data.get('label') == 'NoGo':
+            nogo_nodes.append(v)
+
+    return jsonify({
+        "nodes": G.number_of_nodes(),
+        "edges": G.number_of_edges(),
+        "current_node": current_node,
+        "go_nodes": go_nodes,
+        "nogo_nodes": nogo_nodes,
+        "path_to_goal": path_info
+    })
+
+
 @app.route('/submit', methods=['POST'])
 def submit():
     flask_logger.info("Entering submit function")
@@ -1031,7 +1187,10 @@ def generate():
             return jsonify({"complete": True, "play": False})
 
         # Prep variables for main function
+        # After user submits, first generate call is user turn; subsequent calls are agent turns
         is_user = session['state']['is_user']
+        if is_user:
+            session['state']['is_user'] = False  # Next call will be agent turn
         agents_df = pd.DataFrame(session['state']['agents_df'])
         settings = session['state']['settings']
         user_name = session['state']['user_name']
@@ -1064,8 +1223,11 @@ def generate():
             flask_logger.info("No new response generated")
 
         # Update session state
+        old_history_len = len(session['state']['session_history'])
         session['state']['session_history'] = new_history
-        session['state']['len_last_history'] = len(new_history)
+        # Only update len_last_history when history actually grew (agent generated something)
+        if len(new_history) > old_history_len:
+            session['state']['len_last_history'] = len(new_history)
         session['state']['agents_df'] = new_agents_df.to_dict('records')
         session['state']['current_generation'] += 1
 
@@ -1194,7 +1356,7 @@ def duplicate_chat():
             "error": str(e)
         }), 500
 
-@app.route('/create_new', methods=['POST'])
+@app.route('/create_new_chat', methods=['POST'])
 def create_new_chat():
     """
     Create a new chat - loads defaults and changes to settings page.
@@ -1693,46 +1855,11 @@ def interrupt():
         return jsonify({"success": True})
     return jsonify({"success": False, "error": "No active session"}), 400
 
-@app.errorhandler(404)
-def not_found_error(error):
-    flask_logger.error(f'404 error: {request.url}')
-    return jsonify({"error": "Not found"}), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    flask_logger.error(f'500 error: {error}')
-    return jsonify({"error": "Internal server error"}), 500
-
-# Add the main execution block to run the app
-if __name__ == '__main__':
-    import sys
-    port = int(os.environ.get("FLASK_RUN_PORT", 5000))
-    
-    # Check if model exists or download it
-    if not os.path.exists(model_filename):
-        try:
-            download_model()
-        except Exception as e:
-            flask_logger.error(f"Failed to download model: {str(e)}")
-            print(f"Failed to download model: {str(e)}")
-            sys.exit(1)
-            
-    # Load a test graph to ensure the graph directory is correctly set up
-    test_graph = nx.DiGraph()
-    test_graph.add_node('start')
-    os.makedirs(graph_directory, exist_ok=True)
-    test_graph_path = os.path.join(graph_directory, 'test_graph.graphml')
-    nx.write_graphml(test_graph, test_graph_path)
-    
-    flask_logger.info(f"Starting Flask app on port {port}")
-    from waitress import serve
-    serve(app, host='0.0.0.0', port=port)
-
 @app.route('/add_agent', methods=['POST'])
 def add_agent():
     if 'state' not in session:
         return jsonify({"error": "No active session"}), 400
-        
+
     try:
         # Create a new agent with default settings
         agent_id = generate_agent_id()
@@ -1767,21 +1894,21 @@ def add_agent():
             'environment_changes': '',
             'new_information': ''
         }
-        
+
         # Initialize agent graph
         graph = nx.DiGraph()
         graph.add_node('start')
         nx.write_graphml(graph, new_agent['graph_file_path'])
-        
+
         # Add the new agent to the session
         agents_df = pd.DataFrame(session['state']['agents_df'])
         agents_df = pd.concat([agents_df, pd.DataFrame([new_agent])], ignore_index=True)
         session['state']['agents_df'] = agents_df.to_dict('records')
         session['state']['agent_mutes'].append(False)
         session['state']['number_of_agents'] += 1
-        
+
         save_current_session(session['state'])
-        
+
         return jsonify({
             "success": True,
             "message": "New agent added",
@@ -1793,3 +1920,47 @@ def add_agent():
     except Exception as e:
         flask_logger.error(f"Error adding new agent: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/logs', methods=['GET'])
+def get_logs_route():
+    """Get application logs."""
+    logs = get_logs()
+    return jsonify({"logs": logs, "timestamp": time.time()})
+
+@app.route('/get_agent_graphs', methods=['GET'])
+def get_agent_graphs():
+    """Get list of agents with their graph info."""
+    if 'state' not in session:
+        return jsonify({"error": "No active session"}), 400
+    agents_df = pd.DataFrame(session['state']['agents_df'])
+    graphs = [{"id": row['agent_id'], "name": row['agent_name']} for _, row in agents_df.iterrows()]
+    return jsonify(graphs)
+
+@app.errorhandler(404)
+def not_found_error(error):
+    flask_logger.error(f'404 error: {request.url}')
+    return jsonify({"error": "Not found"}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    flask_logger.error(f'500 error: {error}')
+    return jsonify({"error": "Internal server error"}), 500
+
+if __name__ == '__main__':
+    port = int(os.environ.get("FLASK_RUN_PORT", 5000))
+
+    # Optionally download local model (non-blocking)
+    if not os.path.exists(model_filename):
+        flask_logger.info("Local model not found - skipping download. Use API providers or set OFFLINE_MODE=true.")
+
+    # Ensure graph directory exists
+    os.makedirs(graph_directory, exist_ok=True)
+    test_graph = nx.DiGraph()
+    test_graph.add_node('start')
+    test_graph_path = os.path.join(graph_directory, 'test_graph.graphml')
+    nx.write_graphml(test_graph, test_graph_path)
+
+    flask_logger.info(f"Starting Flask app on port {port}")
+    flask_logger.info(f"Offline mode: {offline}")
+    from waitress import serve
+    serve(app, host='0.0.0.0', port=port)

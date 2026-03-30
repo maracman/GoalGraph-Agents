@@ -211,7 +211,7 @@ export const fetchSessionId = async () => {
    */
   export const addNewAgent = async () => {
     try {
-      const response = await fetch('/add_new_agent', {
+      const response = await fetch('/add_agent', {
         method: 'POST',
       });
       return await response.json();
@@ -317,6 +317,45 @@ export const fetchSessionId = async () => {
       return await response.json();
     } catch (error) {
       console.error('Error updating last interaction:', error);
+      throw error;
+    }
+  };
+
+  export const toggleAgentMute = async (agentId) => {
+    try {
+      const formData = new FormData();
+      formData.append('agent_id', agentId);
+      const response = await fetch('/toggle_agent_mute', {
+        method: 'POST',
+        body: formData,
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Error toggling agent mute:', error);
+      throw error;
+    }
+  };
+
+  export const duplicateChat = async () => {
+    try {
+      const response = await fetch('/duplicate', {
+        method: 'POST',
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Error duplicating chat:', error);
+      throw error;
+    }
+  };
+
+  export const deleteChat = async () => {
+    try {
+      const response = await fetch('/delete_chat', {
+        method: 'POST',
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Error deleting chat:', error);
       throw error;
     }
   };
