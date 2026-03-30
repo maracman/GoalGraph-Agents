@@ -34,7 +34,7 @@ class LLMService {
       throw new Error('Provider is required');
     }
 
-    const supportedProviders = ['openai', 'anthropic', 'cohere', 'huggingface', 'local'];
+    const supportedProviders = ['openai', 'openai-codex', 'anthropic', 'cohere', 'huggingface', 'local'];
     if (!supportedProviders.includes(provider)) {
       throw new Error(`Unsupported provider: ${provider}. Supported providers are: ${supportedProviders.join(', ')}`);
     }
@@ -70,6 +70,8 @@ class LLMService {
     switch (this.provider) {
       case 'openai':
         return 'https://api.openai.com/v1';
+      case 'openai-codex':
+        return 'http://127.0.0.1:10531/v1';
       case 'anthropic':
         return 'https://api.anthropic.com/v1';
       case 'cohere':
@@ -89,14 +91,15 @@ class LLMService {
    */
   createHeaders() {
     const apiKey = this.getApiKey();
-    if (!apiKey && this.provider !== 'local') {
+    if (!apiKey && this.provider !== 'local' && this.provider !== 'openai-codex') {
       throw new Error(`API key not set for provider: ${this.provider}`);
     }
 
     switch (this.provider) {
       case 'openai':
+      case 'openai-codex':
         return {
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${apiKey || 'codex-oauth'}`,
           'Content-Type': 'application/json'
         };
       case 'anthropic':
@@ -132,13 +135,15 @@ class LLMService {
    */
   formatPrompt(prompt, options = {}) {
     switch (this.provider) {
-      case 'openai': {
-        const messages = Array.isArray(prompt) 
-          ? prompt 
+      case 'openai':
+      case 'openai-codex': {
+        const messages = Array.isArray(prompt)
+          ? prompt
           : [{ role: 'user', content: prompt }];
-          
+        const defaultModel = this.provider === 'openai-codex' ? 'gpt-4o' : 'gpt-3.5-turbo';
+
         return {
-          model: options.model || 'gpt-3.5-turbo',
+          model: options.model || defaultModel,
           messages,
           temperature: options.temperature ?? 0.7,
           max_tokens: options.max_tokens ?? 150,
@@ -228,6 +233,7 @@ class LLMService {
   parseResponse(response) {
     switch (this.provider) {
       case 'openai':
+      case 'openai-codex':
         return response.data.choices[0].message.content.trim();
       case 'anthropic':
         return response.data.completion.trim();
@@ -295,6 +301,7 @@ class LLMService {
     
     switch (this.provider) {
       case 'openai':
+      case 'openai-codex':
         return `${baseUrl}/chat/completions`;
       case 'anthropic':
         return `${baseUrl}/complete`;
@@ -359,6 +366,7 @@ class LLMService {
     
     switch (this.provider) {
       case 'openai':
+      case 'openai-codex':
         message = data.error?.message || 'Unknown OpenAI error';
         break;
       case 'anthropic':
@@ -398,6 +406,13 @@ class LLMService {
         case 'openai':
           url = `${baseUrl}/models`;
           break;
+        case 'openai-codex':
+          // Return hardcoded list of models available via Codex subscription
+          return Promise.resolve([
+            { id: 'gpt-4o', name: 'GPT-4o' },
+            { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
+            { id: 'o3-mini', name: 'o3-mini' },
+          ]);
         case 'anthropic':
           // Anthropic doesn't have a models endpoint, return hardcoded list
           return Promise.resolve([
@@ -430,6 +445,7 @@ class LLMService {
       // Format response based on provider
       switch (this.provider) {
         case 'openai':
+        case 'openai-codex':
           return response.data.data.map(model => ({
             id: model.id,
             name: model.id,

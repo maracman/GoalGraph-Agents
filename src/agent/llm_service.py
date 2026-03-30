@@ -34,6 +34,11 @@ PROVIDER_MODELS = {
         {'id': 'gpt-4-turbo', 'name': 'GPT-4 Turbo'},
         {'id': 'gpt-3.5-turbo', 'name': 'GPT-3.5 Turbo'},
     ],
+    'openai-codex': [
+        {'id': 'gpt-4o', 'name': 'GPT-4o (Codex/Subscription)'},
+        {'id': 'gpt-4o-mini', 'name': 'GPT-4o Mini (Codex/Subscription)'},
+        {'id': 'o3-mini', 'name': 'o3-mini (Codex/Subscription)'},
+    ],
     'anthropic': [
         {'id': 'claude-sonnet-4-20250514', 'name': 'Claude Sonnet 4'},
         {'id': 'claude-3-5-sonnet-20241022', 'name': 'Claude 3.5 Sonnet'},
@@ -51,6 +56,14 @@ PROVIDER_MODELS = {
     ]
 }
 
+# Custom base URLs for providers (overridable via env or set_base_url)
+PROVIDER_BASE_URLS = {
+    'openai-codex': os.environ.get(
+        'OPENAI_CODEX_BASE_URL',
+        'http://127.0.0.1:10531/v1/chat/completions'
+    ),
+}
+
 LOCAL_MODELS = {}
 
 
@@ -61,6 +74,7 @@ class LLMService:
         """Initialize the LLM service with the given configuration."""
         self.config = {**DEFAULT_CONFIG, **(config or {})}
         self.api_keys = {}
+        self.base_urls = dict(PROVIDER_BASE_URLS)  # copy defaults
         self.provider = self.config['provider']
         self.local_model_path = None
         self.local_model_filename = None
@@ -86,6 +100,23 @@ class LLMService:
                 self.api_keys[provider] = os.environ[env_var]
                 logger.info(f"Loaded API key for {provider}")
 
+        # Load Codex OAuth token from ~/.codex/auth.json if available
+        self._load_codex_auth()
+
+    def _load_codex_auth(self):
+        """Load OpenAI Codex OAuth credentials from ~/.codex/auth.json."""
+        auth_path = os.path.expanduser('~/.codex/auth.json')
+        try:
+            if os.path.exists(auth_path):
+                with open(auth_path, 'r') as f:
+                    auth = json.load(f)
+                token = auth.get('access_token')
+                if token:
+                    self.api_keys['openai-codex'] = token
+                    logger.info("Loaded Codex OAuth token from ~/.codex/auth.json")
+        except Exception as e:
+            logger.warning(f"Could not load Codex auth: {e}")
+
     def set_provider(self, provider: str):
         """Set the active LLM provider."""
         self.provider = provider
@@ -95,6 +126,11 @@ class LLMService:
         """Set an API key for a provider."""
         self.api_keys[provider] = api_key
         logger.info(f"API key set for {provider}")
+
+    def set_base_url(self, provider: str, url: str):
+        """Set a custom base URL for a provider."""
+        self.base_urls[provider] = url
+        logger.info(f"Base URL for {provider} set to: {url}")
 
     def list_models(self, provider: str = None) -> List[Dict[str, str]]:
         """List available models for a provider."""
@@ -140,7 +176,7 @@ class LLMService:
         except Exception as e:
             logger.error(f"Error with provider {provider}: {str(e)}")
             if self.config['fallback_enabled']:
-                alternative_providers = ['openai', 'anthropic', 'cohere']
+                alternative_providers = ['openai-codex', 'openai', 'anthropic', 'cohere']
                 for alt_provider in alternative_providers:
                     if alt_provider != provider and alt_provider in self.api_keys:
                         try:
@@ -238,6 +274,10 @@ class LLMService:
 
     def get_base_url(self, provider: str) -> str:
         """Get the base URL for the provider's API."""
+        # Check for custom base URL first (e.g. openai-codex proxy)
+        if provider in self.base_urls:
+            return self.base_urls[provider]
+
         urls = {
             'openai': 'https://api.openai.com/v1/chat/completions',
             'anthropic': 'https://api.anthropic.com/v1/messages',
@@ -250,13 +290,17 @@ class LLMService:
         """Create headers for API requests."""
         api_key = self.api_keys.get(provider)
         if not api_key:
-            raise ValueError(f"No API key found for provider: {provider}")
+            # For openai-codex via proxy, API key may not be required
+            if provider == 'openai-codex':
+                api_key = 'codex-oauth'  # Proxy handles auth
+            else:
+                raise ValueError(f"No API key found for provider: {provider}")
 
         headers = {
             'Content-Type': 'application/json'
         }
 
-        if provider == 'openai':
+        if provider in ('openai', 'openai-codex'):
             headers['Authorization'] = f"Bearer {api_key}"
         elif provider == 'anthropic':
             headers['x-api-key'] = api_key
@@ -274,10 +318,11 @@ class LLMService:
         temperature = options.get('temperature', 0.7)
         max_tokens = options.get('max_tokens', 150)
 
-        if provider == 'openai':
+        if provider in ('openai', 'openai-codex'):
             messages = [{'role': 'user', 'content': prompt}] if isinstance(prompt, str) else prompt
+            default_model = 'gpt-4o-mini' if provider == 'openai' else 'gpt-4o'
             return {
-                'model': options.get('model', 'gpt-4o-mini'),
+                'model': options.get('model', default_model),
                 'messages': messages,
                 'temperature': temperature,
                 'max_tokens': max_tokens
@@ -331,7 +376,7 @@ class LLMService:
     def parse_response(self, response: Dict[str, Any], provider: str) -> str:
         """Parse the response from the provider."""
         try:
-            if provider == 'openai':
+            if provider in ('openai', 'openai-codex'):
                 return response['choices'][0]['message']['content'].strip()
             elif provider == 'anthropic':
                 return response['content'][0]['text'].strip()

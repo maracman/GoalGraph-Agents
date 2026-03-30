@@ -9,6 +9,7 @@ const LLMSettings = () => {
   const [provider, setLLMProvider] = useState('openai');
   const [apiKeys, setApiKeys] = useState({
     openai: '',
+    'openai-codex': '',
     anthropic: '',
     cohere: '',
     huggingface: ''
@@ -29,7 +30,8 @@ const LLMSettings = () => {
   
   // Provider options
   const providerOptions = [
-    { value: 'openai', label: 'OpenAI' },
+    { value: 'openai', label: 'OpenAI (API Key)' },
+    { value: 'openai-codex', label: 'OpenAI Codex (ChatGPT Subscription)' },
     { value: 'anthropic', label: 'Anthropic (Claude)' },
     { value: 'cohere', label: 'Cohere' },
     { value: 'huggingface', label: 'HuggingFace' },
@@ -53,13 +55,13 @@ const LLMSettings = () => {
         setApiKey(provider, apiKeys[provider]);
       }
       
-      // For 'local' provider, no API key is needed
-      if (provider === 'local') {
+      // For 'local' or 'openai-codex' provider, no API key is needed
+      if (provider === 'local' || provider === 'openai-codex') {
         setProvider(provider);
       }
-      
-      // Don't try to load models if we don't have an API key for non-local provider
-      if (provider !== 'local' && !apiKeys[provider]) {
+
+      // Don't try to load models if we don't have an API key for non-local/non-codex provider
+      if (provider !== 'local' && provider !== 'openai-codex' && !apiKeys[provider]) {
         setAvailableModels([]);
         setSelectedModel('');
         setLoading(false);
@@ -117,8 +119,8 @@ const LLMSettings = () => {
       // Set provider in the LLM service
       setProvider(provider);
       
-      // Set API key if not using local model
-      if (provider !== 'local') {
+      // Set API key if not using local model or codex proxy
+      if (provider !== 'local' && provider !== 'openai-codex') {
         if (!apiKeys[provider]) {
           throw new Error(`API key is required for ${provider}`);
         }
@@ -240,7 +242,19 @@ const LLMSettings = () => {
           />
         </div>
         
-        {provider !== 'local' && (
+        {provider === 'openai-codex' && (
+          <div className="setting-group">
+            <div className="api-key-input">
+              <small className="api-key-help">
+                Uses your ChatGPT Plus/Pro subscription via the Codex OAuth proxy.
+                Requires: <code>npx openai-oauth</code> running on localhost:10531.
+                Authenticate first with: <code>npm install -g @openai/codex && codex login</code>
+              </small>
+            </div>
+          </div>
+        )}
+
+        {provider !== 'local' && provider !== 'openai-codex' && (
           <div className="setting-group">
             <label htmlFor={`${provider}-api-key`}>API Key</label>
             <div className="api-key-input">
@@ -349,7 +363,7 @@ const LLMSettings = () => {
           <Button 
             onClick={testConfiguration} 
             variant="secondary"
-            disabled={loading || (provider !== 'local' && !apiKeys[provider])}
+            disabled={loading || (provider !== 'local' && provider !== 'openai-codex' && !apiKeys[provider])}
           >
             Test Configuration
           </Button>
