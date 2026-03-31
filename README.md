@@ -1,4 +1,6 @@
-# Thinking Agents
+# GoalGraph
+
+**Chat agents that map their pursuits through autonomous goal-setting**
 
 An interactive multi-agent AI platform where agents pursue goals through conversation, with an LLM judge evaluating progress and a graph intelligence system that learns optimal paths over time.
 
@@ -401,7 +403,7 @@ thinking-agents/
 1. Clone the repository:
    ```bash
    git clone https://github.com/maracman/thinking-agents.git
-   cd thinking-agents
+   cd thinking-agents  # GoalGraph
    ```
 
 2. Set up a Python virtual environment and install dependencies:
