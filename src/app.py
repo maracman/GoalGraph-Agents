@@ -2303,6 +2303,25 @@ def merge_saved_graphs():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route('/api/saved_graphs/<graph_id>/visualize', methods=['GET'])
+def visualize_saved_graph(graph_id):
+    """Generate a PyVis visualization for a saved graph."""
+    try:
+        gml_path = os.path.join(saved_graphs_dir, f"{graph_id}.graphml")
+        if not os.path.exists(gml_path):
+            return jsonify({"success": False, "error": "Graph not found"}), 404
+
+        session_id = session.get('session_id', 'saved')
+        filename = visualize_graph_pyvis(gml_path, session_id)
+        if filename:
+            return jsonify({"success": True, "graph_html": f"/static/{filename}"})
+        else:
+            return jsonify({"success": False, "error": "Failed to generate visualization"}), 500
+    except Exception as e:
+        flask_logger.error(f"Error visualizing saved graph: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/api/saved_graphs/<graph_id>', methods=['DELETE'])
 def delete_saved_graph(graph_id):
     """Delete a saved graph and its metadata."""
