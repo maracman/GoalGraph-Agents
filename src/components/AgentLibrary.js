@@ -1,20 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Save, Trash, Edit2 } from 'lucide-react';
+import { Plus, Save, Trash, Edit2, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { fetchAgentPresets, createAgentPreset, updateAgentPreset, deleteAgentPreset } from '../services/api';
+
+const EMPTY_FORM = {
+  agent_name: '',
+  description: '',
+  goal: '',
+  target_impression: '',
+  provider: '',
+  model: '',
+  persistance: 3,
+  patience: 6
+};
 
 const AgentLibrary = () => {
   const [presets, setPresets] = useState([]);
   const [editingId, setEditingId] = useState(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [providers, setProviders] = useState([]);
   const [models, setModels] = useState([]);
-  const [formData, setFormData] = useState({
-    agent_name: '',
-    description: '',
-    goal: '',
-    target_impression: '',
-    provider: '',
-    model: ''
-  });
+  const [formData, setFormData] = useState({ ...EMPTY_FORM });
 
   useEffect(() => {
     loadPresets();
@@ -66,7 +71,6 @@ const AgentLibrary = () => {
     const { name, value } = e.target;
     setFormData(prev => {
       const updated = { ...prev, [name]: value };
-      // Reset model when provider changes
       if (name === 'provider') {
         updated.model = '';
       }
@@ -101,8 +105,11 @@ const AgentLibrary = () => {
       goal: preset.goal || '',
       target_impression: preset.target_impression || '',
       provider: preset.provider || '',
-      model: preset.model || ''
+      model: preset.model || '',
+      persistance: preset.persistance ?? 3,
+      patience: preset.patience ?? 6
     });
+    setFormOpen(true);
   };
 
   const handleDelete = async (presetId) => {
@@ -117,15 +124,19 @@ const AgentLibrary = () => {
 
   const resetForm = () => {
     setEditingId(null);
-    setFormData({
-      agent_name: '',
-      description: '',
-      goal: '',
-      target_impression: '',
-      provider: '',
-      model: ''
-    });
+    setFormData({ ...EMPTY_FORM });
+    setFormOpen(false);
     setModels([]);
+  };
+
+  const toggleForm = () => {
+    if (formOpen) {
+      resetForm();
+    } else {
+      setEditingId(null);
+      setFormData({ ...EMPTY_FORM });
+      setFormOpen(true);
+    }
   };
 
   const getProviderLabel = (providerId) => {
@@ -133,54 +144,10 @@ const AgentLibrary = () => {
     return p ? p.name : providerId;
   };
 
-  return (
-    <div className="agent-settings-container">
-      <h2>Agent Library</h2>
+  // --- Render -----------------------------------------------------------
 
-      <div className="agent-library-list">
-        {presets.length === 0 && (
-          <p style={{ color: '#888', fontStyle: 'italic' }}>No saved agent presets yet. Create one below.</p>
-        )}
-        {presets.map((preset) => (
-          <div key={preset.preset_id || preset.id} className="agent-preset-card">
-            <div className="preset-card-header">
-              <strong>{preset.agent_name || preset.name}</strong>
-              {preset.provider && preset.model && (
-                <span className="preset-model-badge">
-                  {preset.model}
-                </span>
-              )}
-            </div>
-            <div className="preset-card-body">
-              <p className="preset-goal-snippet">
-                {(preset.goal || '').length > 80
-                  ? (preset.goal || '').substring(0, 80) + '...'
-                  : preset.goal || 'No goal set'}
-              </p>
-              {preset.provider && (
-                <p className="preset-provider-label">
-                  {getProviderLabel(preset.provider)}
-                </p>
-              )}
-            </div>
-            <div className="buttons-row" style={{ justifyContent: 'flex-end' }}>
-              <button className="save-button" onClick={() => handleEdit(preset)} title="Edit">
-                <Edit2 size={14} />
-                <span>Edit</span>
-              </button>
-              <button className="delete-button" onClick={() => handleDelete(preset.preset_id || preset.id)} title="Delete">
-                <Trash size={14} />
-                <span>Delete</span>
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <hr style={{ border: 'none', borderTop: '1px solid #333', margin: '20px 0' }} />
-
-      <h3>{editingId ? 'Edit Agent' : 'Create Agent'}</h3>
-
+  const renderForm = () => (
+    <div className="agent-create-form">
       <div className="settings-form">
         <div className="setting-group">
           <label htmlFor="preset_agent_name">Agent Name</label>
@@ -191,6 +158,7 @@ const AgentLibrary = () => {
             value={formData.agent_name}
             onChange={handleInputChange}
             placeholder="Enter agent name"
+            autoFocus
           />
         </div>
 
@@ -267,19 +235,139 @@ const AgentLibrary = () => {
           </div>
         </div>
 
+        <div className="llm-settings-row">
+          <div className="setting-group" style={{ flex: 1 }}>
+            <label htmlFor="preset_persistance">Persistence</label>
+            <input
+              type="number"
+              id="preset_persistance"
+              name="persistance"
+              value={formData.persistance}
+              onChange={(e) => setFormData(prev => ({ ...prev, persistance: Math.max(1, parseInt(e.target.value) || 1) }))}
+              min={1}
+              max={20}
+            />
+            <span className="setting-hint">Min turns before agent can abandon a subgoal</span>
+          </div>
+          <div className="setting-group" style={{ flex: 1 }}>
+            <label htmlFor="preset_patience">Patience</label>
+            <input
+              type="number"
+              id="preset_patience"
+              name="patience"
+              value={formData.patience}
+              onChange={(e) => setFormData(prev => ({ ...prev, patience: Math.max(1, parseInt(e.target.value) || 1) }))}
+              min={1}
+              max={20}
+            />
+            <span className="setting-hint">Max turns before forced abandonment</span>
+          </div>
+        </div>
+
         <div className="buttons-row">
           <button className="save-button" onClick={handleSave}>
             <Save size={16} />
-            <span>{editingId ? 'Update Preset' : 'Save to Library'}</span>
+            <span>{editingId ? 'Update Agent' : 'Save Agent'}</span>
           </button>
 
-          {editingId && (
-            <button className="add-button" onClick={resetForm}>
-              <Plus size={16} />
-              <span>Cancel Edit</span>
-            </button>
-          )}
+          <button className="add-button" onClick={resetForm}>
+            <X size={16} />
+            <span>Cancel</span>
+          </button>
         </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="agent-settings-container">
+      <h2>Agent Library</h2>
+
+      <div className="agent-library-list">
+        {/* Create Agent card at the top */}
+        <div
+          className={`agent-preset-card create-agent-card ${formOpen && !editingId ? 'active' : ''}`}
+          onClick={(!formOpen || editingId) ? toggleForm : undefined}
+          style={(!formOpen || editingId) ? { cursor: 'pointer' } : {}}
+        >
+          <div className="preset-card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Plus size={18} />
+              <strong>Create Agent</strong>
+            </div>
+            {formOpen && !editingId && (
+              <button
+                className="icon-button"
+                onClick={(e) => { e.stopPropagation(); resetForm(); }}
+                title="Close"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#888' }}
+              >
+                <ChevronUp size={16} />
+              </button>
+            )}
+          </div>
+          {formOpen && !editingId && renderForm()}
+        </div>
+
+        {/* Agent preset cards */}
+        {presets.length === 0 && !formOpen && (
+          <p style={{ color: '#888', fontStyle: 'italic', padding: '8px 0' }}>No saved agent presets yet.</p>
+        )}
+        {presets.map((preset) => {
+          const id = preset.preset_id || preset.id;
+          const isEditing = editingId === id && formOpen;
+          return (
+            <div key={id} className={`agent-preset-card ${isEditing ? 'active' : ''}`}>
+              <div className="preset-card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <strong>{preset.agent_name || preset.name}</strong>
+                  {preset.provider && preset.model && (
+                    <span className="preset-model-badge">
+                      {preset.model}
+                    </span>
+                  )}
+                </div>
+                {isEditing && (
+                  <button
+                    className="icon-button"
+                    onClick={(e) => { e.stopPropagation(); resetForm(); }}
+                    title="Close"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#888' }}
+                  >
+                    <ChevronUp size={16} />
+                  </button>
+                )}
+              </div>
+              {!isEditing && (
+                <>
+                  <div className="preset-card-body">
+                    <p className="preset-goal-snippet">
+                      {(preset.goal || '').length > 80
+                        ? (preset.goal || '').substring(0, 80) + '...'
+                        : preset.goal || 'No goal set'}
+                    </p>
+                    {preset.provider && (
+                      <p className="preset-provider-label">
+                        {getProviderLabel(preset.provider)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="buttons-row" style={{ justifyContent: 'flex-end' }}>
+                    <button className="save-button" onClick={() => handleEdit(preset)} title="Edit">
+                      <Edit2 size={14} />
+                      <span>Edit</span>
+                    </button>
+                    <button className="delete-button" onClick={() => handleDelete(id)} title="Delete">
+                      <Trash size={14} />
+                      <span>Delete</span>
+                    </button>
+                  </div>
+                </>
+              )}
+              {isEditing && renderForm()}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

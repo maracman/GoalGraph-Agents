@@ -3,9 +3,10 @@ import { ChevronLeft, ChevronRight, Settings, MessageSquare, Activity, Code, Clo
 import { useSession } from '../contexts/SessionContext';
 
 const Sidebar = ({ activeTab, setActiveTab, collapsed, toggleSidebar, onNewChat }) => {
-  const { sessionState, pastChats, loadPastChats } = useSession();
+  const { sessionState, pastChats, loadPastChats, switchToChat } = useSession();
   const [sessionParamsOpen, setSessionParamsOpen] = useState(false);
   const [pastChatsOpen, setPastChatsOpen] = useState(false);
+  const [switchingChatId, setSwitchingChatId] = useState(null);
   
   useEffect(() => {
     if (pastChatsOpen) {
@@ -157,10 +158,18 @@ const Sidebar = ({ activeTab, setActiveTab, collapsed, toggleSidebar, onNewChat 
             {pastChatsOpen && (
               <div className="past-chats-content">
                 {pastChats.map((chat) => (
-                  <div 
+                  <div
                     key={chat.id}
-                    className={`past-chat-item ${chat.is_current ? 'current-chat' : ''}`}
+                    className={`past-chat-item ${chat.is_current ? 'current-chat' : ''} ${switchingChatId === chat.id ? 'loading' : ''}`}
                     data-chat-id={chat.id}
+                    onClick={async () => {
+                      if (chat.is_current || switchingChatId) return;
+                      setSwitchingChatId(chat.id);
+                      await switchToChat(chat.id);
+                      setSwitchingChatId(null);
+                      setActiveTab('chat');
+                    }}
+                    style={{ cursor: chat.is_current ? 'default' : switchingChatId ? 'wait' : 'pointer' }}
                   >
                     <span className="chat-names">
                       {chat.user_name} with {chat.agent_names.join(', ')}

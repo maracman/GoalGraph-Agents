@@ -85,7 +85,7 @@ app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_FILE_DIR'] = os.path.join(os.getcwd(), 'flask_session')
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', os.urandom(24).hex())
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'goalgraph-dev-secret-key-change-in-production')
 Session(app)
 
 # Cache directory path
@@ -646,6 +646,7 @@ def update_session():
         loaded_state = load_state(new_session_id)
         if loaded_state:
             session['state'] = loaded_state
+            session.modified = True
             return jsonify({"status": "success", "message": "Session updated successfully", "new_session_id": new_session_id}), 200
         return jsonify({"status": "error", "message": "Session not found"}), 404
     except Exception as e:
@@ -680,7 +681,7 @@ def get_past_chats():
             try:
                 with open(file_path, 'r') as f:
                     state = json.load(f)
-                    chat_id = filename.split('_')[0]
+                    chat_id = filename.replace('_state.json', '')
                     if chat_id == 'default':
                         continue  # Skip default settings file
                         
@@ -733,17 +734,34 @@ def load_chat(chat_id):
         agent_goals = [agent['goal'] for agent in agent_data]
         
         # Update session state with loaded state
+        # Ensure required keys exist for generation
+        state.setdefault('play', False)
+        state.setdefault('current_generation', 0)
+        state.setdefault('max_generations', 0)
+        state.setdefault('is_user', False)
+        state.setdefault('user_message', '')
+        state.setdefault('agent_mutes', [])
+        state.setdefault('len_last_history', len(state.get('session_history', [])))
+        state['session_id'] = chat_id
         session['state'] = state
-        save_current_session(state)  # Update last interaction time
+        # Force Flask-Session to persist this change to the filesystem backend.
+        # Without this, subsequent requests may still see the OLD session state.
+        session.modified = True
+        # Don't call save_current_session here — that updates the chat file's mtime
+        # which reorders the chat list. The chat should only move to the top when
+        # new messages are generated.
 
         # Return needed info for frontend
         return jsonify({
+            'success': True,
             'history': state['session_history'],
             'chatHtml': chat_html,
             'agentNames': agent_names,
             'agentDescriptions': agent_descriptions,
             'agentGoals': agent_goals,
+            'agents_df': state.get('agents_df', []),
             'settings': state['settings'],
+            'chat_mode': state.get('chat_mode', 'you_agent'),
             'userSettings': {
                 'user_name': state['user_name']
             }
@@ -841,23 +859,47 @@ def save_agent_settings():
         return jsonify({"error": "No active session"}), 400
         
     try:
-        agent_id = request.form.get('agent_id')
-        agent_name = request.form.get('agent_name')
-        description = request.form.get('description')
-        goal = request.form.get('goal')
-        muted = request.form.get('muted') == 'true'
-        use_agent_vars = request.form.get('use_agent_generation_variables') == 'true'
-        
-        # Generation parameters
-        gen_vars = {
-            'seed': int(request.form.get('seed', 42)),
-            'temperature': float(request.form.get('temperature', 0.7)),
-            'max_tokens': int(request.form.get('max_tokens', 150)),
-            'top_p': float(request.form.get('top_p', 0.9)),
-            'use_gpu': request.form.get('use_gpu') == 'true',
-            'llm': None
-        }
-        
+        # Support both JSON and form data
+        if request.is_json:
+            data = request.get_json()
+            settings = data.get('settings', data)
+            agent_id = data.get('agent_id') or settings.get('agent_id')
+            agent_name = settings.get('agent_name', '')
+            description = settings.get('description', '')
+            goal = settings.get('goal', '')
+            target_impression = settings.get('target_impression', '')
+            muted = bool(settings.get('muted', False))
+            use_agent_vars = bool(settings.get('is_agent_generation_variables', False))
+            persistance = int(settings.get('persistance', 3))
+            patience = int(settings.get('patience', 6))
+            gen_vars_raw = settings.get('generation_variables', {})
+            gen_vars = {
+                'seed': int(gen_vars_raw.get('seed', 42)),
+                'temperature': float(gen_vars_raw.get('temperature', 0.7)),
+                'max_tokens': int(gen_vars_raw.get('max_tokens', 150)),
+                'top_p': float(gen_vars_raw.get('top_p', 0.9)),
+                'use_gpu': bool(gen_vars_raw.get('use_gpu', True)),
+                'llm': gen_vars_raw.get('llm', None)
+            }
+        else:
+            agent_id = request.form.get('agent_id')
+            agent_name = request.form.get('agent_name', '')
+            description = request.form.get('description', '')
+            goal = request.form.get('goal', '')
+            target_impression = request.form.get('target_impression', '')
+            muted = request.form.get('muted') == 'true'
+            use_agent_vars = request.form.get('use_agent_generation_variables') == 'true'
+            persistance = int(request.form.get('persistance', 3))
+            patience = int(request.form.get('patience', 6))
+            gen_vars = {
+                'seed': int(request.form.get('seed', 42)),
+                'temperature': float(request.form.get('temperature', 0.7)),
+                'max_tokens': int(request.form.get('max_tokens', 150)),
+                'top_p': float(request.form.get('top_p', 0.9)),
+                'use_gpu': request.form.get('use_gpu') == 'true',
+                'llm': None
+            }
+
         # Update agent in session
         agents_df = pd.DataFrame(session['state']['agents_df'])
         if agent_id and agent_id in agents_df['agent_id'].values:
@@ -865,7 +907,10 @@ def save_agent_settings():
             agents_df.at[idx, 'agent_name'] = agent_name
             agents_df.at[idx, 'description'] = description
             agents_df.at[idx, 'goal'] = goal
+            agents_df.at[idx, 'target_impression'] = target_impression
             agents_df.at[idx, 'muted'] = muted
+            agents_df.at[idx, 'persistance'] = persistance
+            agents_df.at[idx, 'patience'] = patience
             agents_df.at[idx, 'is_agent_generation_variables'] = use_agent_vars
             agents_df.at[idx, 'generation_variables'] = gen_vars
         else:
@@ -1125,15 +1170,8 @@ def submit():
 
         check_session_state("submit")
 
-        # If play is true, interrupt the current generation
-        if session['state'].get('play', False):
-            session['state']['play'] = False
-            flask_logger.info("Play was true, setting to false and returning")
-            return jsonify({
-                "success": True,
-                "history": session['state']['session_history'],
-                "play": False
-            })
+        # Reset play state from any previous run
+        session['state']['play'] = False
 
         # Get user message and is_user flag from client side
         user_message = request.form.get('user_message', '')
@@ -1154,10 +1192,17 @@ def submit():
             flask_logger.info("No user message added to session history")
 
         # Get the max_generations value
-        # For multi-agent conversation: allow several rounds of back-and-forth
-        num_agents = len(session['state']['agents_df'])
-        max_rounds = 6  # Each agent speaks this many times
-        max_generations = num_agents * max_rounds
+        # If the client sent a max_turns value, use it; otherwise default
+        client_max_turns = request.form.get('max_turns', None)
+        if client_max_turns is not None:
+            try:
+                max_generations = int(client_max_turns)
+            except (ValueError, TypeError):
+                max_generations = 12
+        else:
+            num_agents = len(session['state']['agents_df'])
+            max_rounds = 6  # Each agent speaks this many times
+            max_generations = num_agents * max_rounds
         flask_logger.info(f"Set max_generations to {max_generations}")
 
         # Initialize the generation process
@@ -1165,8 +1210,9 @@ def submit():
         session['state']['max_generations'] = max_generations
         session['state']['play'] = True
         flask_logger.info("Initialized generation process variables")
-        
+
         # Save the session state
+        session.modified = True
         save_current_session(session['state'])
 
         response = jsonify({
@@ -1266,6 +1312,7 @@ def generate():
         flask_logger.info(f"Updated play status: {session['state']['play']}")
 
         # Save the updated session
+        session.modified = True
         save_current_session(session['state'])
 
         # Prepare and return response
@@ -2007,8 +2054,13 @@ def interrupt():
     Interrupt the current generation process.
     """
     if 'state' in session:
+        was_playing = session['state'].get('play', False)
         session['state']['play'] = False
-        save_current_session(session['state'])
+        session.modified = True
+        # Only save to disk if generation was actually running.
+        # Saving updates the file mtime, which reorders the chat list.
+        if was_playing:
+            save_current_session(session['state'])
         return jsonify({"success": True})
     return jsonify({"success": False, "error": "No active session"}), 400
 

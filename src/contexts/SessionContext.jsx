@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef, useCallback } from 'react';
 import { 
   fetchSessionId, 
   checkSession, 
@@ -9,7 +9,8 @@ import {
   resetChat,
   createNewChat,
   duplicateChat as duplicateChatAPI,
-  deleteChat as deleteChatAPI
+  deleteChat as deleteChatAPI,
+  loadChat
 } from '../services/api';
 
 // Create context
@@ -35,20 +36,28 @@ export const SessionProvider = ({ children, initialSessionId }) => {
   
   // UI state
   const [pastChats, setPastChats] = useState([]);
+
+  // Cancellation ref for the generation loop
+  const generationCancelledRef = useRef(false);
   
-  // Initialize session
+  // Initialize session — only on first mount
+  // Chat switching is handled by switchToChat, which updates state directly.
+  const initializedRef = useRef(false);
   useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
     const initializeSession = async () => {
       try {
         setLoading(true);
-        
+
         // If no session ID is provided, fetch one
         let currentSessionId = sessionId;
         if (!currentSessionId) {
           currentSessionId = await fetchSessionId();
           setSessionId(currentSessionId);
         }
-        
+
         // Get session state
         const sessionData = await checkSession();
         if (sessionData.session_contents) {
@@ -58,13 +67,14 @@ export const SessionProvider = ({ children, initialSessionId }) => {
             isPlaying: sessionData.session_contents.play || false,
             history: sessionData.session_contents.session_history || [],
             settings: sessionData.session_contents.settings || {},
-            agentData: sessionData.session_contents.agents_df || []
+            agentData: sessionData.session_contents.agents_df || [],
+            chat_mode: sessionData.session_contents.chat_mode || 'you_agent'
           }));
         }
-        
+
         // Load past chats
         loadPastChats();
-        
+
         setError(null);
       } catch (err) {
         console.error("Error initializing session:", err);
@@ -73,20 +83,19 @@ export const SessionProvider = ({ children, initialSessionId }) => {
         setLoading(false);
       }
     };
-    
+
     initializeSession();
-  }, [sessionId]);
+  }, []);
   
-  // Load past chats
-  const loadPastChats = async () => {
+  // Load past chats — memoized to prevent infinite re-render loops
+  const loadPastChats = useCallback(async () => {
     try {
       const chatsData = await fetchPastChats();
       setPastChats(chatsData.pastChats || []);
     } catch (err) {
       console.error("Error loading past chats:", err);
-      setError("Failed to load past chats");
     }
-  };
+  }, []);
   
   // Handle user message submission
   const handleSubmitMessage = async (message, isUser = true) => {
@@ -130,12 +139,36 @@ export const SessionProvider = ({ children, initialSessionId }) => {
     }
   };
   
+  // Stop any running generation
+  const stopGeneration = async () => {
+    generationCancelledRef.current = true;
+    try {
+      await interruptTask();
+    } catch (e) {
+      // ignore
+    }
+    setSessionState(prev => ({ ...prev, isPlaying: false }));
+  };
+
   // Generate agent responses
   const generateAgentResponses = async () => {
+    generationCancelledRef.current = false;
     try {
       let keepGoing = true;
       while (keepGoing) {
+        // Check cancellation before each request
+        if (generationCancelledRef.current) {
+          setSessionState(prev => ({ ...prev, isPlaying: false }));
+          break;
+        }
+
         const response = await generateResponse();
+
+        // Check cancellation after each request
+        if (generationCancelledRef.current) {
+          setSessionState(prev => ({ ...prev, isPlaying: false }));
+          break;
+        }
 
         if (response.error) {
           console.error("Generation error:", response.error);
@@ -260,6 +293,43 @@ export const SessionProvider = ({ children, initialSessionId }) => {
     }
   };
   
+  // Switch to a past chat
+  const switchToChat = async (chatId) => {
+    try {
+      // Stop any running generation first
+      await stopGeneration();
+
+      const response = await loadChat(chatId);
+      if (response.error || !response.success) {
+        return { success: false, error: response.error || 'Failed to load chat' };
+      }
+      setSessionId(chatId);
+      setSessionState(prev => ({
+        ...prev,
+        history: response.history || [],
+        settings: response.settings || prev.settings,
+        agentData: response.agents_df || prev.agentData,
+        chat_mode: response.chat_mode || prev.chat_mode || 'you_agent',
+        isPlaying: false,
+        isUser: false,
+        currentGeneration: 0,
+        maxGenerations: 0
+      }));
+      // Update past chats list and mark the new chat as current locally
+      // (avoids relying on the server session cookie roundtrip timing)
+      setPastChats(prev => prev.map(chat => ({
+        ...chat,
+        is_current: chat.id === chatId
+      })));
+      // Also refresh from server for full accuracy
+      loadPastChats();
+      return { success: true };
+    } catch (err) {
+      console.error("Error switching chat:", err);
+      return { success: false, error: err.message || "Failed to load chat" };
+    }
+  };
+
   // Update session settings
   const updateSessionSettings = (newSettings) => {
     setSessionState(prev => ({
@@ -286,6 +356,8 @@ export const SessionProvider = ({ children, initialSessionId }) => {
     createNewChatSession,
     duplicateChat,
     deleteChat,
+    switchToChat,
+    stopGeneration,
     updateSessionSettings
   };
   

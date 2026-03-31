@@ -64,11 +64,14 @@ export const fetchSessionId = async () => {
    * @param {boolean} isUser Whether the message is from the user
    * @returns {Promise<Object>} The response containing updated history
    */
-  export const submitMessage = async (message, isUser = true) => {
+  export const submitMessage = async (message, isUser = true, maxTurns = null) => {
     try {
       const formData = new FormData();
       formData.append('user_message', message);
       formData.append('is_user', isUser);
+      if (maxTurns != null) {
+        formData.append('max_turns', maxTurns);
+      }
   
       const response = await fetch('/submit', {
         method: 'POST',

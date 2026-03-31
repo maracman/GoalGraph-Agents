@@ -13,6 +13,8 @@ const AgentSettings = () => {
     goal: '',
     target_impression: '',
     muted: false,
+    persistance: 3,
+    patience: 6,
     use_agent_generation_variables: false,
     generation_variables: {
       seed: 42,
@@ -36,6 +38,8 @@ const AgentSettings = () => {
         goal: agent.goal,
         target_impression: agent.target_impression || '',
         muted: agent.muted,
+        persistance: agent.persistance ?? 3,
+        patience: agent.patience ?? 6,
         use_agent_generation_variables: agent.is_agent_generation_variables,
         generation_variables: {
           seed: agent.generation_variables?.seed || 42,
@@ -106,6 +110,8 @@ const AgentSettings = () => {
         goal: formData.goal,
         target_impression: formData.target_impression,
         muted: formData.muted,
+        persistance: formData.persistance,
+        patience: formData.patience,
         is_agent_generation_variables: formData.use_agent_generation_variables,
         generation_variables: formData.generation_variables
       };
@@ -230,7 +236,36 @@ const AgentSettings = () => {
             <span>Muted</span>
           </label>
         </div>
-        
+
+        <div className="llm-settings-row">
+          <div className="setting-group" style={{ flex: 1 }}>
+            <label htmlFor="persistance">Persistence</label>
+            <input
+              type="number"
+              id="persistance"
+              name="persistance"
+              value={formData.persistance}
+              onChange={(e) => setFormData(prev => ({ ...prev, persistance: Math.max(1, parseInt(e.target.value) || 1) }))}
+              min={1}
+              max={20}
+            />
+            <span className="setting-hint">How many turns the agent keeps working on a subgoal before it may move on (lower = more graph nodes)</span>
+          </div>
+          <div className="setting-group" style={{ flex: 1 }}>
+            <label htmlFor="patience">Patience</label>
+            <input
+              type="number"
+              id="patience"
+              name="patience"
+              value={formData.patience}
+              onChange={(e) => setFormData(prev => ({ ...prev, patience: Math.max(1, parseInt(e.target.value) || 1) }))}
+              min={1}
+              max={20}
+            />
+            <span className="setting-hint">Maximum turns on one subgoal before the agent is forced to move on (must be ≥ persistence)</span>
+          </div>
+        </div>
+
         <div className="setting-group checkbox-group">
           <label htmlFor="use_agent_generation_variables">
             <input

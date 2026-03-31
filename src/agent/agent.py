@@ -404,8 +404,20 @@ def get_agent_response(prompt, agent_name, generation_vars, last_narration=''):
 
             return agent_response, narration
 
-        # Fallback: treat entire response as plain text
-        return raw, ""
+        # Fallback: treat entire response as plain text.
+        # Strip stray JSON wrapper artifacts the LLM sometimes leaves behind,
+        # e.g. a trailing  "}  from an incomplete {"agent_response": "..."}.
+        cleaned = raw
+        # Try to unwrap if it looks like a partial JSON response wrapper
+        m = re.match(r'\s*\{\s*"agent_response"\s*:\s*"', cleaned)
+        if m:
+            cleaned = cleaned[m.end():]
+            # Remove the matching trailing  "}
+            cleaned = re.sub(r'"\s*\}\s*$', '', cleaned)
+        else:
+            # Just strip a trailing  "}  or  }  that leaked from JSON
+            cleaned = re.sub(r'"\s*\}\s*$', '', cleaned)
+        return cleaned.strip(), ""
 
     except Exception as e:
         logger.error(f"Error generating response: {str(e)}")

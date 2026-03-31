@@ -4,12 +4,14 @@ import { submitMessage, generateResponse, interruptTask } from '../services/api'
 import { useSession } from '../contexts/SessionContext';
 
 const ChatInterface = () => {
-  const { sessionId, setSessionId, sessionState, setSessionState, loadPastChats } = useSession();
+  const { sessionId, setSessionId, sessionState, setSessionState, loadPastChats, stopGeneration } = useSession();
   const [userMessage, setUserMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null); // 'delete' | 'reset' | null
+  const [maxTurns, setMaxTurns] = useState(12);
   const chatBoxRef = useRef(null);
+  const cancelledRef = useRef(false);
   
   useEffect(() => {
     // Scroll to bottom of chat when history changes
@@ -20,20 +22,22 @@ const ChatInterface = () => {
   
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (sessionState.isPlaying) {
-      // If playing, interrupt the generation
-      await interruptTask();
-      setSessionState(prev => ({ ...prev, isPlaying: false }));
+      // If playing, stop the generation loop
+      cancelledRef.current = true;
+      await stopGeneration();
       return;
     }
-    
+
     if (!userMessage.trim()) {
       // Empty message — just trigger agent generation directly
       try {
         setIsSubmitting(true);
+        cancelledRef.current = false;
         // Submit empty to set play state on server
-        const response = await submitMessage('', true);
+        const turns = parseInt(maxTurns) || 12;
+        const response = await submitMessage('', true, turns);
         if (response.success) {
           setSessionState(prev => ({
             ...prev,
@@ -54,11 +58,13 @@ const ChatInterface = () => {
       }
       return;
     }
-    
+
     try {
       setIsSubmitting(true);
-      
-      const response = await submitMessage(userMessage, true);
+      cancelledRef.current = false;
+
+      const turns = parseInt(maxTurns) || 12;
+      const response = await submitMessage(userMessage, true, turns);
       if (response.success) {
         setSessionState(prev => ({
           ...prev,
@@ -68,9 +74,9 @@ const ChatInterface = () => {
           currentGeneration: 0,
           isUser: false
         }));
-        
+
         setUserMessage('');
-        
+
         // Start generation if play is true
         if (response.play) {
           generateAgentResponses();
@@ -87,7 +93,19 @@ const ChatInterface = () => {
     try {
       let keepGoing = true;
       while (keepGoing) {
+        // Check cancellation before each request
+        if (cancelledRef.current) {
+          setSessionState(prev => ({ ...prev, isPlaying: false }));
+          break;
+        }
+
         const response = await generateResponse();
+
+        // Check cancellation after each request
+        if (cancelledRef.current) {
+          setSessionState(prev => ({ ...prev, isPlaying: false }));
+          break;
+        }
 
         if (response.error) {
           console.error("Generation error:", response.error);
@@ -219,6 +237,28 @@ const ChatInterface = () => {
   
   const isAgentAgent = sessionState.chat_mode === 'agent_agent';
 
+  // Parse message text — agent responses may be JSON with agent_response and narration fields
+  const renderMessageText = (text) => {
+    if (typeof text !== 'string') return text;
+    // Try to parse as JSON if it looks like it
+    if (text.trimStart().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed.agent_response || parsed.narration) {
+          return (
+            <>
+              {parsed.agent_response && <p>{parsed.agent_response}</p>}
+              {parsed.narration && <p className="narration"><em>{parsed.narration}</em></p>}
+            </>
+          );
+        }
+      } catch (e) {
+        // Not valid JSON, render as plain text
+      }
+    }
+    return text;
+  };
+
   // Build mode indicator label
   const getModeLabel = () => {
     if (!isAgentAgent) {
@@ -290,7 +330,7 @@ const ChatInterface = () => {
               <div className="message-header">
                 <strong>{message[0] === 'user' ? (isAgentAgent ? 'Narrator' : 'You') : message[0]}</strong>
               </div>
-              <div className="message-text">{message[1]}</div>
+              <div className="message-text">{renderMessageText(message[1])}</div>
             </div>
           </div>
         ))}
@@ -318,8 +358,30 @@ const ChatInterface = () => {
           placeholder={isAgentAgent ? "Set the scene..." : "Type your message..."}
           disabled={isSubmitting}
         />
-        <button 
-          type="submit" 
+        <div className="turns-input">
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={maxTurns}
+            onChange={(e) => {
+              const val = e.target.value.replace(/[^0-9]/g, '');
+              setMaxTurns(val);
+            }}
+            onBlur={() => {
+              const n = parseInt(maxTurns);
+              if (!n || n < 1) setMaxTurns(1);
+              else if (n > 200) setMaxTurns(200);
+              else setMaxTurns(n);
+            }}
+            title="Number of turns to generate"
+            disabled={sessionState.isPlaying}
+            style={{ width: '50px', textAlign: 'center' }}
+          />
+          <span className="turns-label">turns</span>
+        </div>
+        <button
+          type="submit"
           className={`dynamic-button ${sessionState.isPlaying ? 'pause' : userMessage ? 'send' : 'play'}`}
           disabled={isSubmitting && !sessionState.isPlaying}
         >
