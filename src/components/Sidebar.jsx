@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Settings, MessageSquare, Activity, Code, Cloud } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings, MessageSquare, Activity, Code, Cloud, PlusCircle } from 'lucide-react';
 import { useSession } from '../contexts/SessionContext';
 
-const Sidebar = ({ activeTab, setActiveTab, collapsed, toggleSidebar }) => {
+const Sidebar = ({ activeTab, setActiveTab, collapsed, toggleSidebar, onNewChat }) => {
   const { sessionState, pastChats, loadPastChats } = useSession();
   const [sessionParamsOpen, setSessionParamsOpen] = useState(false);
   const [pastChatsOpen, setPastChatsOpen] = useState(false);
@@ -75,7 +75,18 @@ const Sidebar = ({ activeTab, setActiveTab, collapsed, toggleSidebar }) => {
               <span className="tab-text">LLM Settings</span>
             </button>
             
-            <button 
+            {onNewChat && (
+              <button
+                className=""
+                onClick={onNewChat}
+                style={{ marginTop: '8px' }}
+              >
+                <PlusCircle size={18} />
+                <span className="tab-text">New Chat</span>
+              </button>
+            )}
+
+            <button
               className="sidebar-tab"
               onClick={toggleSessionParams}
             >

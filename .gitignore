@@ -30,5 +30,11 @@ node_modules/
 # Chat cache
 chat_cache/
 
+# Generated graph visualizations
+src/static/graph_*.html
+
+# Bundle license file
+src/static/bundle.js.LICENSE.txt
+
 # IDE / Claude
 .claude/

@@ -359,3 +359,75 @@ export const fetchSessionId = async () => {
       throw error;
     }
   };
+
+// Agent Library
+export const fetchAgentPresets = async () => {
+  const response = await fetch('/api/agent_library');
+  return response.json();
+};
+
+export const createAgentPreset = async (data) => {
+  const response = await fetch('/api/agent_library', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  return response.json();
+};
+
+export const updateAgentPreset = async (presetId, data) => {
+  const response = await fetch(`/api/agent_library/${presetId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  return response.json();
+};
+
+export const deleteAgentPreset = async (presetId) => {
+  const response = await fetch(`/api/agent_library/${presetId}`, {
+    method: 'DELETE'
+  });
+  return response.json();
+};
+
+// Graph Library
+export const fetchSavedGraphs = async () => {
+  const response = await fetch('/api/saved_graphs');
+  return response.json();
+};
+
+export const saveGraphFromAgent = async (agentId, name) => {
+  const response = await fetch(`/api/saved_graphs/from_agent/${agentId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name })
+  });
+  return response.json();
+};
+
+export const mergeGraphs = async (graphIds, name) => {
+  const response = await fetch('/api/saved_graphs/merge', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ graph_ids: graphIds, name })
+  });
+  return response.json();
+};
+
+export const deleteSavedGraph = async (graphId) => {
+  const response = await fetch(`/api/saved_graphs/${graphId}`, {
+    method: 'DELETE'
+  });
+  return response.json();
+};
+
+// New chat with configuration
+export const createConfiguredChat = async (mode, presetIds, graphAssignments) => {
+  const response = await fetch('/create_new_chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode, preset_ids: presetIds, graph_assignments: graphAssignments || {} })
+  });
+  return response.json();
+};

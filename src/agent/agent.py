@@ -104,6 +104,8 @@ def llm_judge_call(system_prompt, user_prompt, generation_vars):
 
     try:
         raw = llm_service.complete(messages, options)
+        # Small delay to respect rate limits (especially ChatGPT Plus OAuth)
+        time.sleep(1)
         return raw
     except Exception as e:
         logger.error(f"LLM judge call failed: {e}")
@@ -368,7 +370,7 @@ def get_agent_response(prompt, agent_name, generation_vars, last_narration=''):
         }
 
         # For providers that support chat format, convert the prompt
-        if provider in ('openai', 'anthropic') and isinstance(prompt, str):
+        if provider in ('openai', 'openai-codex', 'anthropic') and isinstance(prompt, str):
             sections = prompt.split("\n\nConversation:\n")
             if len(sections) == 2:
                 system_prompt_text = sections[0]
@@ -414,12 +416,12 @@ def get_agent_response(prompt, agent_name, generation_vars, last_narration=''):
 # Main entry points
 # ---------------------------------------------------------------------------
 
-def offline_main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last_history):
+def offline_main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last_history, turn_index=0):
     """Main function for offline mode (without real LLM)."""
-    return main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last_history, offline=True)
+    return main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last_history, offline=True, turn_index=turn_index)
 
 
-def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last_history, offline=False):
+def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last_history, offline=False, turn_index=0):
     """Main function for agent processing.
 
     Implements the full loop:
@@ -436,20 +438,23 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
         logger.info("User turn, not generating agent responses")
         return history, agents_df, []
 
-    if len(history) == len_last_history:
+    # Only block on first turn (turn_index=0) if history hasn't changed since last user message
+    # For subsequent turns (turn_index>0), the previous agent's response is the new content
+    if turn_index == 0 and len(history) == len_last_history:
         logger.info("History unchanged, not generating new responses")
         return history, agents_df, []
 
     logs = []
 
-    # Pick an unmuted agent
+    # Pick agent via round-robin (cycle through unmuted agents in order)
     unmuted_agents = [i for i, muted in enumerate(agent_mutes) if not muted]
     if not unmuted_agents:
         logger.warning("All agents are muted, no responses generated")
         return history, agents_df, ["All agents are muted"]
 
-    agent_idx = random.choice(unmuted_agents)
+    agent_idx = unmuted_agents[turn_index % len(unmuted_agents)]
     agent = agents_df.iloc[agent_idx]
+    logger.info(f"Round-robin turn {turn_index}: selected agent '{agent['agent_name']}' (idx={agent_idx})")
 
     # Build generation vars
     generation_vars = (

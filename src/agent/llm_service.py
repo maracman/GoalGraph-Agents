@@ -35,9 +35,11 @@ PROVIDER_MODELS = {
         {'id': 'gpt-3.5-turbo', 'name': 'GPT-3.5 Turbo'},
     ],
     'openai-codex': [
-        {'id': 'gpt-4o', 'name': 'GPT-4o (Codex/Subscription)'},
-        {'id': 'gpt-4o-mini', 'name': 'GPT-4o Mini (Codex/Subscription)'},
-        {'id': 'o3-mini', 'name': 'o3-mini (Codex/Subscription)'},
+        {'id': 'gpt-5.1-codex-mini', 'name': 'GPT-5.1 Codex Mini (Subscription)'},
+        {'id': 'gpt-5.1', 'name': 'GPT-5.1 (Subscription)'},
+        {'id': 'gpt-5.1-codex-max', 'name': 'GPT-5.1 Codex Max (Subscription)'},
+        {'id': 'gpt-5.2', 'name': 'GPT-5.2 (Subscription)'},
+        {'id': 'gpt-5.2-codex', 'name': 'GPT-5.2 Codex (Subscription)'},
     ],
     'anthropic': [
         {'id': 'claude-sonnet-4-20250514', 'name': 'Claude Sonnet 4'},
@@ -58,11 +60,10 @@ PROVIDER_MODELS = {
 
 # Custom base URLs for providers (overridable via env or set_base_url)
 PROVIDER_BASE_URLS = {
-    'openai-codex': os.environ.get(
-        'OPENAI_CODEX_BASE_URL',
-        'http://127.0.0.1:10531/v1/chat/completions'
-    ),
+    'openai-codex': 'https://chatgpt.com/backend-api/codex/responses',
 }
+
+import base64
 
 LOCAL_MODELS = {}
 
@@ -110,10 +111,14 @@ class LLMService:
             if os.path.exists(auth_path):
                 with open(auth_path, 'r') as f:
                     auth = json.load(f)
-                token = auth.get('access_token')
+                # Token is nested under tokens.access_token
+                tokens = auth.get('tokens', {})
+                token = tokens.get('access_token') or auth.get('access_token')
                 if token:
                     self.api_keys['openai-codex'] = token
                     logger.info("Loaded Codex OAuth token from ~/.codex/auth.json")
+                else:
+                    logger.warning("No access_token found in ~/.codex/auth.json")
         except Exception as e:
             logger.warning(f"Could not load Codex auth: {e}")
 
@@ -138,9 +143,9 @@ class LLMService:
         return PROVIDER_MODELS.get(provider, [])
 
     def make_api_request(self, url: str, data: Dict[str, Any], headers: Dict[str, str]) -> Dict[str, Any]:
-        """Make an API request with retry logic."""
-        retries = self.config.get('retries', 2)
-        retry_delay = self.config.get('retry_delay', 1)
+        """Make an API request with retry logic and 429 backoff."""
+        retries = self.config.get('retries', 4)
+        retry_delay = self.config.get('retry_delay', 2)
         timeout = self.config.get('timeout', 60)
 
         last_error = None
@@ -151,9 +156,29 @@ class LLMService:
                 return response.json()
             except requests.exceptions.RequestException as e:
                 last_error = e
-                logger.warning(f"API request attempt {attempt + 1} failed: {str(e)}")
+                resp_obj = getattr(e, 'response', None)
+                status_code = getattr(resp_obj, 'status_code', None)
+                resp_text = ''
+                if resp_obj is not None:
+                    try:
+                        resp_text = resp_obj.text[:500]
+                    except Exception:
+                        pass
+                logger.warning(f"API request attempt {attempt + 1} failed (status={status_code}): {str(e)} | body: {resp_text}")
                 if attempt < retries:
-                    time.sleep(retry_delay)
+                    if status_code == 429:
+                        # Rate limited — use exponential backoff
+                        wait = retry_delay * (2 ** attempt)  # 2, 4, 8, 16 seconds
+                        # Check for Retry-After header
+                        retry_after = getattr(e, 'response', None)
+                        if retry_after is not None:
+                            ra = retry_after.headers.get('Retry-After')
+                            if ra and ra.isdigit():
+                                wait = max(wait, int(ra))
+                        logger.info(f"Rate limited, waiting {wait}s before retry...")
+                        time.sleep(wait)
+                    else:
+                        time.sleep(retry_delay)
 
         raise Exception(f"API request failed after {retries + 1} attempts: {str(last_error)}")
 
@@ -172,6 +197,8 @@ class LLMService:
                 return self.complete_with_local_model(prompt, options)
 
         try:
+            if provider == 'openai-codex':
+                return self.complete_with_codex(prompt, options)
             return self.complete_with_api(prompt, options)
         except Exception as e:
             logger.error(f"Error with provider {provider}: {str(e)}")
@@ -182,6 +209,8 @@ class LLMService:
                         try:
                             logger.info(f"Attempting fallback to {alt_provider}")
                             options['provider'] = alt_provider
+                            if alt_provider == 'openai-codex':
+                                return self.complete_with_codex(prompt, options)
                             return self.complete_with_api(prompt, options)
                         except Exception as fallback_error:
                             logger.error(f"Fallback to {alt_provider} failed: {str(fallback_error)}")
@@ -206,6 +235,186 @@ class LLMService:
         response = self.make_api_request(url, data, headers)
 
         return self.parse_response(response, provider)
+
+    def _extract_codex_account_id(self, token: str) -> str:
+        """Extract chatgpt_account_id from JWT token."""
+        try:
+            parts = token.split('.')
+            if len(parts) != 3:
+                raise ValueError("Invalid JWT token")
+            payload = parts[1]
+            # Add base64 padding
+            payload += '=' * (4 - len(payload) % 4)
+            decoded = json.loads(base64.b64decode(payload))
+            account_id = decoded.get('https://api.openai.com/auth', {}).get('chatgpt_account_id')
+            if not account_id:
+                raise ValueError("No chatgpt_account_id in token")
+            return account_id
+        except Exception as e:
+            logger.error(f"Failed to extract account ID from Codex token: {e}")
+            raise
+
+    def complete_with_codex(self, prompt: Union[str, List[Dict[str, str]]], options: Dict[str, Any]) -> str:
+        """Generate a completion using the ChatGPT Codex Responses API.
+
+        Uses https://chatgpt.com/backend-api/codex/responses with the OAuth
+        token from ~/.codex/auth.json.  This routes through the user's
+        ChatGPT Plus/Pro subscription instead of pay-per-token API billing.
+
+        Key constraints of this API:
+        - stream=true is REQUIRED
+        - instructions field is REQUIRED
+        - No temperature parameter (reasoning models)
+        - Input content must use {"type": "input_text", "text": "..."} format
+        - Only codex-specific models work (gpt-5.1-codex-mini, gpt-5.1, etc.)
+        """
+        token = self.api_keys.get('openai-codex')
+        if not token:
+            raise ValueError("No Codex OAuth token available. Run 'codex' CLI to authenticate.")
+
+        account_id = self._extract_codex_account_id(token)
+        model = options.get('model', 'gpt-5.1-codex-mini')
+        max_tokens = options.get('max_tokens', 250)
+
+        # Map non-codex model names to codex equivalents
+        codex_model_map = {
+            'gpt-4o': 'gpt-5.1-codex-mini',
+            'gpt-4o-mini': 'gpt-5.1-codex-mini',
+            'gpt-3.5-turbo': 'gpt-5.1-codex-mini',
+            'o3-mini': 'gpt-5.1-codex-mini',
+        }
+        if model in codex_model_map:
+            logger.info(f"Mapping model {model} to Codex model {codex_model_map[model]}")
+            model = codex_model_map[model]
+
+        # Build messages in Responses API format
+        system_prompt = 'You are a helpful assistant.'
+        input_messages = []
+
+        if isinstance(prompt, str):
+            input_messages = [{"role": "user", "content": [{"type": "input_text", "text": prompt}]}]
+        elif isinstance(prompt, list):
+            for msg in prompt:
+                if msg['role'] == 'system':
+                    system_prompt = msg['content']
+                elif msg['role'] == 'assistant':
+                    # Assistant messages use output_text type in Responses API
+                    input_messages.append({
+                        "role": "assistant",
+                        "content": [{"type": "output_text", "text": msg['content']}]
+                    })
+                else:
+                    # User/developer messages use input_text type
+                    input_messages.append({
+                        "role": msg['role'],
+                        "content": [{"type": "input_text", "text": msg['content']}]
+                    })
+
+        if not input_messages:
+            input_messages = [{"role": "user", "content": [{"type": "input_text", "text": "Hello"}]}]
+
+        body = {
+            "model": model,
+            "store": False,
+            "stream": True,  # Required by Codex API
+            "instructions": system_prompt,
+            "input": input_messages,
+            "text": {"verbosity": "medium"},
+        }
+
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'chatgpt-account-id': account_id,
+            'OpenAI-Beta': 'responses=experimental',
+            'Content-Type': 'application/json',
+            'Accept': 'text/event-stream',
+            'User-Agent': 'AgentGraph/1.0',
+            'originator': 'pi',
+        }
+
+        url = self.base_urls.get('openai-codex', PROVIDER_BASE_URLS['openai-codex'])
+        logger.info(f"Codex API request to {url} with model={model}")
+
+        # Streaming request with retry logic
+        retries = self.config.get('retries', 4)
+        retry_delay = self.config.get('retry_delay', 2)
+        timeout = self.config.get('timeout', 120)
+
+        last_error = None
+        for attempt in range(retries + 1):
+            try:
+                response = requests.post(
+                    url, json=body, headers=headers,
+                    timeout=timeout, stream=True
+                )
+                if response.status_code != 200:
+                    error_text = response.text[:500]
+                    logger.warning(f"Codex attempt {attempt+1} failed ({response.status_code}): {error_text}")
+                    if attempt < retries and response.status_code in (429, 500, 502, 503):
+                        wait = retry_delay * (2 ** attempt)
+                        time.sleep(wait)
+                        continue
+                    response.raise_for_status()
+
+                # Parse SSE stream to extract text
+                return self._parse_codex_stream(response)
+
+            except requests.exceptions.RequestException as e:
+                last_error = e
+                logger.warning(f"Codex request attempt {attempt+1} failed: {e}")
+                if attempt < retries:
+                    time.sleep(retry_delay * (2 ** attempt))
+
+        raise Exception(f"Codex API failed after {retries+1} attempts: {last_error}")
+
+    def _parse_codex_stream(self, response) -> str:
+        """Parse SSE stream from Codex Responses API and return final text."""
+        text_parts = []
+        final_response = None
+
+        for raw_line in response.iter_lines():
+            if not raw_line:
+                continue
+
+            # Ensure we have a string
+            line = raw_line.decode('utf-8') if isinstance(raw_line, bytes) else raw_line
+
+            if line.startswith('data: '):
+                data_str = line[6:]
+                try:
+                    data = json.loads(data_str)
+                except json.JSONDecodeError:
+                    continue
+
+                event_type = data.get('type', '')
+
+                # Collect text deltas
+                if event_type == 'response.output_text.delta':
+                    delta = data.get('delta', '')
+                    text_parts.append(delta)
+
+                # Or grab the final completed response
+                elif event_type == 'response.completed':
+                    final_response = data.get('response', {})
+
+                elif event_type == 'error':
+                    msg = data.get('message', str(data))
+                    raise Exception(f"Codex stream error: {msg}")
+
+        # If we got text deltas, join them
+        if text_parts:
+            return ''.join(text_parts).strip()
+
+        # Fallback: parse from the completed response
+        if final_response:
+            output = final_response.get('output', [])
+            for item in output:
+                if item.get('type') == 'message':
+                    for content in item.get('content', []):
+                        if content.get('type') == 'output_text':
+                            return content.get('text', '').strip()
+
+        raise Exception("No text output in Codex response")
 
     def complete_with_local_model(self, prompt: str, options: Dict[str, Any]) -> str:
         """Generate a completion using a local model."""

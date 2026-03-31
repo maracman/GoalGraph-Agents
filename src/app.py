@@ -32,10 +32,14 @@ os.makedirs('chat_cache', exist_ok=True)
 os.makedirs('chat_cache/graphs', exist_ok=True)
 os.makedirs('flask_session', exist_ok=True)
 os.makedirs('static', exist_ok=True)
+agent_library_dir = os.path.join('chat_cache', 'agent_library')
+saved_graphs_dir = os.path.join('chat_cache', 'saved_graphs')
+os.makedirs(agent_library_dir, exist_ok=True)
+os.makedirs(saved_graphs_dir, exist_ok=True)
 
 # Global variables
 global_log_queue = queue.Queue()
-offline = os.environ.get('OFFLINE_MODE', 'true').lower() == 'true'
+offline = os.environ.get('OFFLINE_MODE', 'false').lower() == 'true'
 VERSION = time.time()
 current_device = None
 
@@ -87,6 +91,10 @@ Session(app)
 # Cache directory path
 cache_dir = os.path.join(os.getcwd(), 'chat_cache')
 graph_directory = os.path.join(cache_dir, 'graphs')
+agent_library_dir = os.path.join(cache_dir, 'agent_library')
+saved_graphs_dir = os.path.join(cache_dir, 'saved_graphs')
+os.makedirs(agent_library_dir, exist_ok=True)
+os.makedirs(saved_graphs_dir, exist_ok=True)
 
 # Model configuration
 local_model_path = os.path.join(os.getcwd(), "local_model")
@@ -221,12 +229,12 @@ def load_default_settings(filename='defaults_session.json'):
     # Add LLM settings if not already present
     if 'llm_settings' not in defaults:
         defaults['llm_settings'] = {
-            'provider': 'local',
-            'model': os.path.basename(model_filename) if os.path.exists(model_filename) else None,
+            'provider': 'openai-codex',
+            'model': 'gpt-4o',
             'temperature': 0.7,
-            'max_tokens': 150,
+            'max_tokens': 250,
             'top_p': 0.9,
-            'fallback_to_local': True
+            'fallback_to_local': False
         }
     
     return defaults
@@ -317,22 +325,33 @@ def initialize_session():
 
     if 'llm_settings' not in session_state:
         session_state['llm_settings'] = defaults.get('llm_settings', {
-            'provider': 'local',
-            'model': os.path.basename(model_filename) if os.path.exists(model_filename) else None,
+            'provider': 'openai-codex',
+            'model': 'gpt-4o',
             'temperature': 0.7,
-            'max_tokens': 150,
+            'max_tokens': 250,
             'top_p': 0.9,
-            'fallback_to_local': True
+            'fallback_to_local': False
         })
 
     return session_state
+
+def _sanitize_for_json(obj):
+    """Replace NaN/Infinity values with None for valid JSON serialization."""
+    import math
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_for_json(v) for v in obj]
+    return obj
 
 def save_current_session(session_state):
     session_id = session_state['session_id']
     filename = f"{session_id}_state.json"
     filepath = os.path.join(cache_dir, filename)
     with open(filepath, 'w') as f:
-        json.dump(session_state, f)
+        json.dump(_sanitize_for_json(session_state), f)
     flask_logger.info(f"Session state saved: {session_id}")
 
 def load_state(session_id):
@@ -423,21 +442,22 @@ def get_session_id():
 
 @app.route('/debug_session')
 def debug_session():
-    return jsonify(session.get('state', {}))
+    return jsonify(_sanitize_for_json(session.get('state', {})))
 
 @app.route('/check_session')
 def check_session():
-    return jsonify({
+    return jsonify(_sanitize_for_json({
         'session_id': session.get('state', {}).get('session_id'),
         'session_contents': session.get('state', {})
-    })
+    }))
 
 @app.route('/get_llm_providers', methods=['GET'])
 def get_llm_providers():
     """Get list of available LLM providers."""
     try:
         providers = [
-            {'id': 'openai', 'name': 'OpenAI'},
+            {'id': 'openai-codex', 'name': 'ChatGPT (Subscription)'},
+            {'id': 'openai', 'name': 'OpenAI (API)'},
             {'id': 'anthropic', 'name': 'Anthropic (Claude)'},
             {'id': 'cohere', 'name': 'Cohere'},
             {'id': 'huggingface', 'name': 'HuggingFace'},
@@ -1122,15 +1142,22 @@ def submit():
 
         # Record user message in history if is_user is true
         if is_user and user_message:
-            session['state']['session_history'].append(("user", str(user_message)))
+            # In agent_agent mode the human acts as a narrator, not a participant
+            if session['state'].get('chat_mode') == 'agent_agent':
+                session['state']['session_history'].append(("narrator", str(user_message)))
+            else:
+                session['state']['session_history'].append(("user", str(user_message)))
             session['state']['is_user'] = is_user
             session['state']['user_message'] = user_message
             flask_logger.info(f"Added user message to session history: '{user_message}'")
         else:
             flask_logger.info("No user message added to session history")
 
-        # Get the max_generations value based on the is_user flag
-        max_generations = len(session['state']['agents_df']) if is_user else 100
+        # Get the max_generations value
+        # For multi-agent conversation: allow several rounds of back-and-forth
+        num_agents = len(session['state']['agents_df'])
+        max_rounds = 6  # Each agent speaks this many times
+        max_generations = num_agents * max_rounds
         flask_logger.info(f"Set max_generations to {max_generations}")
 
         # Initialize the generation process
@@ -1203,8 +1230,11 @@ def generate():
             # Update settings with LLM configuration
             settings.update(llm_settings)
         
+        # Pass current_generation so agent.main() can round-robin agents
+        current_gen = session['state']['current_generation']
+
         # Call the main function
-        flask_logger.info(f"Calling main function with: is_user={is_user}, user_name={user_name}, agent_mutes={agent_mutes}, len_last_history={len_last_history}")
+        flask_logger.info(f"Calling main function with: is_user={is_user}, user_name={user_name}, agent_mutes={agent_mutes}, len_last_history={len_last_history}, turn={current_gen}")
         new_history, new_agents_df, logs = main(
             session['state']['session_history'],
             agents_df,
@@ -1212,7 +1242,8 @@ def generate():
             user_name,
             is_user,
             agent_mutes,
-            len_last_history
+            len_last_history,
+            turn_index=current_gen
         )
 
         # Check if new response was generated
@@ -1223,11 +1254,9 @@ def generate():
             flask_logger.info("No new response generated")
 
         # Update session state
-        old_history_len = len(session['state']['session_history'])
         session['state']['session_history'] = new_history
-        # Only update len_last_history when history actually grew (agent generated something)
-        if len(new_history) > old_history_len:
-            session['state']['len_last_history'] = len(new_history)
+        # Don't update len_last_history here — it's set on submit only
+        # so agent.main() can use turn_index for multi-agent round-robin
         session['state']['agents_df'] = new_agents_df.to_dict('records')
         session['state']['current_generation'] += 1
 
@@ -1359,20 +1388,148 @@ def duplicate_chat():
 @app.route('/create_new_chat', methods=['POST'])
 def create_new_chat():
     """
-    Create a new chat - loads defaults and changes to settings page.
-    This follows the 'create new chat' option in the TODO list.
+    Create a new chat.  Accepts an optional JSON body to configure agents
+    from presets and optionally assign saved graphs:
+
+        {
+          "mode": "agent_agent" | "user_agent",
+          "preset_ids": ["preset_abc", "preset_def"],
+          "graph_assignments": {"preset_abc": "graph_123"}
+        }
+
+    When no body (or no preset_ids) is provided the route falls back to the
+    original defaults_session.json behaviour so it stays backward-compatible.
     """
     try:
-        # Initialize a new session with defaults
-        new_session = initialize_session()
-        session['state'] = new_session
-        
-        return jsonify({
-            "success": True,
-            "message": "New chat created",
-            "session_id": new_session['session_id'],
-            "redirect_to": "agent"  # Redirect to settings page
-        })
+        import shutil
+
+        data = request.get_json(silent=True) or {}
+        preset_ids = data.get('preset_ids', [])
+
+        if preset_ids:
+            # ── Preset-driven session creation ──────────────────────────
+            mode = data.get('mode', 'user_agent')
+            graph_assignments = data.get('graph_assignments', {})
+
+            defaults = load_default_settings()
+            session_id = generate_session_id()
+
+            agents = []
+            for pid in preset_ids:
+                preset_path = os.path.join(agent_library_dir, f"{pid}.json")
+                if not os.path.exists(preset_path):
+                    return jsonify({
+                        "success": False,
+                        "error": f"Preset {pid} not found"
+                    }), 404
+                with open(preset_path, 'r') as f:
+                    preset = json.load(f)
+
+                agent_id = generate_agent_id()
+                graph_file_path = os.path.join(graph_directory, f"{agent_id}_graph.graphml")
+
+                # If a saved graph is assigned, copy it; otherwise init empty
+                assigned_graph_id = graph_assignments.get(pid)
+                if assigned_graph_id:
+                    src_gml = os.path.join(saved_graphs_dir, f"{assigned_graph_id}.graphml")
+                    if os.path.exists(src_gml):
+                        shutil.copy2(src_gml, graph_file_path)
+                    else:
+                        graph = nx.DiGraph()
+                        graph.add_node('start')
+                        nx.write_graphml(graph, graph_file_path)
+                else:
+                    graph = nx.DiGraph()
+                    graph.add_node('start')
+                    nx.write_graphml(graph, graph_file_path)
+
+                # Build per-agent generation variables with provider/model if set
+                agent_provider = preset.get('provider', '')
+                agent_model = preset.get('model', '')
+                has_custom_llm = bool(agent_provider and agent_model)
+
+                gen_vars = {
+                    'seed': 42,
+                    'temperature': 0.7,
+                    'max_tokens': 250,
+                    'top_p': 0.9,
+                    'use_gpu': True,
+                    'llm': None
+                }
+                if has_custom_llm:
+                    gen_vars['provider'] = agent_provider
+                    gen_vars['model'] = agent_model
+
+                agent = {
+                    'agent_id': agent_id,
+                    'agent_name': preset.get('agent_name', 'Unnamed Agent'),
+                    'description': preset.get('description', ''),
+                    'goal': preset.get('goal', ''),
+                    'target_impression': preset.get('target_impression', ''),
+                    'muted': False,
+                    'environment': 'default',
+                    'graph_file_path': graph_file_path,
+                    'persistance_count': 0,
+                    'persistance_score': None,
+                    'patience': 8,
+                    'persistance': 4,
+                    'last_response': '',
+                    'last_narration': '',
+                    'current_aim': None,
+                    'suggestion': '',
+                    'current_node_location': 'start',
+                    'personal_history': [],
+                    'is_agent_generation_variables': has_custom_llm,
+                    'generation_variables': gen_vars,
+                    'impression_of_others': '',
+                    'environment_changes': '',
+                    'new_information': ''
+                }
+                agents.append(agent)
+
+            agents_df = pd.DataFrame(agents)
+
+            session_state = {
+                'session_id': session_id,
+                'user_name': defaults['user_name'],
+                'agent_mutes': [False] * len(agents_df),
+                'agents_df': agents_df.to_dict('records'),
+                'session_history': [],
+                'len_last_history': defaults['len_last_history'],
+                'settings': defaults['settings'],
+                'play': False,
+                'is_user': False,
+                'max_generations': 0,
+                'current_generation': 0,
+                'user_message': '',
+                'number_of_agents': len(agents_df),
+                'chat_mode': mode
+            }
+
+            if 'llm_settings' in defaults:
+                session_state['llm_settings'] = defaults['llm_settings']
+
+            save_current_session(session_state)
+            session['state'] = session_state
+
+            return jsonify({
+                "success": True,
+                "message": "New chat created from presets",
+                "session_id": session_id,
+                "chat_mode": mode,
+                "redirect_to": "agent"
+            })
+        else:
+            # ── Default behaviour (backward-compatible) ─────────────────
+            new_session = initialize_session()
+            session['state'] = new_session
+
+            return jsonify({
+                "success": True,
+                "message": "New chat created",
+                "session_id": new_session['session_id'],
+                "redirect_to": "agent"
+            })
     except Exception as e:
         flask_logger.error(f"Error creating new chat: {str(e)}")
         return jsonify({
@@ -1935,6 +2092,237 @@ def get_agent_graphs():
     agents_df = pd.DataFrame(session['state']['agents_df'])
     graphs = [{"id": row['agent_id'], "name": row['agent_name']} for _, row in agents_df.iterrows()]
     return jsonify(graphs)
+
+### ─── Agent Library CRUD ───────────────────────────────────────────────
+
+@app.route('/api/agent_library', methods=['GET'])
+def list_agent_presets():
+    """List all saved agent presets."""
+    try:
+        presets = []
+        for filename in os.listdir(agent_library_dir):
+            if filename.endswith('.json'):
+                filepath = os.path.join(agent_library_dir, filename)
+                with open(filepath, 'r') as f:
+                    preset = json.load(f)
+                    presets.append(preset)
+        return jsonify({"success": True, "presets": presets})
+    except Exception as e:
+        flask_logger.error(f"Error listing agent presets: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/agent_library', methods=['POST'])
+def create_agent_preset():
+    """Create a new agent preset."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+
+        preset_id = f"preset_{uuid.uuid4()}"
+        preset = {
+            "preset_id": preset_id,
+            "agent_name": data.get("agent_name", "Unnamed Agent"),
+            "description": data.get("description", ""),
+            "goal": data.get("goal", ""),
+            "target_impression": data.get("target_impression", ""),
+            "provider": data.get("provider", ""),
+            "model": data.get("model", ""),
+            "created_at": datetime.now().isoformat()
+        }
+
+        filepath = os.path.join(agent_library_dir, f"{preset_id}.json")
+        with open(filepath, 'w') as f:
+            json.dump(preset, f, indent=2)
+
+        return jsonify({"success": True, "preset": preset}), 201
+    except Exception as e:
+        flask_logger.error(f"Error creating agent preset: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/agent_library/<preset_id>', methods=['PUT'])
+def update_agent_preset(preset_id):
+    """Update an existing agent preset."""
+    try:
+        filepath = os.path.join(agent_library_dir, f"{preset_id}.json")
+        if not os.path.exists(filepath):
+            return jsonify({"success": False, "error": "Preset not found"}), 404
+
+        with open(filepath, 'r') as f:
+            preset = json.load(f)
+
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+
+        for key in ["agent_name", "description", "goal", "target_impression", "provider", "model"]:
+            if key in data:
+                preset[key] = data[key]
+        preset["updated_at"] = datetime.now().isoformat()
+
+        with open(filepath, 'w') as f:
+            json.dump(preset, f, indent=2)
+
+        return jsonify({"success": True, "preset": preset})
+    except Exception as e:
+        flask_logger.error(f"Error updating agent preset: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/agent_library/<preset_id>', methods=['DELETE'])
+def delete_agent_preset(preset_id):
+    """Delete an agent preset."""
+    try:
+        filepath = os.path.join(agent_library_dir, f"{preset_id}.json")
+        if not os.path.exists(filepath):
+            return jsonify({"success": False, "error": "Preset not found"}), 404
+
+        os.remove(filepath)
+        return jsonify({"success": True, "message": f"Preset {preset_id} deleted"})
+    except Exception as e:
+        flask_logger.error(f"Error deleting agent preset: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+### ─── Graph Library ───────────────────────────────────────────────────
+
+@app.route('/api/saved_graphs', methods=['GET'])
+def list_saved_graphs():
+    """List all saved graphs with their metadata."""
+    try:
+        graphs = []
+        for filename in os.listdir(saved_graphs_dir):
+            if filename.endswith('_meta.json'):
+                filepath = os.path.join(saved_graphs_dir, filename)
+                with open(filepath, 'r') as f:
+                    meta = json.load(f)
+                    graphs.append(meta)
+        return jsonify({"success": True, "graphs": graphs})
+    except Exception as e:
+        flask_logger.error(f"Error listing saved graphs: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/saved_graphs/from_agent/<agent_id>', methods=['POST'])
+def save_graph_from_agent(agent_id):
+    """Save a running agent's graph to the graph library."""
+    try:
+        if 'state' not in session:
+            return jsonify({"error": "No active session"}), 400
+
+        agents_df = pd.DataFrame(session['state']['agents_df'])
+        row = agents_df[agents_df['agent_id'] == agent_id]
+        if row.empty:
+            return jsonify({"success": False, "error": "Agent not found"}), 404
+
+        agent = row.iloc[0]
+        src_path = agent['graph_file_path']
+        if not os.path.exists(src_path):
+            return jsonify({"success": False, "error": "Agent graph file not found"}), 404
+
+        graph_id = f"graph_{uuid.uuid4()}"
+        data = request.get_json() or {}
+        name = data.get("name", f"{agent['agent_name']}_graph")
+
+        # Copy graphml
+        import shutil
+        dest_graphml = os.path.join(saved_graphs_dir, f"{graph_id}.graphml")
+        shutil.copy2(src_path, dest_graphml)
+
+        # Create metadata
+        G = nx.read_graphml(dest_graphml)
+        meta = {
+            "graph_id": graph_id,
+            "name": name,
+            "source_agent_id": agent_id,
+            "source_agent_name": agent['agent_name'],
+            "nodes": G.number_of_nodes(),
+            "edges": G.number_of_edges(),
+            "created_at": datetime.now().isoformat()
+        }
+        meta_path = os.path.join(saved_graphs_dir, f"{graph_id}_meta.json")
+        with open(meta_path, 'w') as f:
+            json.dump(meta, f, indent=2)
+
+        return jsonify({"success": True, "graph": meta}), 201
+    except Exception as e:
+        flask_logger.error(f"Error saving graph from agent: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/saved_graphs/merge', methods=['POST'])
+def merge_saved_graphs():
+    """Merge multiple saved graphs into a new one."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+
+        graph_ids = data.get("graph_ids", [])
+        name = data.get("name", "merged_graph")
+
+        if len(graph_ids) < 2:
+            return jsonify({"success": False, "error": "At least two graph_ids required"}), 400
+
+        merged = nx.DiGraph()
+        source_names = []
+        for gid in graph_ids:
+            gml_path = os.path.join(saved_graphs_dir, f"{gid}.graphml")
+            if not os.path.exists(gml_path):
+                return jsonify({"success": False, "error": f"Graph {gid} not found"}), 404
+            G = nx.read_graphml(gml_path)
+            merged = nx.compose(merged, G)
+
+            meta_path = os.path.join(saved_graphs_dir, f"{gid}_meta.json")
+            if os.path.exists(meta_path):
+                with open(meta_path, 'r') as f:
+                    source_names.append(json.load(f).get("name", gid))
+
+        new_graph_id = f"graph_{uuid.uuid4()}"
+        dest_graphml = os.path.join(saved_graphs_dir, f"{new_graph_id}.graphml")
+        nx.write_graphml(merged, dest_graphml)
+
+        meta = {
+            "graph_id": new_graph_id,
+            "name": name,
+            "source_graph_ids": graph_ids,
+            "source_names": source_names,
+            "nodes": merged.number_of_nodes(),
+            "edges": merged.number_of_edges(),
+            "created_at": datetime.now().isoformat()
+        }
+        meta_path = os.path.join(saved_graphs_dir, f"{new_graph_id}_meta.json")
+        with open(meta_path, 'w') as f:
+            json.dump(meta, f, indent=2)
+
+        return jsonify({"success": True, "graph": meta}), 201
+    except Exception as e:
+        flask_logger.error(f"Error merging graphs: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/saved_graphs/<graph_id>', methods=['DELETE'])
+def delete_saved_graph(graph_id):
+    """Delete a saved graph and its metadata."""
+    try:
+        gml_path = os.path.join(saved_graphs_dir, f"{graph_id}.graphml")
+        meta_path = os.path.join(saved_graphs_dir, f"{graph_id}_meta.json")
+
+        if not os.path.exists(meta_path) and not os.path.exists(gml_path):
+            return jsonify({"success": False, "error": "Graph not found"}), 404
+
+        if os.path.exists(gml_path):
+            os.remove(gml_path)
+        if os.path.exists(meta_path):
+            os.remove(meta_path)
+
+        return jsonify({"success": True, "message": f"Graph {graph_id} deleted"})
+    except Exception as e:
+        flask_logger.error(f"Error deleting saved graph: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 @app.errorhandler(404)
 def not_found_error(error):

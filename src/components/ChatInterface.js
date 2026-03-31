@@ -4,10 +4,11 @@ import { submitMessage, generateResponse, interruptTask } from '../services/api'
 import { useSession } from '../contexts/SessionContext';
 
 const ChatInterface = () => {
-  const { sessionId, sessionState, setSessionState } = useSession();
+  const { sessionId, setSessionId, sessionState, setSessionState, loadPastChats } = useSession();
   const [userMessage, setUserMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null); // 'delete' | 'reset' | null
   const chatBoxRef = useRef(null);
   
   useEffect(() => {
@@ -27,8 +28,30 @@ const ChatInterface = () => {
       return;
     }
     
-    if (!userMessage.trim() && !sessionState.isUser) {
-      // Don't submit empty messages
+    if (!userMessage.trim()) {
+      // Empty message — just trigger agent generation directly
+      try {
+        setIsSubmitting(true);
+        // Submit empty to set play state on server
+        const response = await submitMessage('', true);
+        if (response.success) {
+          setSessionState(prev => ({
+            ...prev,
+            history: response.history || prev.history,
+            maxGenerations: response.max_generations,
+            isPlaying: response.play,
+            currentGeneration: 0,
+            isUser: false
+          }));
+          if (response.play) {
+            generateAgentResponses();
+          }
+        }
+      } catch (error) {
+        console.error("Error starting generation:", error);
+      } finally {
+        setIsSubmitting(false);
+      }
       return;
     }
     
@@ -105,30 +128,116 @@ const ChatInterface = () => {
   };
   
   const createNewChat = async () => {
-    // Implement create new chat functionality
     setDropdownOpen(false);
+    try {
+      const response = await fetch('/create_new_chat', { method: 'POST' });
+      const data = await response.json();
+      if (data.success || data.session_id) {
+        if (data.session_id) setSessionId(data.session_id);
+        setSessionState(prev => ({
+          ...prev,
+          history: [],
+          isPlaying: false,
+          isUser: false,
+          currentGeneration: 0,
+          maxGenerations: 0,
+          chat_mode: data.chat_mode || 'you_agent'
+        }));
+        await loadPastChats();
+      }
+    } catch (error) {
+      console.error('Error creating new chat:', error);
+    }
   };
-  
+
   const duplicateChat = async () => {
-    // Implement duplicate chat functionality
     setDropdownOpen(false);
+    try {
+      const response = await fetch('/duplicate_chat', { method: 'POST' });
+      const data = await response.json();
+      if (data.success || data.session_id) {
+        if (data.session_id) setSessionId(data.session_id);
+        await loadPastChats();
+      }
+    } catch (error) {
+      console.error('Error duplicating chat:', error);
+    }
   };
-  
+
   const resetChat = async () => {
-    // Implement reset chat functionality
     setDropdownOpen(false);
+    setConfirmAction('reset');
   };
-  
+
   const deleteChat = async () => {
-    // Implement delete chat functionality
     setDropdownOpen(false);
+    setConfirmAction('delete');
+  };
+
+  const handleConfirm = async () => {
+    const action = confirmAction;
+    setConfirmAction(null);
+    if (action === 'reset') {
+      try {
+        const response = await fetch('/reset', { method: 'POST' });
+        const data = await response.json();
+        if (data.success) {
+          setSessionState(prev => ({
+            ...prev,
+            history: [],
+            isPlaying: false,
+            isUser: false,
+            currentGeneration: 0,
+            maxGenerations: 0
+          }));
+        }
+      } catch (error) {
+        console.error('Error resetting chat:', error);
+      }
+    } else if (action === 'delete') {
+      try {
+        const response = await fetch('/delete_chat', { method: 'POST' });
+        const data = await response.json();
+        if (data.success || data.session_id) {
+          if (data.session_id) setSessionId(data.session_id);
+          setSessionState(prev => ({
+            ...prev,
+            history: [],
+            isPlaying: false,
+            isUser: false,
+            currentGeneration: 0,
+            maxGenerations: 0,
+            chat_mode: 'you_agent'
+          }));
+          await loadPastChats();
+        }
+      } catch (error) {
+        console.error('Error deleting chat:', error);
+      }
+    }
   };
   
+  const isAgentAgent = sessionState.chat_mode === 'agent_agent';
+
+  // Build mode indicator label
+  const getModeLabel = () => {
+    if (!isAgentAgent) {
+      // "You + Agent" style
+      const agentNames = (sessionState.agentData || []).map(a => a.agent_name || a.name).filter(Boolean);
+      if (agentNames.length > 0) return `You + ${agentNames[0]}`;
+      return 'Conversation';
+    }
+    // Agent vs Agent style
+    const agentNames = (sessionState.agentData || []).map(a => a.agent_name || a.name).filter(Boolean);
+    if (agentNames.length >= 2) return `${agentNames[0]} vs ${agentNames[1]}`;
+    return 'Agent vs Agent';
+  };
+
   return (
     <div className="chat-container">
       <div className="chat-header">
         <div className="chat-title">
-          <span>Conversation</span>
+          <span>{getModeLabel()}</span>
           <div className="dropdown">
             <button className="dropdown-toggle" onClick={toggleDropdown}>
               <ChevronDown size={18} />
@@ -156,7 +265,21 @@ const ChatInterface = () => {
           </div>
         </div>
       </div>
-      
+
+      {confirmAction && (
+        <div className="confirm-banner">
+          <span>
+            {confirmAction === 'delete'
+              ? 'Delete this chat? This cannot be undone.'
+              : 'Reset this chat? History will be cleared but agents kept.'}
+          </span>
+          <div className="confirm-banner-buttons">
+            <button className="confirm-yes" onClick={handleConfirm}>Yes</button>
+            <button className="confirm-no" onClick={() => setConfirmAction(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
       <div className="chat-box-body" ref={chatBoxRef}>
         {sessionState.history.map((message, index) => (
           <div 
@@ -165,7 +288,7 @@ const ChatInterface = () => {
           >
             <div className="message-content">
               <div className="message-header">
-                <strong>{message[0] === 'user' ? 'You' : message[0]}</strong>
+                <strong>{message[0] === 'user' ? (isAgentAgent ? 'Narrator' : 'You') : message[0]}</strong>
               </div>
               <div className="message-text">{message[1]}</div>
             </div>
@@ -192,7 +315,7 @@ const ChatInterface = () => {
           type="text"
           value={userMessage}
           onChange={(e) => setUserMessage(e.target.value)}
-          placeholder="Type your message..."
+          placeholder={isAgentAgent ? "Set the scene..." : "Type your message..."}
           disabled={isSubmitting}
         />
         <button 
