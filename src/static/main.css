@@ -741,7 +741,7 @@ body, html {
 
 /* Graph View */
 .graph-view-container {
-  max-width: 1000px;
+  max-width: 1280px;
   margin: 0 auto 20px;
   padding: 24px 24px 40px;
   background-color: white;
@@ -773,7 +773,7 @@ body, html {
 }
 
 .graph-display:has(.graph-iframe) {
-  min-height: 450px;
+  min-height: 620px;
 }
 
 .graph-display:has(.no-graph-message) {
@@ -813,7 +813,8 @@ body, html {
 }
 
 .graph-iframe-container:has(.graph-iframe) {
-  height: 450px;
+  height: min(72vh, 760px);
+  min-height: 620px;
 }
 
 .graph-iframe {

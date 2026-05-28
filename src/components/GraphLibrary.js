@@ -208,15 +208,19 @@ const GraphLibrary = () => {
           <div className="graph-legend-inline">
             <div className="legend-item">
               <div className="legend-color" style={{ backgroundColor: 'blue' }}></div>
-              <span>Active subgoal</span>
+              <span>Active aim</span>
             </div>
             <div className="legend-item">
               <div className="legend-color" style={{ backgroundColor: 'gray' }}></div>
-              <span>Previous subgoal</span>
+              <span>Previous aim</span>
             </div>
             <div className="legend-item">
               <div className="legend-line" style={{ borderTop: '2px solid green' }}></div>
               <span>Go (success)</span>
+            </div>
+            <div className="legend-item">
+              <div className="legend-line" style={{ borderTop: '2px solid #2563eb' }}></div>
+              <span>Progress (aim evolved)</span>
             </div>
             <div className="legend-item">
               <div className="legend-line" style={{ borderTop: '2px dashed red' }}></div>

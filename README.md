@@ -2,9 +2,9 @@
 
 **Chat agents that map their pursuits through autonomous goal-setting**
 
-An interactive multi-agent AI platform where agents pursue goals through conversation, with an LLM judge evaluating progress and a graph intelligence system that learns optimal paths over time.
+An interactive multi-agent AI platform where agents pursue evolving aims through conversation, with an LLM judge evaluating progress and a graph intelligence system that learns useful paths over time.
 
-Agents don't just chat — they work toward goals. A lightweight LLM judge rates each agent's progress on a 1–7 scale, triggering **Go** (goal achieved) or **NoGo** (abandon and retry) decisions that build a persistent decision graph. Over time, agents use sentence embeddings to find known paths through the graph toward their goals, avoiding previously failed approaches.
+Agents don't just chat — they build a reusable knowledge workspace of possible aims. A lightweight LLM judge rates each agent's progress on a 1–7 scale, triggering **Go** (aim achieved), **Progress** (aim evolved), or **NoGo** (abandon and retry) decisions that build a persistent directed graph. Over time, agents use sentence embeddings to find known paths through the graph, avoiding failed approaches while letting goals change as the situation develops.
 
 ## Screenshots
 
@@ -14,11 +14,11 @@ These screenshots are generated from the current web app UI.
 ![Chat Interface](screenshots/chat_interface.png)
 
 ### Graph Visualization
-Curated water-rights dispute graph with 22 nodes and 22 edges.
-![Graph Visualization](screenshots/graph_visualization.png)
+Detailed 129-node aim workspace in the actual GoalGraph UI, with one node highlighted and its connected nodes available for path-following.
+![Graph Visualization](screenshots/detailed_graph_explorer.png)
 
 ### Rapid Graph Run UI
-Actual GoalGraph UI showing a dense rapid adversarial run. The 2x2 use-case image below is re-rendered from GraphML data for side-by-side comparison.
+Actual GoalGraph UI showing a dense rapid adversarial run.
 ![Rapid Graph Run UI](screenshots/ui_graph_run.png)
 
 ### Agent Settings
@@ -56,17 +56,18 @@ Actual GoalGraph UI showing a dense rapid adversarial run. The 2x2 use-case imag
 
 Each generation cycle follows this flow:
 
-1. **Subgoal Assignment** — If the agent has no active subgoal, the system first checks the decision graph for a known path (via embedding similarity search). If no path exists, the LLM generates a new subgoal, informed by previously failed approaches (NoGo nodes in the graph).
+1. **Aim Assignment** — If the agent has no active aim, the system first checks the decision graph for a known path (via embedding similarity search). If no path exists, the LLM generates a new aim, informed by previously failed approaches (NoGo nodes in the graph).
 
-2. **Response Generation** — The agent generates an in-character response with its subgoal and suggested action as context. Responses include optional narration (deduplicated against the last narration to avoid repetition using a >20% similarity threshold).
+2. **Response Generation** — The agent generates an in-character response with its current aim and suggested action as context. Responses include optional narration (deduplicated against the last narration to avoid repetition using a >20% similarity threshold).
 
-3. **LLM Judge Review** — A lightweight LLM call rates goal progress on a 1–7 Likert scale:
-   - Rating >= 6 → **Go**: Subgoal achieved. A Go edge is created in the graph.
-   - Rating <= 2 → **NoGo**: Strong failure. The subgoal is abandoned (after minimum persistence turns).
+3. **LLM Judge Review** — A lightweight LLM call rates aim progress on a 1–7 Likert scale:
+   - Rating >= 6 → **Go**: Aim achieved. A Go edge is created in the graph.
+   - Aim evolved → **Progress**: The current aim led to a better or more specific next aim.
+   - Rating <= 2 → **NoGo**: Strong failure. The aim is abandoned (after minimum persistence turns).
    - Score regression > 1 point *and* rating <= 4 → **NoGo**: Progress is going backwards.
    - Exceeded patience limit → **NoGo**: Agent has been stuck too long; forced abandonment.
 
-4. **Graph Update** — Go/NoGo decisions create weighted, directed edges in the agent's decision graph. The edge weight equals `persistence_count` (the number of turns the agent spent on that subgoal), which also determines visual distance in the graph rendering.
+4. **Graph Update** — Go/Progress/NoGo decisions create weighted, directed edges in the agent's decision graph. The edge weight equals `persistence_count` (the number of turns the agent spent on that aim), which also determines visual distance in the graph rendering.
 
 ```
                         ┌──────────────┐
@@ -74,12 +75,12 @@ Each generation cycle follows this flow:
                         └──────┬───────┘
                                │
                     ┌──────────▼──────────┐
-                    │  Generate Subgoal   │◄──── Check graph for known path
+                    │    Generate Aim     │◄──── Check graph for known path
                     │  (or use known path)│      (embedding similarity search)
                     └──────────┬──────────┘
                                │
                     ┌──────────▼──────────┐
-                    │  Agent Response     │◄──── Subgoal + suggestion in prompt
+                    │  Agent Response     │◄──── Aim + suggestion in prompt
                     │  (LLM generation)   │
                     └──────────┬──────────┘
                                │
@@ -93,8 +94,8 @@ Each generation cycle follows this flow:
                            │     │ (NoGo)
                     ┌──────▼─┐ ┌─▼────────────┐
                     │Go Edge │ │NoGo Edge      │
-                    │→ next  │ │→ {goal}_NoGo  │
-                    │subgoal │ │  (try again)  │
+                    │→ next  │ │→ {aim}_NoGo   │
+                    │ aim    │ │  (try again)  │
                     └────────┘ └───────────────┘
 ```
 
@@ -107,24 +108,25 @@ Each agent maintains its own **directed graph** (NetworkX `DiGraph`) stored as a
 | Node Type | Example | Meaning |
 |-----------|---------|---------|
 | `start` | `start` | Initial node. Every graph begins here. |
-| Subgoal node | `negotiate 50% discount` | A successfully reached intermediate goal. |
+| Aim node | `negotiate 50% discount` | A reachable goal, hypothesis, tactic, or next step in the shared workspace. |
 | NoGo node | `negotiate 50% discount_NoGo` | A failed approach — explicitly recorded to prevent re-attempting. |
 
 #### Edge Types
 
 | Edge Label | Direction | Weight | Meaning |
 |------------|-----------|--------|---------|
-| `Go` | `current_node` → `subgoal_text` | `persistence_count` | Successful progression. The agent achieved this subgoal in N turns. |
-| `NoGo` | `current_node` → `{subgoal}_NoGo` | `persistence_count` | Failed approach. The agent tried N turns and gave up. |
+| `Go` | `current_node` → `aim_text` | `persistence_count` | Successful progression. The agent achieved this aim in N turns. |
+| `Progress` | `current_node` → `aim_text` | `persistence_count` | The aim evolved into a better, more specific, or more current aim. |
+| `NoGo` | `current_node` → `{aim}_NoGo` | `persistence_count` | Failed approach. The agent tried N turns and gave up. |
 | `Similar` | Bidirectional | `0.1` | Semantic link between nodes with cosine similarity > 0.8. Created during graph merge operations. |
 
 #### Edge Weight Semantics
 
 The edge weight has a dual purpose:
 
-1. **As a record**: It captures how many conversation turns the agent spent pursuing that subgoal. Lower weight = the agent achieved it quickly. Higher weight = it took more effort.
+1. **As a record**: It captures how many conversation turns the agent spent pursuing that aim. Lower weight = the agent advanced quickly. Higher weight = it took more effort.
 2. **For pathfinding**: When searching for routes through the graph, edge weight determines cost. NoGo edges are penalized 10x, so the pathfinder strongly prefers successful (Go) routes.
-3. **For visualization**: PyVis renders edge length as `weight × 100`, so quick wins cluster tightly and hard-fought subgoals spread out visually.
+3. **For visualization**: PyVis renders edge length as `weight × 100`, so quick wins cluster tightly and hard-fought aims spread out visually.
 
 #### Graph Lifecycle
 
@@ -132,15 +134,15 @@ The edge weight has a dual purpose:
 Agent Created → Empty graph with 'start' node
        │
        ▼
-First Subgoal → LLM generates subgoal (no graph history to reference)
+First Aim → LLM generates an aim (no graph history to reference)
        │
        ▼
-After N turns → Judge rates progress → Go or NoGo edge created
+After N turns → Judge rates progress → Go, Progress, or NoGo edge created
        │
        ▼
-Next Subgoal → System checks graph: "Is there a known path from here to the goal?"
-       │         ├── Yes: Follow known path (next node = next subgoal)
-       │         └── No: LLM generates new subgoal (informed by NoGo history)
+Next Aim → System checks graph: "Is there a useful known path from here?"
+       │         ├── Yes: Follow known path (next node = next aim)
+       │         └── No: LLM generates a new aim (informed by NoGo history)
        ▼
 Graph grows with each conversation cycle...
        │
@@ -154,13 +156,13 @@ The decision graph isn't just a record — it's reusable knowledge.
 
 #### Semantic Search (`find_path_to_goal`)
 
-Node labels are embedded with `all-MiniLM-L6-v2` (sentence-transformers). When an agent needs a new subgoal:
+Node labels are embedded with `all-MiniLM-L6-v2` (sentence-transformers). When an agent needs a new aim:
 
 1. All node labels in the graph are batch-encoded into 384-dimensional embeddings (cached for efficiency).
 2. The agent's goal text is embedded.
 3. Cosine similarity identifies the graph node most semantically similar to the goal.
 4. `nx.shortest_path` routes from the agent's current node to the target, weighting by `persistence_count` and penalizing NoGo edges 10×.
-5. The next node on that path becomes the agent's new subgoal.
+5. The next node on that path becomes the agent's new aim.
 
 This means agents can recognize when a previously successful strategy applies to a new situation, even when the exact wording differs.
 
@@ -187,18 +189,18 @@ After a merge, `link_similar_nodes()` can connect semantically equivalent nodes 
 
 ### Persistence & Patience
 
-Each agent has configurable persistence parameters that control how long it pursues a subgoal before giving up:
+Each agent has configurable persistence parameters that control how long it pursues an aim before giving up:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `persistance` | 3 | Minimum turns before a NoGo can trigger, even on bad scores. Gives the agent a fair chance. |
 | `patience` | 6 | Maximum turns before a forced NoGo, regardless of score. Prevents infinite loops. |
-| `persistance_count` | 0 (resets) | Tracks attempts on the current subgoal. Becomes the edge weight on Go/NoGo. |
+| `persistance_count` | 0 (resets) | Tracks attempts on the current aim. Becomes the edge weight on Go/Progress/NoGo. |
 | `persistance_score` | 4 (resets) | The LLM judge's latest rating (1–7). Used to detect regression. |
 
 **Decision logic each turn:**
 - If `persistance_count < persistance`: Agent continues regardless of score (building patience).
-- If rating >= 6: **Go** — subgoal achieved.
+- If rating >= 6: **Go** — aim achieved.
 - If rating <= 2 and `persistance_count >= persistance`: **NoGo** — clear failure.
 - If `persistance_score - rating > 1` and rating <= 4: **NoGo** — regression detected.
 - If `persistance_count > patience`: **NoGo** — timeout, agent has been stuck too long.
@@ -211,7 +213,7 @@ Each agent has configurable persistence parameters that control how long it purs
 
 The platform supports two conversation modes, selected when creating a new chat:
 
-**You + Agent** — Chat directly with one AI agent. You provide messages; the agent responds in character while pursuing its goal. The agent's subgoal system, LLM judge, and graph all operate behind the scenes.
+**You + Agent** — Chat directly with one AI agent. You provide messages; the agent responds in character while pursuing its long-range goal. The agent's aim system, LLM judge, and graph all operate behind the scenes.
 
 **Agent vs Agent** — Watch two or more agents converse with each other. You act as a "narrator," providing scene-setting context. Each agent takes turns responding, each pursuing their own goal with their own decision graph. This mode is designed for studying multi-agent negotiation, debate, and emergent behavior.
 
@@ -239,7 +241,7 @@ The **Agent Library** lets you create reusable agent presets with:
 | **Target Impression** | How the agent wants to be perceived by others |
 | **LLM Provider** | Which AI provider to use (OpenAI, Anthropic, Cohere, etc.) |
 | **Model** | Specific model within that provider |
-| **Persistence / Patience** | How quickly the agent abandons or completes subgoals, useful for graph density |
+| **Persistence / Patience** | How quickly the agent abandons, progresses, or completes aims, useful for graph density |
 
 **Per-agent LLM configuration** means you can pit different models against each other in the same conversation. For example:
 - **Jordan** uses `claude-sonnet-4-20250514` (Anthropic)
@@ -254,7 +256,8 @@ The **Graph** tab provides a complete graph management interface:
 #### Active Agent Graphs
 - View any active agent's current decision graph rendered as an interactive PyVis visualization.
 - Nodes are draggable; the physics simulation uses Barnes-Hut gravity.
-- Blue nodes = active/successful subgoals. Grey nodes = failed (NoGo) approaches.
+- Dense graphs can be explored while zoomed out: hover or select a node to highlight its immediate neighborhood, inspect incoming/outgoing connected nodes, and follow a path by clicking connected nodes in the details panel.
+- Blue nodes = active/successful aims. Grey nodes = failed (NoGo) approaches.
 - Save an agent's graph to the library for later reuse.
 
 #### Saved Graphs
@@ -269,7 +272,7 @@ The **Graph** tab provides a complete graph management interface:
 3. Enter a name for the merged graph.
 4. Click "Confirm Merge" — the system combines all nodes/edges via `nx.compose` and saves the result as a new graph.
 
-The inline legend appears inside the graph viewer when a graph is displayed, showing node types (active subgoal, previous subgoal) and edge types (Go/success, NoGo/fail).
+The inline legend appears inside the graph viewer when a graph is displayed, showing node types and edge types (Go/success, Progress/aim evolved, NoGo/fail).
 
 ### Multi-Provider LLM Support
 
@@ -318,10 +321,6 @@ The Developer tab provides real-time debugging:
 
 GoalGraph is strongest when each agent has a clear objective and the conversation has real tradeoffs. Useful graph examples include:
 
-The 2x2 grid is reconstructed from the included GraphML examples so the use cases can be compared in one image. Use the **Rapid Graph Run UI** screenshot above for the actual in-app graph view.
-
-![Curated adversarial graph examples](screenshots/usecase_graph_examples.png)
-
 | Use case | Agent pairing | What the graph reveals |
 |----------|---------------|------------------------|
 | Subscription retention | Customer vs retention specialist | Discount anchors, cancellation threats, save offers, and failed persuasion loops |
@@ -332,7 +331,7 @@ The 2x2 grid is reconstructed from the included GraphML examples so the use case
 | Product strategy | Growth lead vs reliability lead | Feature tradeoffs, launch blockers, risk acceptance, and escalation points |
 | Mediation practice | Mediator vs two conflicting stakeholders | Which reframes lower conflict and which proposals repeatedly stall |
 
-For dense graph examples, use short goals, strong opposition, low persistence, and 30-100 rapid turns. For higher-quality strategy maps, raise persistence/patience and run several shorter sessions, then merge the saved graphs.
+For detailed graph examples, use strong situational constraints, evolving aims, low-to-medium persistence, and rapid turns. For higher-quality strategy maps, raise persistence/patience and run several shorter sessions, then merge the saved graphs.
 
 Seed GraphML examples are included in `examples/graphs/`:
 
@@ -343,6 +342,7 @@ Seed GraphML examples are included in `examples/graphs/`:
 | [`security_red_team.graphml`](examples/graphs/security_red_team.graphml) | Security drill showing investigation, control gaps, mitigations, and unsafe dead ends |
 | [`procurement_negotiation.graphml`](examples/graphs/procurement_negotiation.graphml) | Buyer-vendor negotiation around price, risk, legal terms, and rollout commitments |
 | [`adversarial_use_cases_showcase.graphml`](examples/graphs/adversarial_use_cases_showcase.graphml) | Merged multi-domain strategy map with semantic links across scenarios |
+| [`detailed_adversarial_strategy_map.graphml`](examples/graphs/detailed_adversarial_strategy_map.graphml) | 129-node aim workspace with Go, Progress, and NoGo paths for detailed exploration |
 
 ---
 
@@ -372,7 +372,7 @@ Seed GraphML examples are included in `examples/graphs/`:
 │         │            │                  │                     │
 │  ┌──────▼──────┐ ┌───▼────────────┐ ┌──▼──────────────┐     │
 │  │  agent.py   │ │graph_intel.py  │ │ llm_service.py  │     │
-│  │  Subgoals   │ │  Embeddings    │ │  Multi-provider │     │
+│  │    Aims     │ │  Embeddings    │ │  Multi-provider │     │
 │  │  Go/NoGo    │ │  Pathfinding   │ │  Retry/fallback │     │
 │  │  Judge loop │ │  Import/Merge  │ │  Rate limiting  │     │
 │  └──────┬──────┘ └───┬────────────┘ └──┬──────────────┘     │
@@ -403,10 +403,10 @@ thinking-agents/
 │   ├── webpack.config.js            # Webpack build configuration
 │   ├── package.json                 # Frontend dependencies
 │   ├── agent/
-│   │   ├── agent.py                 # Core agent logic: subgoals, LLM judge, Go/NoGo loop
+│   │   ├── agent.py                 # Core agent logic: aims, LLM judge, Go/Progress/NoGo loop
 │   │   ├── graph_intelligence.py    # Embedding search, pathfinding, graph import/merge/linking
 │   │   ├── llm_service.py           # Multi-provider LLM abstraction with retry and fallback
-│   │   └── schemas.py               # JSON schemas for agent responses, judge ratings, subgoals
+│   │   └── schemas.py               # JSON schemas for agent responses, judge ratings, aims
 │   ├── components/
 │   │   ├── App.js                   # Main App component with tab routing
 │   │   ├── Sidebar.jsx              # Sidebar navigation and past chats
@@ -600,8 +600,8 @@ OFFLINE_MODE=true python app.py
 
 ### Analyzing Agent Behavior
 
-- **Graph structure** reveals the agent's decision-making process: which subgoals were attempted, which succeeded (Go edges), which failed (NoGo edges), and how many turns each took (edge weight).
-- **Edge weight distribution** shows efficiency — lower weights mean the agent achieved subgoals quickly.
+- **Graph structure** reveals the agent's decision-making process: which aims were attempted, which succeeded (Go edges), which evolved (Progress edges), which failed (NoGo edges), and how many turns each took (edge weight).
+- **Edge weight distribution** shows efficiency — lower weights mean the agent advanced aims quickly.
 - **NoGo node clustering** indicates areas where agents consistently struggle.
 - **Merged graphs** across multiple runs reveal robust strategies vs. fragile ones.
 
