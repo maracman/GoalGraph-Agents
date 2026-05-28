@@ -14,7 +14,7 @@ These screenshots are generated from the current web app UI.
 ![Chat Interface](screenshots/chat_interface.png)
 
 ### Graph Visualization
-Detailed 129-node aim workspace in the actual GoalGraph UI, with one node highlighted and its connected nodes available for path-following.
+Detailed 129-node aim workspace in the actual GoalGraph UI, with the expanded graph viewport and explorer controls for search, labels, and path-following.
 ![Graph Visualization](screenshots/detailed_graph_explorer.png)
 
 ### Rapid Graph Run UI
