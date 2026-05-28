@@ -24,6 +24,7 @@ const GraphLibrary = () => {
   const [saveNameInput, setSaveNameInput] = useState('');
   const [savingAgentId, setSavingAgentId] = useState(null);
   const iframeRef = useRef(null);
+  const graphDisplayRef = useRef(null);
 
   useEffect(() => {
     loadAllGraphs();
@@ -42,11 +43,18 @@ const GraphLibrary = () => {
     }
   };
 
+  const scrollGraphIntoView = () => {
+    requestAnimationFrame(() => {
+      graphDisplayRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
   const handleVisualize = async (agentId) => {
     setLoading(true);
     try {
       const graphData = await visualizeGraph(agentId);
       setGraphUrl(graphData.graph_html);
+      scrollGraphIntoView();
     } catch (error) {
       console.error('Error visualizing graph:', error);
     } finally {
@@ -61,6 +69,7 @@ const GraphLibrary = () => {
       const response = await fetch(`/api/saved_graphs/${graphId}/visualize`);
       const data = await response.json();
       setGraphUrl(data.graph_html);
+      scrollGraphIntoView();
     } catch (error) {
       console.error('Error visualizing saved graph:', error);
     } finally {
@@ -133,53 +142,12 @@ const GraphLibrary = () => {
 
   return (
     <div className="graph-view-container">
-      {/* Section 1: Active Agent Graphs */}
-      <div className="graph-header">
-        <h2>Active Agent Graphs</h2>
-      </div>
-
-      <div className="agent-library-list">
-        {activeAgentGraphs.length === 0 && (
-          <p style={{ color: '#888', fontStyle: 'italic' }}>No active agent graphs.</p>
-        )}
-        {activeAgentGraphs.map((agent) => (
-          <div key={agent.id} className="agent-preset-card">
-            <div className="preset-card-header">
-              <strong>{agent.name}</strong>
-              <span style={{ color: '#888', fontSize: '0.85em', marginLeft: '8px' }}>
-                {agent.node_count != null ? `${agent.node_count} nodes` : ''}
-              </span>
-            </div>
-            <div className="buttons-row" style={{ justifyContent: 'flex-end' }}>
-              <button className="save-button" onClick={() => handleVisualize(agent.id)}>
-                View
-              </button>
-              <button className="add-button" onClick={() => handleSaveFromAgent(agent.id)}>
-                <Save size={14} />
-                <span>{savingAgentId === agent.id ? 'Confirm' : 'Save to Library'}</span>
-              </button>
-            </div>
-            {savingAgentId === agent.id && (
-              <div className="setting-group" style={{ marginTop: '8px' }}>
-                <input
-                  type="text"
-                  value={saveNameInput}
-                  onChange={(e) => setSaveNameInput(e.target.value)}
-                  placeholder="Graph name"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveFromAgent(agent.id);
-                    if (e.key === 'Escape') { setSavingAgentId(null); setSaveNameInput(''); }
-                  }}
-                  autoFocus
-                />
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
       {/* Graph visualization */}
-      <div className="graph-display">
+      <div className="graph-header">
+        <h2>Graph Visualization</h2>
+      </div>
+
+      <div className="graph-display" ref={graphDisplayRef}>
         {loading && (
           <div className="loading-indicator">
             <div className="spinner"></div>
@@ -228,6 +196,51 @@ const GraphLibrary = () => {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Section 1: Active Agent Graphs */}
+      <div className="graph-header">
+        <h2>Active Agent Graphs</h2>
+      </div>
+
+      <div className="agent-library-list">
+        {activeAgentGraphs.length === 0 && (
+          <p style={{ color: '#888', fontStyle: 'italic' }}>No active agent graphs.</p>
+        )}
+        {activeAgentGraphs.map((agent) => (
+          <div key={agent.id} className="agent-preset-card">
+            <div className="preset-card-header">
+              <strong>{agent.name}</strong>
+              <span style={{ color: '#888', fontSize: '0.85em', marginLeft: '8px' }}>
+                {agent.node_count != null ? `${agent.node_count} nodes` : ''}
+              </span>
+            </div>
+            <div className="buttons-row" style={{ justifyContent: 'flex-end' }}>
+              <button className="save-button" onClick={() => handleVisualize(agent.id)}>
+                View
+              </button>
+              <button className="add-button" onClick={() => handleSaveFromAgent(agent.id)}>
+                <Save size={14} />
+                <span>{savingAgentId === agent.id ? 'Confirm' : 'Save to Library'}</span>
+              </button>
+            </div>
+            {savingAgentId === agent.id && (
+              <div className="setting-group" style={{ marginTop: '8px' }}>
+                <input
+                  type="text"
+                  value={saveNameInput}
+                  onChange={(e) => setSaveNameInput(e.target.value)}
+                  placeholder="Graph name"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveFromAgent(agent.id);
+                    if (e.key === 'Escape') { setSavingAgentId(null); setSaveNameInput(''); }
+                  }}
+                  autoFocus
+                />
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
       {/* Section 2: Saved Graphs */}

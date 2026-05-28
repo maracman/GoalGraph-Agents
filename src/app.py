@@ -152,11 +152,37 @@ def graph_node_label(node, data=None):
 
 def inject_graph_explorer(html_path, node_count):
     """Add lightweight search, fit, and zoom-aware labels to the PyVis HTML."""
-    explorer = f"""
+    layout_css = f"""
 <style>
   html, body, #mynetwork {{
+    width: 100%;
     height: 100%;
     margin: 0;
+  }}
+  html, body {{
+    min-height: 100%;
+    overflow: hidden;
+  }}
+  body > .card {{
+    width: 100% !important;
+    height: 100vh !important;
+    min-height: 720px;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }}
+  #mynetwork {{
+    height: 100vh !important;
+    min-height: 720px;
+    padding: 0 !important;
+    float: none !important;
+    border: 0 !important;
+  }}
+  #mynetwork .vis-network,
+  #mynetwork canvas {{
+    min-height: 720px;
+  }}
+  #mynetwork canvas {{
+    display: block;
   }}
   #goalgraph-explorer {{
     position: absolute;
@@ -239,6 +265,8 @@ def inject_graph_explorer(html_path, node_count):
     white-space: nowrap;
   }}
 </style>
+"""
+    explorer = f"""
 <div id="goalgraph-explorer">
   <div class="explorer-row">
     <input id="goalgraph-node-search" type="search" list="goalgraph-node-options" placeholder="Find node" autocomplete="off" />
@@ -276,6 +304,30 @@ def inject_graph_explorer(html_path, node_count):
   var labelById = {{}};
   var selectedNodeId = null;
   var hoverNodeId = null;
+  var resizeTimer = null;
+
+  function resizeNetwork() {{
+    var height = Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0, 720);
+    var heightPx = height + 'px';
+    var card = document.querySelector('body > .card');
+    var networkElement = document.getElementById('mynetwork');
+    document.documentElement.style.height = '100%';
+    document.body.style.height = '100%';
+    if (card) card.style.height = heightPx;
+    if (networkElement) networkElement.style.height = heightPx;
+    network.setSize('100%', heightPx);
+    network.redraw();
+  }}
+
+  resizeNetwork();
+  window.addEventListener('resize', function () {{
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(function () {{
+      resizeNetwork();
+      network.fit({{ animation: false }});
+      updateLabels();
+    }}, 80);
+  }});
 
   originalNodes.forEach(function (node) {{
     labelById[node.id] = node.fullLabel;
@@ -477,18 +529,25 @@ def inject_graph_explorer(html_path, node_count):
     zoomTimer = window.setTimeout(updateLabels, 60);
   }});
   network.once('stabilized', function () {{
+    resizeNetwork();
     updateLabels();
     network.fit({{ animation: false }});
   }});
   window.setTimeout(function () {{
+    resizeNetwork();
     updateLabels();
     network.fit({{ animation: false }});
   }}, 500);
+  window.setTimeout(function () {{
+    resizeNetwork();
+    network.fit({{ animation: false }});
+  }}, 1200);
 }}());
 </script>
 """
     with open(html_path, 'r', encoding='utf-8') as f:
         contents = f.read()
+    contents = contents.replace('</head>', layout_css + '\n</head>')
     contents = contents.replace('</body>', explorer + '\n</body>')
     with open(html_path, 'w', encoding='utf-8') as f:
         f.write(contents)
