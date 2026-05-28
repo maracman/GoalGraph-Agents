@@ -1,0 +1,1451 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d4" for="edge" attr.name="weight" attr.type="double" />
+  <key id="d3" for="edge" attr.name="label" attr.type="string" />
+  <key id="d2" for="node" attr.name="role" attr.type="string" />
+  <key id="d1" for="node" attr.name="phase" attr.type="string" />
+  <key id="d0" for="node" attr.name="label" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="frame_000">
+      <data key="d0">define shared stakes</data>
+      <data key="d1">frame</data>
+      <data key="d2">start</data>
+    </node>
+    <node id="frame_001">
+      <data key="d0">name hard constraint</data>
+      <data key="d1">frame</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="frame_002">
+      <data key="d0">state preferred outcome</data>
+      <data key="d1">frame</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="frame_003">
+      <data key="d0">surface hidden incentive</data>
+      <data key="d1">frame</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="frame_004">
+      <data key="d0">separate facts from story</data>
+      <data key="d1">frame</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="frame_005">
+      <data key="d0">agree on decision clock</data>
+      <data key="d1">frame</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="frame_006">
+      <data key="d0">map veto holders</data>
+      <data key="d1">frame</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="frame_007">
+      <data key="d0">set evidence standard</data>
+      <data key="d1">frame</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="frame_008">
+      <data key="d0">identify fallback path</data>
+      <data key="d1">frame</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="frame_009">
+      <data key="d0">lock agenda</data>
+      <data key="d1">frame</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="evidence_010">
+      <data key="d0">request baseline data</data>
+      <data key="d1">evidence</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="evidence_011">
+      <data key="d0">check source quality</data>
+      <data key="d1">evidence</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="evidence_012">
+      <data key="d0">ask for counterexample</data>
+      <data key="d1">evidence</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="evidence_013">
+      <data key="d0">compare historical pattern</data>
+      <data key="d1">evidence</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="evidence_014">
+      <data key="d0">quantify downside risk</data>
+      <data key="d1">evidence</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="evidence_015">
+      <data key="d0">show opportunity cost</data>
+      <data key="d1">evidence</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="evidence_016">
+      <data key="d0">test assumption with sample</data>
+      <data key="d1">evidence</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="evidence_017">
+      <data key="d0">invite third party readout</data>
+      <data key="d1">evidence</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="evidence_018">
+      <data key="d0">publish shared notes</data>
+      <data key="d1">evidence</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="evidence_019">
+      <data key="d0">confirm disputed facts</data>
+      <data key="d1">evidence</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="pressure_020">
+      <data key="d0">anchor ambitious ask</data>
+      <data key="d1">pressure</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="pressure_021">
+      <data key="d0">hold price line</data>
+      <data key="d1">pressure</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="pressure_022">
+      <data key="d0">challenge weak concession</data>
+      <data key="d1">pressure</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="pressure_023">
+      <data key="d0">expose delay cost</data>
+      <data key="d1">pressure</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="pressure_024">
+      <data key="d0">offer narrow trade</data>
+      <data key="d1">pressure</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="pressure_025">
+      <data key="d0">reject vague promise</data>
+      <data key="d1">pressure</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="pressure_026">
+      <data key="d0">escalate to sponsor</data>
+      <data key="d1">pressure</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="pressure_027">
+      <data key="d0">ask for written commitment</data>
+      <data key="d1">pressure</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="pressure_028">
+      <data key="d0">pause to recalc BATNA</data>
+      <data key="d1">pressure</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="pressure_029">
+      <data key="d0">reopen priority stack</data>
+      <data key="d1">pressure</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="compromise_030">
+      <data key="d0">split reversible pilot</data>
+      <data key="d1">compromise</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="compromise_031">
+      <data key="d0">define success metric</data>
+      <data key="d1">compromise</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="compromise_032">
+      <data key="d0">cap exposure window</data>
+      <data key="d1">compromise</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="compromise_033">
+      <data key="d0">stage rollout gates</data>
+      <data key="d1">compromise</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="compromise_034">
+      <data key="d0">exchange concession</data>
+      <data key="d1">compromise</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="compromise_035">
+      <data key="d0">add audit checkpoint</data>
+      <data key="d1">compromise</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="compromise_036">
+      <data key="d0">reserve legal fallback</data>
+      <data key="d1">compromise</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="compromise_037">
+      <data key="d0">document exception path</data>
+      <data key="d1">compromise</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="compromise_038">
+      <data key="d0">assign accountable owner</data>
+      <data key="d1">compromise</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="compromise_039">
+      <data key="d0">schedule review date</data>
+      <data key="d1">compromise</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="execution_040">
+      <data key="d0">launch controlled test</data>
+      <data key="d1">execution</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="execution_041">
+      <data key="d0">watch leading indicator</data>
+      <data key="d1">execution</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="execution_042">
+      <data key="d0">collect stakeholder signal</data>
+      <data key="d1">execution</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="execution_043">
+      <data key="d0">triage first incident</data>
+      <data key="d1">execution</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="execution_044">
+      <data key="d0">tighten operating rule</data>
+      <data key="d1">execution</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="execution_045">
+      <data key="d0">revise support script</data>
+      <data key="d1">execution</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="execution_046">
+      <data key="d0">publish weekly dashboard</data>
+      <data key="d1">execution</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="execution_047">
+      <data key="d0">resolve edge case</data>
+      <data key="d1">execution</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="execution_048">
+      <data key="d0">train second team</data>
+      <data key="d1">execution</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="execution_049">
+      <data key="d0">prepare scale decision</data>
+      <data key="d1">execution</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="resilience_050">
+      <data key="d0">model bad faith move</data>
+      <data key="d1">resilience</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="resilience_051">
+      <data key="d0">precommit response</data>
+      <data key="d1">resilience</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="resilience_052">
+      <data key="d0">build rollback path</data>
+      <data key="d1">resilience</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="resilience_053">
+      <data key="d0">write escalation trigger</data>
+      <data key="d1">resilience</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="resilience_054">
+      <data key="d0">stress test capacity</data>
+      <data key="d1">resilience</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="resilience_055">
+      <data key="d0">verify compliance record</data>
+      <data key="d1">resilience</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="resilience_056">
+      <data key="d0">reconcile conflicting data</data>
+      <data key="d1">resilience</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="resilience_057">
+      <data key="d0">repair trust after miss</data>
+      <data key="d1">resilience</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="resilience_058">
+      <data key="d0">close unresolved loop</data>
+      <data key="d1">resilience</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="resilience_059">
+      <data key="d0">archive lessons learned</data>
+      <data key="d1">resilience</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="scale_060">
+      <data key="d0">expand to next cohort</data>
+      <data key="d1">scale</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="scale_061">
+      <data key="d0">compare regional variance</data>
+      <data key="d1">scale</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="scale_062">
+      <data key="d0">standardize winning path</data>
+      <data key="d1">scale</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="scale_063">
+      <data key="d0">remove obsolete branch</data>
+      <data key="d1">scale</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="scale_064">
+      <data key="d0">merge duplicate tactic</data>
+      <data key="d1">scale</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="scale_065">
+      <data key="d0">codify negotiation guardrail</data>
+      <data key="d1">scale</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="scale_066">
+      <data key="d0">fund enabling work</data>
+      <data key="d1">scale</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="scale_067">
+      <data key="d0">hand off owner packet</data>
+      <data key="d1">scale</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="scale_068">
+      <data key="d0">monitor drift signal</data>
+      <data key="d1">scale</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="scale_069">
+      <data key="d0">renew agreement</data>
+      <data key="d1">scale</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="longtail_070">
+      <data key="d0">audit lingering risk</data>
+      <data key="d1">longtail</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="longtail_071">
+      <data key="d0">probe weak relationship</data>
+      <data key="d1">longtail</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="longtail_072">
+      <data key="d0">refresh external benchmark</data>
+      <data key="d1">longtail</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="longtail_073">
+      <data key="d0">test renewal pressure</data>
+      <data key="d1">longtail</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="longtail_074">
+      <data key="d0">rebalance incentives</data>
+      <data key="d1">longtail</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="longtail_075">
+      <data key="d0">update decision graph</data>
+      <data key="d1">longtail</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="longtail_076">
+      <data key="d0">run adversarial replay</data>
+      <data key="d1">longtail</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="longtail_077">
+      <data key="d0">retire failed tactic</data>
+      <data key="d1">longtail</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="longtail_078">
+      <data key="d0">lock final memorandum</data>
+      <data key="d1">longtail</data>
+      <data key="d2">go</data>
+    </node>
+    <node id="longtail_079">
+      <data key="d0">resolution</data>
+      <data key="d1">longtail</data>
+      <data key="d2">resolution</data>
+    </node>
+    <node id="nogo_000">
+      <data key="d0">personal attack (NoGo)</data>
+      <data key="d1">frame</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_001">
+      <data key="d0">hide key data (NoGo)</data>
+      <data key="d1">frame</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_002">
+      <data key="d0">accept vague terms (NoGo)</data>
+      <data key="d1">frame</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="recovery_003">
+      <data key="d0">narrow the disputed scope</data>
+      <data key="d1">frame</data>
+      <data key="d2">recovery</data>
+    </node>
+    <node id="nogo_004">
+      <data key="d0">overpromise capacity (NoGo)</data>
+      <data key="d1">frame</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_005">
+      <data key="d0">skip legal review (NoGo)</data>
+      <data key="d1">evidence</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_006">
+      <data key="d0">threaten public blame (NoGo)</data>
+      <data key="d1">evidence</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_007">
+      <data key="d0">ignore stakeholder loss (NoGo)</data>
+      <data key="d1">evidence</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="recovery_008">
+      <data key="d0">publish decision log</data>
+      <data key="d1">evidence</data>
+      <data key="d2">recovery</data>
+    </node>
+    <node id="nogo_009">
+      <data key="d0">bury audit finding (NoGo)</data>
+      <data key="d1">evidence</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_010">
+      <data key="d0">offer symbolic concession (NoGo)</data>
+      <data key="d1">evidence</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_011">
+      <data key="d0">force premature decision (NoGo)</data>
+      <data key="d1">pressure</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="recovery_012">
+      <data key="d0">convert demand into test</data>
+      <data key="d1">pressure</data>
+      <data key="d2">recovery</data>
+    </node>
+    <node id="nogo_013">
+      <data key="d0">escalate without options (NoGo)</data>
+      <data key="d1">pressure</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_014">
+      <data key="d0">dismiss edge case (NoGo)</data>
+      <data key="d1">pressure</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_015">
+      <data key="d0">personal attack (NoGo)</data>
+      <data key="d1">pressure</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_016">
+      <data key="d0">hide key data (NoGo)</data>
+      <data key="d1">pressure</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="recovery_017">
+      <data key="d0">bring sponsor into room</data>
+      <data key="d1">pressure</data>
+      <data key="d2">recovery</data>
+    </node>
+    <node id="nogo_018">
+      <data key="d0">delay until urgency fades (NoGo)</data>
+      <data key="d1">compromise</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_019">
+      <data key="d0">overpromise capacity (NoGo)</data>
+      <data key="d1">compromise</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_020">
+      <data key="d0">skip legal review (NoGo)</data>
+      <data key="d1">compromise</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="recovery_021">
+      <data key="d0">ask neutral reviewer</data>
+      <data key="d1">compromise</data>
+      <data key="d2">recovery</data>
+    </node>
+    <node id="nogo_022">
+      <data key="d0">ignore stakeholder loss (NoGo)</data>
+      <data key="d1">compromise</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_023">
+      <data key="d0">change metric midstream (NoGo)</data>
+      <data key="d1">compromise</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_024">
+      <data key="d0">bury audit finding (NoGo)</data>
+      <data key="d1">execution</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_025">
+      <data key="d0">offer symbolic concession (NoGo)</data>
+      <data key="d1">execution</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="recovery_026">
+      <data key="d0">reset conversation frame</data>
+      <data key="d1">execution</data>
+      <data key="d2">recovery</data>
+    </node>
+    <node id="nogo_027">
+      <data key="d0">claim false certainty (NoGo)</data>
+      <data key="d1">execution</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_028">
+      <data key="d0">escalate without options (NoGo)</data>
+      <data key="d1">execution</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_029">
+      <data key="d0">dismiss edge case (NoGo)</data>
+      <data key="d1">execution</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="recovery_030">
+      <data key="d0">return to evidence standard</data>
+      <data key="d1">execution</data>
+      <data key="d2">recovery</data>
+    </node>
+    <node id="nogo_031">
+      <data key="d0">hide key data (NoGo)</data>
+      <data key="d1">resilience</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_032">
+      <data key="d0">accept vague terms (NoGo)</data>
+      <data key="d1">resilience</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_033">
+      <data key="d0">delay until urgency fades (NoGo)</data>
+      <data key="d1">resilience</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_034">
+      <data key="d0">overpromise capacity (NoGo)</data>
+      <data key="d1">resilience</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="recovery_035">
+      <data key="d0">trade timeline for transparency</data>
+      <data key="d1">resilience</data>
+      <data key="d2">recovery</data>
+    </node>
+    <node id="nogo_036">
+      <data key="d0">threaten public blame (NoGo)</data>
+      <data key="d1">resilience</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_037">
+      <data key="d0">ignore stakeholder loss (NoGo)</data>
+      <data key="d1">scale</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_038">
+      <data key="d0">change metric midstream (NoGo)</data>
+      <data key="d1">scale</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="recovery_039">
+      <data key="d0">separate apology from remedy</data>
+      <data key="d1">scale</data>
+      <data key="d2">recovery</data>
+    </node>
+    <node id="nogo_040">
+      <data key="d0">offer symbolic concession (NoGo)</data>
+      <data key="d1">scale</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_041">
+      <data key="d0">force premature decision (NoGo)</data>
+      <data key="d1">scale</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_042">
+      <data key="d0">claim false certainty (NoGo)</data>
+      <data key="d1">scale</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_043">
+      <data key="d0">escalate without options (NoGo)</data>
+      <data key="d1">longtail</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="recovery_044">
+      <data key="d0">write reversible clause</data>
+      <data key="d1">longtail</data>
+      <data key="d2">recovery</data>
+    </node>
+    <node id="nogo_045">
+      <data key="d0">personal attack (NoGo)</data>
+      <data key="d1">longtail</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_046">
+      <data key="d0">hide key data (NoGo)</data>
+      <data key="d1">longtail</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="nogo_047">
+      <data key="d0">accept vague terms (NoGo)</data>
+      <data key="d1">longtail</data>
+      <data key="d2">nogo</data>
+    </node>
+    <node id="recovery_048">
+      <data key="d0">publish decision log</data>
+      <data key="d1">longtail</data>
+      <data key="d2">recovery</data>
+    </node>
+    <edge source="frame_000" target="frame_001">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="frame_001" target="frame_002">
+      <data key="d3">Progress</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="frame_002" target="frame_003">
+      <data key="d3">Progress</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="frame_002" target="nogo_000">
+      <data key="d3">NoGo</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="frame_003" target="frame_004">
+      <data key="d3">Go</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="frame_003" target="frame_009">
+      <data key="d3">Go</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="frame_004" target="frame_005">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="frame_004" target="nogo_001">
+      <data key="d3">NoGo</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="frame_005" target="frame_006">
+      <data key="d3">Go</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="frame_006" target="frame_007">
+      <data key="d3">Progress</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="frame_006" target="nogo_002">
+      <data key="d3">NoGo</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="frame_007" target="frame_008">
+      <data key="d3">Progress</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="frame_007" target="recovery_003">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="frame_008" target="frame_009">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="frame_008" target="nogo_004">
+      <data key="d3">NoGo</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="frame_008" target="pressure_027">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="frame_009" target="evidence_010">
+      <data key="d3">Go</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="frame_009" target="frame_004">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="evidence_010" target="evidence_011">
+      <data key="d3">Go</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="evidence_010" target="nogo_005">
+      <data key="d3">NoGo</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="evidence_011" target="evidence_012">
+      <data key="d3">Progress</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="evidence_012" target="evidence_013">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="evidence_012" target="nogo_006">
+      <data key="d3">NoGo</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="evidence_013" target="evidence_014">
+      <data key="d3">Go</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="evidence_014" target="evidence_015">
+      <data key="d3">Go</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="evidence_014" target="pressure_020">
+      <data key="d3">Go</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="evidence_014" target="nogo_007">
+      <data key="d3">NoGo</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="evidence_014" target="recovery_008">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="evidence_015" target="evidence_016">
+      <data key="d3">Go</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="evidence_015" target="execution_045">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="evidence_016" target="evidence_017">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="evidence_016" target="nogo_009">
+      <data key="d3">NoGo</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="evidence_017" target="evidence_018">
+      <data key="d3">Progress</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="evidence_018" target="evidence_019">
+      <data key="d3">Go</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="evidence_018" target="evidence_013">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="evidence_018" target="nogo_010">
+      <data key="d3">NoGo</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="evidence_019" target="pressure_020">
+      <data key="d3">Go</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="pressure_020" target="pressure_021">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="pressure_020" target="nogo_011">
+      <data key="d3">NoGo</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="pressure_021" target="pressure_022">
+      <data key="d3">Progress</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="pressure_021" target="recovery_012">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="pressure_022" target="pressure_023">
+      <data key="d3">Progress</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="pressure_022" target="nogo_013">
+      <data key="d3">NoGo</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="pressure_023" target="pressure_024">
+      <data key="d3">Go</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="pressure_024" target="pressure_025">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="pressure_024" target="nogo_014">
+      <data key="d3">NoGo</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="pressure_025" target="pressure_026">
+      <data key="d3">Go</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="pressure_025" target="compromise_031">
+      <data key="d3">Go</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="pressure_026" target="pressure_027">
+      <data key="d3">Progress</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="pressure_026" target="nogo_015">
+      <data key="d3">NoGo</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="pressure_027" target="pressure_028">
+      <data key="d3">Progress</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="pressure_027" target="pressure_022">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="pressure_028" target="pressure_029">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="pressure_028" target="nogo_016">
+      <data key="d3">NoGo</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="pressure_028" target="recovery_017">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="pressure_029" target="compromise_030">
+      <data key="d3">Go</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="compromise_030" target="compromise_031">
+      <data key="d3">Go</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="compromise_030" target="nogo_018">
+      <data key="d3">NoGo</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="compromise_031" target="compromise_032">
+      <data key="d3">Progress</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="compromise_031" target="resilience_058">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="compromise_032" target="compromise_033">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="compromise_032" target="nogo_019">
+      <data key="d3">NoGo</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="compromise_033" target="compromise_034">
+      <data key="d3">Go</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="compromise_034" target="compromise_035">
+      <data key="d3">Go</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="compromise_034" target="nogo_020">
+      <data key="d3">NoGo</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="compromise_035" target="compromise_036">
+      <data key="d3">Go</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="compromise_035" target="recovery_021">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="compromise_036" target="compromise_037">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="compromise_036" target="compromise_031">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="compromise_036" target="execution_042">
+      <data key="d3">Progress</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="compromise_036" target="nogo_022">
+      <data key="d3">NoGo</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="compromise_037" target="compromise_038">
+      <data key="d3">Progress</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="compromise_038" target="compromise_039">
+      <data key="d3">Go</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="compromise_038" target="nogo_023">
+      <data key="d3">NoGo</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="compromise_039" target="execution_040">
+      <data key="d3">Go</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="execution_040" target="execution_041">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="execution_040" target="nogo_024">
+      <data key="d3">NoGo</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="execution_041" target="execution_042">
+      <data key="d3">Progress</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="execution_042" target="execution_043">
+      <data key="d3">Progress</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="execution_042" target="nogo_025">
+      <data key="d3">NoGo</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="execution_042" target="recovery_026">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="execution_043" target="execution_044">
+      <data key="d3">Go</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="execution_043" target="longtail_072">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="execution_044" target="execution_045">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="execution_044" target="nogo_027">
+      <data key="d3">NoGo</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="execution_045" target="execution_046">
+      <data key="d3">Go</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="execution_045" target="execution_040">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="execution_046" target="execution_047">
+      <data key="d3">Progress</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="execution_046" target="nogo_028">
+      <data key="d3">NoGo</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="execution_047" target="execution_048">
+      <data key="d3">Progress</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="execution_047" target="resilience_053">
+      <data key="d3">Progress</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="execution_048" target="execution_049">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="execution_048" target="nogo_029">
+      <data key="d3">NoGo</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="execution_049" target="resilience_050">
+      <data key="d3">Go</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="execution_049" target="recovery_030">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="resilience_050" target="resilience_051">
+      <data key="d3">Go</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="resilience_050" target="nogo_031">
+      <data key="d3">NoGo</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="resilience_051" target="resilience_052">
+      <data key="d3">Progress</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="resilience_052" target="resilience_053">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="resilience_052" target="nogo_032">
+      <data key="d3">NoGo</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="resilience_053" target="resilience_054">
+      <data key="d3">Go</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="resilience_054" target="resilience_055">
+      <data key="d3">Go</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="resilience_054" target="execution_049">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="resilience_054" target="nogo_033">
+      <data key="d3">NoGo</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="resilience_054" target="pressure_020">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="resilience_055" target="resilience_056">
+      <data key="d3">Go</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="resilience_056" target="resilience_057">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="resilience_056" target="nogo_034">
+      <data key="d3">NoGo</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="resilience_056" target="recovery_035">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="resilience_057" target="resilience_058">
+      <data key="d3">Progress</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="resilience_058" target="resilience_059">
+      <data key="d3">Go</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="resilience_058" target="scale_064">
+      <data key="d3">Go</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="resilience_058" target="nogo_036">
+      <data key="d3">NoGo</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="resilience_059" target="scale_060">
+      <data key="d3">Go</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="scale_060" target="scale_061">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="scale_060" target="nogo_037">
+      <data key="d3">NoGo</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="scale_061" target="scale_062">
+      <data key="d3">Progress</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="scale_062" target="scale_063">
+      <data key="d3">Progress</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="scale_062" target="nogo_038">
+      <data key="d3">NoGo</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="scale_063" target="scale_064">
+      <data key="d3">Go</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="scale_063" target="resilience_058">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="scale_063" target="recovery_039">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="scale_064" target="scale_065">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="scale_064" target="nogo_040">
+      <data key="d3">NoGo</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="scale_065" target="scale_066">
+      <data key="d3">Go</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="scale_066" target="scale_067">
+      <data key="d3">Progress</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="scale_066" target="nogo_041">
+      <data key="d3">NoGo</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="scale_066" target="compromise_036">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="scale_067" target="scale_068">
+      <data key="d3">Progress</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="scale_068" target="scale_069">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="scale_068" target="nogo_042">
+      <data key="d3">NoGo</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="scale_069" target="longtail_070">
+      <data key="d3">Go</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="scale_069" target="longtail_075">
+      <data key="d3">Go</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="longtail_070" target="longtail_071">
+      <data key="d3">Go</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="longtail_070" target="nogo_043">
+      <data key="d3">NoGo</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="longtail_070" target="recovery_044">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="longtail_071" target="longtail_072">
+      <data key="d3">Progress</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="longtail_071" target="longtail_079">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="longtail_072" target="longtail_073">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="longtail_072" target="scale_067">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="longtail_072" target="nogo_045">
+      <data key="d3">NoGo</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="longtail_073" target="longtail_074">
+      <data key="d3">Go</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="longtail_074" target="longtail_075">
+      <data key="d3">Go</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="longtail_074" target="nogo_046">
+      <data key="d3">NoGo</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="longtail_075" target="longtail_076">
+      <data key="d3">Go</data>
+      <data key="d4">4.0</data>
+    </edge>
+    <edge source="longtail_076" target="longtail_077">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="longtail_076" target="nogo_047">
+      <data key="d3">NoGo</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="longtail_077" target="longtail_078">
+      <data key="d3">Progress</data>
+      <data key="d4">2.0</data>
+    </edge>
+    <edge source="longtail_077" target="recovery_048">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="longtail_078" target="longtail_079">
+      <data key="d3">Go</data>
+      <data key="d4">3.0</data>
+    </edge>
+    <edge source="nogo_000" target="frame_005">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_001" target="frame_008">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_002" target="evidence_011">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="recovery_003" target="evidence_011">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_004" target="evidence_015">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_005" target="evidence_013">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_006" target="evidence_016">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_007" target="evidence_019">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="recovery_008" target="evidence_018">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_009" target="pressure_023">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_010" target="pressure_021">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_011" target="pressure_024">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="recovery_012" target="pressure_025">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_013" target="pressure_028">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_014" target="compromise_031">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_015" target="pressure_029">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_016" target="compromise_032">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="recovery_017" target="compromise_032">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_018" target="compromise_036">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_019" target="compromise_039">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_020" target="compromise_037">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="recovery_021" target="compromise_039">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_022" target="execution_041">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_023" target="execution_044">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_024" target="execution_047">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_025" target="execution_045">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="recovery_026" target="execution_046">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_027" target="execution_049">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_028" target="resilience_052">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_029" target="resilience_055">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="recovery_030" target="resilience_053">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_031" target="resilience_054">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_032" target="resilience_057">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_033" target="scale_060">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_034" target="scale_063">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="recovery_035" target="scale_060">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_036" target="scale_062">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_037" target="scale_065">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_038" target="scale_068">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="recovery_039" target="scale_067">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_040" target="scale_067">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_041" target="longtail_070">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_042" target="longtail_073">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_043" target="longtail_076">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="recovery_044" target="longtail_074">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_045" target="longtail_075">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_046" target="longtail_078">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="nogo_047" target="longtail_079">
+      <data key="d3">Progress</data>
+      <data key="d4">1.0</data>
+    </edge>
+    <edge source="recovery_048" target="longtail_079">
+      <data key="d3">Go</data>
+      <data key="d4">1.0</data>
+    </edge>
+  </graph>
+</graphml>

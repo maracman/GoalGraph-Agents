@@ -158,10 +158,12 @@ def format_prompt(history, agent_description, goal, name, user_name,
     system_prompt = f"""You are {name}, an intelligent agent with the following description:
 {agent_description}
 
-Your goal is: {goal}
+Your long-range workspace goal is: {goal}
+Your aims can change as the conversation reveals new information. Treat the graph as a
+workspace of possible aims, not as a single fixed route.
 """
     if current_aim:
-        system_prompt += f"\nYour current subgoal is: {current_aim}\n"
+        system_prompt += f"\nYour current aim is: {current_aim}\n"
     if suggestion:
         system_prompt += f"Suggested next action: {suggestion}\n"
 
@@ -193,10 +195,12 @@ def format_chat_messages(history, agent_description, goal, name, user_name,
     system_content = f"""You are {name}, an intelligent agent with the following description:
 {agent_description}
 
-Your goal is: {goal}
+Your long-range workspace goal is: {goal}
+Your aims can change as the conversation reveals new information. Treat the graph as a
+workspace of possible aims, not as a single fixed route.
 """
     if current_aim:
-        system_content += f"\nYour current subgoal is: {current_aim}\n"
+        system_content += f"\nYour current aim is: {current_aim}\n"
     if suggestion:
         system_content += f"Suggested next action: {suggestion}\n"
 
@@ -217,18 +221,17 @@ Respond ONLY with the JSON object."""
 
 
 # ---------------------------------------------------------------------------
-# Subgoal management
+# Aim management
 # ---------------------------------------------------------------------------
 
-def review_subgoal(history, agent, generation_vars, graph):
-    """Use the LLM to judge whether the current subgoal has been achieved.
+def review_subgoal(history, agent, generation_vars, graph, current_aim=None):
+    """Use the LLM to judge progress on the current aim.
 
-    Returns (rating, justification, suggestion) or (None, None, None) on failure.
+    Returns (rating, justification, suggestion, aim_status, next_aim) on success.
     """
     agent_name = agent['agent_name']
-    current_aim = agent['current_aim']
-    previous_score = agent['persistance_score'] if agent['persistance_score'] is not None else 4
-
+    current_aim = current_aim or agent['current_aim']
+    workspace_goal = agent['goal']
     recent_exchanges = "\n".join(
         [f"{m[0]}: {m[1]}" for m in history[-10:]]
     )
@@ -238,45 +241,66 @@ def review_subgoal(history, agent, generation_vars, graph):
     user_prompt = f"""This is the current conversation:
 {recent_exchanges}
 
-Based on this chat, has {agent_name} achieved the below goal?
-Goal: "{current_aim}"
+Based on this chat, evaluate {agent_name}'s progress:
+Long-range workspace goal: "{workspace_goal}"
+Current aim: "{current_aim}"
+
+Classify the current aim:
+- "continue": the aim is still useful and should continue.
+- "progress": the conversation has moved the aim forward, refined it, or revealed a better next aim.
+- "achieved": the current aim has been completed.
+- "abandon": the current aim is no longer useful or is clearly failing.
 
 Answer using the following scale:
 1 = Strongly disagree, 2 = Disagree, 3 = Slightly disagree,
 4 = Neither agree nor disagree, 5 = Slightly agree, 6 = Agree, 7 = Strongly agree.
 
-Justify your response, then provide a suggestion (to guide {agent_name}'s next action) that
-increases their chances at achieving this goal.
+Justify your response, then provide a suggestion that guides {agent_name}'s next action in this
+workspace. If the aim should progress, provide the next_aim as a concise graph node label. If not,
+set next_aim to null.
 
-Respond with JSON: {{"rating": <int 1-7>, "justification": "<text>", "suggestion": "<text>"}}"""
+Respond with JSON: {{"rating": <int 1-7>, "justification": "<text>", "suggestion": "<text>", "aim_status": "continue|progress|achieved|abandon", "next_aim": "<text or null>"}}"""
 
     raw = llm_judge_call(system_prompt, user_prompt, generation_vars)
     if raw is None:
-        return None, None, None
+        return None, None, None, None, None
 
     output = validate_json(raw, json_schema_review_goal)
     if output is None:
         logger.warning(f"Failed to parse review_subgoal response: {raw[:200]}")
-        return None, None, None
+        return None, None, None, None, None
 
     rating = output.get('rating')
     justification = output.get('justification', '')
     suggestion = output.get('suggestion', '')
+    aim_status = output.get('aim_status')
+    next_aim = output.get('next_aim')
 
     # Clamp rating to valid range
     if isinstance(rating, (int, float)):
         rating = max(1, min(7, int(rating)))
     else:
-        return None, None, None
+        return None, None, None, None, None
 
-    logger.info(f"Subgoal review for '{current_aim}': rating={rating}, justification={justification[:80]}")
-    return rating, justification, suggestion
+    if aim_status not in ("continue", "progress", "achieved", "abandon"):
+        aim_status = 'achieved' if rating >= 6 else 'continue'
+
+    if isinstance(next_aim, str):
+        next_aim = next_aim.strip() or None
+    else:
+        next_aim = None
+
+    logger.info(
+        f"Aim review for '{current_aim}': rating={rating}, status={aim_status}, "
+        f"justification={justification[:80]}"
+    )
+    return rating, justification, suggestion, aim_status, next_aim
 
 
 def generate_new_subgoal(history, agent, generation_vars, graph):
-    """Use the LLM to generate a new subgoal for the agent.
+    """Use the LLM to generate a new aim for the agent.
 
-    Returns (new_subgoal, planned_action) or (None, None) on failure.
+    Returns (new_aim, planned_action) or (None, None) on failure.
     """
     agent_name = agent['agent_name']
     goal = agent['goal']
@@ -310,11 +334,12 @@ def generate_new_subgoal(history, agent, generation_vars, graph):
 Recent chat: {recent_exchanges}
 {environment_info}
 {agent_name} description: {description}
-{agent_name} goal: {goal}
+{agent_name} long-range workspace goal: {goal}
 {nogo_statement}
-Consider the current situation and provide {agent_name} with an achievable subgoal that aligns
-with their character and represents a significant NEXT STEP toward completing their main goal.
-Additionally, detail the specific action they should take to achieve this subgoal.
+Consider the current situation and provide {agent_name} with an achievable next aim. The aim
+should be a useful node in a shared knowledge workspace: it may advance, refine, branch, or
+temporarily redirect the larger goal as new information appears. Additionally, detail the
+specific action they should take to pursue this aim.
 
 Respond with JSON: {{"new_subgoal": "<subgoal text>", "planned_action": "<action text>"}}"""
 
@@ -502,7 +527,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
     last_narration = agent.get('last_narration', '')
 
     # ------------------------------------------------------------------
-    # Step 1: If no active subgoal, try graph-guided path first, then LLM
+    # Step 1: If no active aim, try graph-guided path first, then LLM
     # ------------------------------------------------------------------
     guided_path = None  # Will hold the path if graph search finds one
 
@@ -514,7 +539,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
 
         if path_result is not None:
             path, target_node, similarity = path_result
-            # The next node on the path becomes our subgoal
+            # The next node on the path becomes our aim
             next_step = path[1]  # path[0] is current_node
             current_aim = next_step
             suggestion = (
@@ -526,11 +551,11 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
             persistence_count = 0
             persistence_score = None
             logs.append(
-                f"Graph-guided subgoal for {agent_name}: '{current_aim}' "
+                f"Graph-guided aim for {agent_name}: '{current_aim}' "
                 f"(path to '{target_node}', similarity={similarity:.2f})"
             )
         else:
-            # No useful path found – ask the LLM to generate a new subgoal
+            # No useful path found – ask the LLM to generate a new aim
             new_subgoal, planned_action = generate_new_subgoal(
                 history, agent, generation_vars, G
             )
@@ -538,10 +563,10 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
             suggestion = planned_action
             persistence_count = 0
             persistence_score = None
-            logs.append(f"New subgoal for {agent_name}: {current_aim}")
+            logs.append(f"New aim for {agent_name}: {current_aim}")
 
     # ------------------------------------------------------------------
-    # Step 2: Generate agent response with subgoal context
+    # Step 2: Generate agent response with aim context
     # ------------------------------------------------------------------
     prompt = format_prompt(
         history,
@@ -569,12 +594,12 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
     persistence_count += 1
 
     # ------------------------------------------------------------------
-    # Step 3: Review subgoal progress (only after enough history)
+    # Step 3: Review aim progress (only after enough history)
     # ------------------------------------------------------------------
     if len(history) > 2 and current_aim:
-        rating, justification, new_suggestion = review_subgoal(
+        rating, justification, new_suggestion, aim_status, next_aim = review_subgoal(
             history + [(agent_name, response_text)],
-            agent, generation_vars, G
+            agent, generation_vars, G, current_aim=current_aim
         )
 
         if rating is not None:
@@ -584,23 +609,46 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
             if new_suggestion:
                 suggestion = new_suggestion
 
-            # GO: rating >= 6 means subgoal achieved
-            if rating >= 6:
-                logger.info(f"GO: {agent_name} achieved subgoal '{current_aim}' (rating={rating})")
+            # GO: rating >= 6 or explicit achieved means aim achieved.
+            if rating >= 6 or aim_status == 'achieved':
+                logger.info(f"GO: {agent_name} achieved aim '{current_aim}' (rating={rating})")
                 new_node = current_aim
                 G = update_graph(G, current_node, new_node, "Go", persistence_count)
                 current_node = new_node
-                current_aim = None
-                suggestion = ''
+                current_aim = next_aim
+                suggestion = new_suggestion if next_aim else ''
                 persistence_count = 0
-                logs.append(f"GO: subgoal achieved -> {new_node}")
+                persistence_score = None
+                logs.append(f"GO: aim achieved -> {new_node}")
+                if next_aim:
+                    logs.append(f"Next aim: {next_aim}")
+
+            # PROGRESS: the aim changed or advanced before a binary finish.
+            elif aim_status == 'progress' and next_aim and next_aim != current_aim:
+                logger.info(
+                    f"PROGRESS: {agent_name} moving from aim '{current_aim}' "
+                    f"to '{next_aim}' (rating={rating})"
+                )
+                new_node = current_aim
+                G = update_graph(G, current_node, new_node, "Progress", persistence_count)
+                current_node = new_node
+                current_aim = next_aim
+                suggestion = new_suggestion
+                persistence_count = 0
+                persistence_score = None
+                logs.append(f"PROGRESS: aim evolved -> {new_node} -> {next_aim}")
 
             # NOGO checks (only after minimum persistence)
             elif persistence_count >= patience_min:
                 nogo = False
 
+                # Explicit abandon from the judge
+                if aim_status == 'abandon':
+                    nogo = True
+                    logs.append("NOGO: aim abandoned by judge")
+
                 # Strong failure
-                if rating <= 2:
+                elif rating <= 2:
                     nogo = True
                     logs.append(f"NOGO: strong failure (rating={rating})")
 
@@ -615,12 +663,13 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
                     logs.append(f"NOGO: exceeded patience ({persistence_count} > {patience_max})")
 
                 if nogo:
-                    logger.info(f"NOGO: {agent_name} abandoning subgoal '{current_aim}'")
+                    logger.info(f"NOGO: {agent_name} abandoning aim '{current_aim}'")
                     nogo_node = f"{current_aim}_NoGo"
                     G = update_graph(G, current_node, nogo_node, "NoGo", persistence_count)
                     current_aim = None
                     suggestion = ''
                     persistence_count = 0
+                    persistence_score = None
 
     # ------------------------------------------------------------------
     # Step 4: Save updated state back to the DataFrame

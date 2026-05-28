@@ -9,6 +9,7 @@ import os
 import sys
 import json
 import uuid
+import html
 import networkx as nx
 import numpy as np
 from datetime import datetime
@@ -140,17 +141,371 @@ def reload_agent():
         flask_logger.error(f"Failed to reload agent: {str(e)}")
         raise
 
+def graph_node_label(node, data=None):
+    """Return a compact human-readable label for graph visualization."""
+    data = data or {}
+    label = str(data.get('label') or node)
+    if '/' in label:
+        label = label.split('/', 1)[1]
+    return label.replace('_NoGo', ' (NoGo)').replace('_', ' ')
+
+
+def inject_graph_explorer(html_path, node_count):
+    """Add lightweight search, fit, and zoom-aware labels to the PyVis HTML."""
+    explorer = f"""
+<style>
+  html, body, #mynetwork {{
+    height: 100%;
+    margin: 0;
+  }}
+  #goalgraph-explorer {{
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 10;
+    width: min(300px, calc(100% - 24px));
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(15, 23, 42, 0.14);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: #111827;
+  }}
+  #goalgraph-explorer .explorer-row {{
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }}
+  #goalgraph-explorer input[type="search"] {{
+    flex: 1;
+    min-width: 0;
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 13px;
+  }}
+  #goalgraph-explorer button {{
+    height: 30px;
+    padding: 0 9px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #f9fafb;
+    color: #111827;
+    font-size: 12px;
+    cursor: pointer;
+  }}
+  #goalgraph-explorer label {{
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+    margin-top: 8px;
+    font-size: 12px;
+    color: #374151;
+  }}
+  #goalgraph-selected-node {{
+    margin-top: 8px;
+    font-size: 12px;
+    line-height: 1.35;
+    color: #4b5563;
+  }}
+  #goalgraph-selected-node strong {{
+    display: block;
+    color: #111827;
+    font-size: 13px;
+    margin-bottom: 2px;
+  }}
+  #goalgraph-selected-node .connection-group {{
+    margin-top: 8px;
+  }}
+  #goalgraph-selected-node .connection-title {{
+    margin-bottom: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: #6b7280;
+  }}
+  #goalgraph-selected-node button.node-link {{
+    display: block;
+    width: 100%;
+    height: auto;
+    margin-top: 3px;
+    padding: 5px 7px;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }}
+</style>
+<div id="goalgraph-explorer">
+  <div class="explorer-row">
+    <input id="goalgraph-node-search" type="search" list="goalgraph-node-options" placeholder="Find node" autocomplete="off" />
+    <button id="goalgraph-fit" type="button">Fit</button>
+  </div>
+  <datalist id="goalgraph-node-options"></datalist>
+  <label><input id="goalgraph-label-toggle" type="checkbox" /> Labels</label>
+  <div id="goalgraph-selected-node">{node_count} nodes. Hover, select, or search a node.</div>
+</div>
+<script>
+(function () {{
+  if (!window.network || !window.nodes || !window.edges) return;
+
+  var graphNodeCount = {int(node_count)};
+  var labelToggle = document.getElementById('goalgraph-label-toggle');
+  var searchInput = document.getElementById('goalgraph-node-search');
+  var optionsList = document.getElementById('goalgraph-node-options');
+  var detail = document.getElementById('goalgraph-selected-node');
+  var originalNodes = nodes.get().map(function (node) {{
+    return Object.assign({{}}, node, {{
+      fullLabel: node.fullLabel || node.label || node.id,
+      baseColor: node.color || 'blue',
+      baseValue: node.value || 1
+    }});
+  }});
+  var originalEdges = edges.get().map(function (edge) {{
+    var baseColor = typeof edge.color === 'string'
+      ? edge.color
+      : (edge.color && edge.color.color) || (edge.dashes ? '#c2410c' : '#2f855a');
+    return Object.assign({{}}, edge, {{
+      baseColor: baseColor,
+      baseWidth: edge.width || 1
+    }});
+  }});
+  var labelById = {{}};
+  var selectedNodeId = null;
+  var hoverNodeId = null;
+
+  originalNodes.forEach(function (node) {{
+    labelById[node.id] = node.fullLabel;
+    var option = document.createElement('option');
+    option.value = node.fullLabel;
+    option.dataset.nodeId = node.id;
+    optionsList.appendChild(option);
+  }});
+
+  function labelsVisible() {{
+    return graphNodeCount < 80 || labelToggle.checked || network.getScale() >= 0.85;
+  }}
+
+  function escapeHtml(value) {{
+    return String(value).replace(/[&<>"']/g, function (char) {{
+      return ({{
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }})[char];
+    }});
+  }}
+
+  function getConnections(nodeId) {{
+    var connectedIds = {{}};
+    var edgeIds = {{}};
+    var incoming = [];
+    var outgoing = [];
+    edges.get().forEach(function (edge) {{
+      if (edge.to === nodeId) {{
+        connectedIds[edge.from] = true;
+        edgeIds[edge.id] = true;
+        incoming.push({{ id: edge.from, label: labelById[edge.from] || edge.from, edge: edge }});
+      }}
+      if (edge.from === nodeId) {{
+        connectedIds[edge.to] = true;
+        edgeIds[edge.id] = true;
+        outgoing.push({{ id: edge.to, label: labelById[edge.to] || edge.to, edge: edge }});
+      }}
+    }});
+    return {{
+      connectedIds: connectedIds,
+      edgeIds: edgeIds,
+      incoming: incoming,
+      outgoing: outgoing
+    }};
+  }}
+
+  function renderConnectionGroup(title, connections) {{
+    if (!connections.length) return '';
+    return '<div class="connection-group"><div class="connection-title">' + title + '</div>' +
+      connections.slice(0, 8).map(function (item) {{
+        return '<button type="button" class="node-link" data-node-id="' + escapeHtml(item.id) + '">' +
+          escapeHtml(item.label) + '</button>';
+      }}).join('') +
+      (connections.length > 8 ? '<div>' + (connections.length - 8) + ' more...</div>' : '') +
+      '</div>';
+  }}
+
+  function renderGraphState(activeNodeId) {{
+    var show = labelsVisible();
+    var connections = activeNodeId ? getConnections(activeNodeId) : null;
+    nodes.update(originalNodes.map(function (node) {{
+      var isActive = activeNodeId && node.id === activeNodeId;
+      var isConnected = activeNodeId && connections.connectedIds[node.id];
+      var showNodeLabel = show || isActive || isConnected;
+      var color = node.baseColor;
+      if (isActive) {{
+        color = {{ background: '#facc15', border: '#111827', highlight: {{ background: '#facc15', border: '#111827' }} }};
+      }} else if (isConnected) {{
+        color = {{ background: node.baseColor, border: '#f97316', highlight: {{ background: node.baseColor, border: '#f97316' }} }};
+      }} else if (activeNodeId) {{
+        color = {{ background: '#e5e7eb', border: '#cbd5e1', highlight: {{ background: '#e5e7eb', border: '#cbd5e1' }} }};
+      }}
+      return {{
+        id: node.id,
+        label: showNodeLabel ? node.fullLabel : '',
+        value: isActive ? node.baseValue + 4 : isConnected ? node.baseValue + 2 : node.baseValue,
+        font: {{
+          size: showNodeLabel ? 16 : 0,
+          color: '#111827',
+          strokeWidth: showNodeLabel ? 4 : 0,
+          strokeColor: '#ffffff'
+        }},
+        color: color
+      }};
+    }}));
+    edges.update(originalEdges.map(function (edge) {{
+      var isConnectedEdge = activeNodeId && connections.edgeIds[edge.id];
+      return {{
+        id: edge.id,
+        color: isConnectedEdge ? '#f97316' : activeNodeId ? '#d1d5db' : edge.baseColor,
+        width: isConnectedEdge ? 3 : edge.baseWidth,
+        hidden: false
+      }};
+    }}));
+  }}
+
+  function updateLabels() {{
+    renderGraphState(hoverNodeId || selectedNodeId);
+  }}
+
+  function edgeCounts(nodeId) {{
+    var incoming = 0;
+    var outgoing = 0;
+    edges.get().forEach(function (edge) {{
+      if (edge.to === nodeId) incoming += 1;
+      if (edge.from === nodeId) outgoing += 1;
+    }});
+    return {{ incoming: incoming, outgoing: outgoing }};
+  }}
+
+  function showNode(nodeId) {{
+    var label = labelById[nodeId] || nodeId;
+    var connections = getConnections(nodeId);
+    var counts = {{
+      incoming: connections.incoming.length,
+      outgoing: connections.outgoing.length
+    }};
+    detail.innerHTML = '<strong>' + label + '</strong>' +
+      counts.incoming + ' incoming / ' + counts.outgoing + ' outgoing edges' +
+      renderConnectionGroup('Incoming from', connections.incoming) +
+      renderConnectionGroup('Outgoing to', connections.outgoing);
+  }}
+
+  function findNodeId(query) {{
+    var normalized = query.trim().toLowerCase();
+    if (!normalized) return null;
+    var exact = originalNodes.find(function (node) {{
+      return node.fullLabel.toLowerCase() === normalized || String(node.id).toLowerCase() === normalized;
+    }});
+    if (exact) return exact.id;
+    var partial = originalNodes.find(function (node) {{
+      return node.fullLabel.toLowerCase().includes(normalized) || String(node.id).toLowerCase().includes(normalized);
+    }});
+    return partial ? partial.id : null;
+  }}
+
+  function focusNode(nodeId, shouldZoom) {{
+    if (!nodeId) return;
+    selectedNodeId = nodeId;
+    hoverNodeId = null;
+    network.selectNodes([nodeId]);
+    renderGraphState(nodeId);
+    network.focus(nodeId, {{
+      scale: shouldZoom ? 1.65 : network.getScale(),
+      animation: {{ duration: 350, easingFunction: 'easeInOutQuad' }}
+    }});
+    showNode(nodeId);
+  }}
+
+  document.getElementById('goalgraph-fit').addEventListener('click', function () {{
+    network.fit({{ animation: {{ duration: 350, easingFunction: 'easeInOutQuad' }} }});
+  }});
+  labelToggle.addEventListener('change', updateLabels);
+  searchInput.addEventListener('keydown', function (event) {{
+    if (event.key === 'Enter') focusNode(findNodeId(searchInput.value), true);
+  }});
+  searchInput.addEventListener('change', function () {{
+    focusNode(findNodeId(searchInput.value), true);
+  }});
+  detail.addEventListener('click', function (event) {{
+    var target = event.target.closest('button[data-node-id]');
+    if (target) focusNode(target.dataset.nodeId, false);
+  }});
+  network.on('hoverNode', function (params) {{
+    hoverNodeId = params.node;
+    renderGraphState(hoverNodeId);
+    showNode(hoverNodeId);
+  }});
+  network.on('blurNode', function () {{
+    hoverNodeId = null;
+    renderGraphState(selectedNodeId);
+    if (selectedNodeId) {{
+      showNode(selectedNodeId);
+    }} else {{
+      detail.innerHTML = graphNodeCount + ' nodes. Hover, select, or search a node.';
+    }}
+  }});
+  network.on('selectNode', function (params) {{
+    if (params.nodes && params.nodes.length) {{
+      selectedNodeId = params.nodes[0];
+      hoverNodeId = null;
+      renderGraphState(selectedNodeId);
+      showNode(selectedNodeId);
+    }}
+  }});
+  network.on('deselectNode', function () {{
+    selectedNodeId = null;
+    renderGraphState(null);
+    detail.innerHTML = graphNodeCount + ' nodes. Hover, select, or search a node.';
+  }});
+
+  var zoomTimer = null;
+  network.on('zoom', function () {{
+    window.clearTimeout(zoomTimer);
+    zoomTimer = window.setTimeout(updateLabels, 60);
+  }});
+  network.once('stabilized', function () {{
+    updateLabels();
+    network.fit({{ animation: false }});
+  }});
+  window.setTimeout(function () {{
+    updateLabels();
+    network.fit({{ animation: false }});
+  }}, 500);
+}}());
+</script>
+"""
+    with open(html_path, 'r', encoding='utf-8') as f:
+        contents = f.read()
+    contents = contents.replace('</body>', explorer + '\n</body>')
+    with open(html_path, 'w', encoding='utf-8') as f:
+        f.write(contents)
+
+
 def visualize_graph_pyvis(graph_file_path, session_id):
     """Generate a visualization of the agent's decision graph"""
     try:
         # Load the graph from the GraphML file
         G = nx.read_graphml(graph_file_path)
 
-        net = Network(notebook=True, directed=True, cdn_resources='in_line')
+        net = Network(notebook=True, directed=True, cdn_resources='in_line', height='100%', width='100%')
+        large_graph = G.number_of_nodes() >= 80
 
         # Separate "Go" and "NoGo" edges
-        go_edges = [(u, v) for u, v, d in G.edges(data=True) if d['label'] == 'Go']
-        nogo_edges = [(u, v) for u, v, d in G.edges(data=True) if d['label'] == 'NoGo']
+        go_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get('label') == 'Go']
+        nogo_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get('label') == 'NoGo']
 
         # Extract weights for "Go" edges
         go_weights = [G[u][v]['weight'] for u, v in go_edges]
@@ -178,25 +533,74 @@ def visualize_graph_pyvis(graph_file_path, session_id):
             return f'#{grey_value:02x}{grey_value:02x}{grey_value:02x}'
 
         # Add nodes and edges to the network
-        for node in G.nodes():
+        for node, node_data in G.nodes(data=True):
             incoming_edges = G.in_edges(node, data=True)
-            if any(d['label'] == 'NoGo' for u, v, d in incoming_edges):
-                weight = next(d['weight'] for u, v, d in incoming_edges if d['label'] == 'NoGo')
+            if any(d.get('label') == 'NoGo' for u, v, d in incoming_edges):
+                weight = next(d.get('weight', 1) for u, v, d in incoming_edges if d.get('label') == 'NoGo')
                 color = weight_to_color(weight, min_weight, max_weight)
+            elif node == 'start' or str(node).endswith('/start'):
+                color = '#111827'
             else:
                 color = 'blue'
-            net.add_node(node, label=node, color=color)
+            label = graph_node_label(node, node_data)
+            outgoing_count = G.out_degree(node)
+            incoming_count = G.in_degree(node)
+            title = (
+                f"<strong>{html.escape(label)}</strong><br>"
+                f"{incoming_count} incoming / {outgoing_count} outgoing edges"
+            )
+            net.add_node(
+                node,
+                label='' if large_graph else label,
+                fullLabel=label,
+                title=title,
+                color=color,
+                value=max(1, incoming_count + outgoing_count)
+            )
 
         for u, v, data in G.edges(data=True):
-            weight = data['weight']
-            if data['label'] == 'NoGo':
-                net.add_edge(u, v, label=data['label'], weight=weight, length=nogo_length)
+            weight = float(data.get('weight', 1))
+            edge_label = data.get('label', '')
+            if edge_label == 'NoGo':
+                net.add_edge(u, v, label='' if large_graph else edge_label, title=edge_label, weight=weight, length=nogo_length, color='#c2410c', dashes=True)
+            elif edge_label == 'Progress':
+                net.add_edge(u, v, label='' if large_graph else edge_label, title=edge_label, weight=weight, length=weight * 100, color='#2563eb')
             else:
-                net.add_edge(u, v, label=data['label'], weight=weight, length=weight * 100)
+                net.add_edge(u, v, label='' if large_graph else edge_label, title=edge_label, weight=weight, length=weight * 100, color='#2f855a')
 
         # Customize physics to better reflect distances
         net.set_options("""
         var options = {
+          "interaction": {
+            "hover": true,
+            "keyboard": true,
+            "navigationButtons": true,
+            "tooltipDelay": 120
+          },
+          "nodes": {
+            "shape": "dot",
+            "font": {
+              "size": 16,
+              "face": "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+              "strokeWidth": 4,
+              "strokeColor": "#ffffff"
+            },
+            "scaling": {
+              "min": 8,
+              "max": 24
+            }
+          },
+          "edges": {
+            "arrows": {
+              "to": {
+                "enabled": true,
+                "scaleFactor": 0.55
+              }
+            },
+            "smooth": {
+              "type": "dynamic"
+            }
+          },
           "physics": {
             "barnesHut": {
               "gravitationalConstant": -8000,
@@ -216,7 +620,9 @@ def visualize_graph_pyvis(graph_file_path, session_id):
         filename = f"graph_{session_id}_{timestamp}.html"
 
         # Save the graph visualization
-        net.save_graph(os.path.join(app.static_folder, filename))
+        output_path = os.path.join(app.static_folder, filename)
+        net.save_graph(output_path)
+        inject_graph_explorer(output_path, G.number_of_nodes())
 
         return filename
     except Exception as e:

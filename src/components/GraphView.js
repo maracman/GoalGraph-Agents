@@ -105,11 +105,11 @@ const GraphView = () => {
         <h3>Graph Legend</h3>
         <div className="legend-item">
           <div className="legend-color" style={{ backgroundColor: 'blue' }}></div>
-          <span>Node - Active subgoal</span>
+          <span>Node - Active aim</span>
         </div>
         <div className="legend-item">
           <div className="legend-color" style={{ backgroundColor: 'gray' }}></div>
-          <span>Node - Previous subgoal</span>
+          <span>Node - Previous aim</span>
         </div>
         <div className="legend-item">
           <div className="legend-line" style={{ borderTop: '2px solid green' }}></div>

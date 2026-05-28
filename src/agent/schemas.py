@@ -8,7 +8,12 @@ json_schema_review_goal = {
     "properties": {
         "rating": {"type": "integer", "minimum": 1, "maximum": 7},
         "justification": {"type": "string"},
-        "suggestion": {"type": "string"}
+        "suggestion": {"type": "string"},
+        "aim_status": {
+            "type": "string",
+            "enum": ["continue", "progress", "achieved", "abandon"]
+        },
+        "next_aim": {"type": ["string", "null"]}
     },
     "required": ["rating", "justification", "suggestion"]
 }
