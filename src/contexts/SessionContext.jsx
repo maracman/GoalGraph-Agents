@@ -31,7 +31,9 @@ export const SessionProvider = ({ children, initialSessionId }) => {
     isUser: false,
     userMessage: '',
     maxGenerations: 0,
-    currentGeneration: 0
+    currentGeneration: 0,
+    fastGraphRun: false,
+    generationDelayMs: 100
   });
   
   // UI state
@@ -68,7 +70,9 @@ export const SessionProvider = ({ children, initialSessionId }) => {
             history: sessionData.session_contents.session_history || [],
             settings: sessionData.session_contents.settings || {},
             agentData: sessionData.session_contents.agents_df || [],
-            chat_mode: sessionData.session_contents.chat_mode || 'you_agent'
+            chat_mode: sessionData.session_contents.chat_mode || 'you_agent',
+            fastGraphRun: Boolean(sessionData.session_contents.fast_graph_run),
+            generationDelayMs: sessionData.session_contents.generation_delay_ms ?? 100
           }));
         }
 
@@ -121,12 +125,14 @@ export const SessionProvider = ({ children, initialSessionId }) => {
           maxGenerations: response.max_generations,
           isPlaying: response.play,
           currentGeneration: 0,
-          isUser: false
+          isUser: false,
+          fastGraphRun: response.fast_graph_run,
+          generationDelayMs: response.generation_delay_ms
         }));
         
         // Start generation if play is true
         if (response.play) {
-          generateAgentResponses();
+          generateAgentResponses(response.generation_delay_ms);
         }
         
         return { success: true };
@@ -151,7 +157,7 @@ export const SessionProvider = ({ children, initialSessionId }) => {
   };
 
   // Generate agent responses
-  const generateAgentResponses = async () => {
+  const generateAgentResponses = async (generationDelayMs = sessionState.generationDelayMs ?? 100) => {
     generationCancelledRef.current = false;
     try {
       let keepGoing = true;
@@ -188,14 +194,19 @@ export const SessionProvider = ({ children, initialSessionId }) => {
           history: response.history || prev.history,
           isPlaying: keepGoing,
           currentGeneration: response.current_generation,
-          maxGenerations: response.max_generations
+          maxGenerations: response.max_generations,
+          fastGraphRun: response.fast_graph_run,
+          generationDelayMs: response.generation_delay_ms
         }));
 
         if (!keepGoing) {
           break;
         }
 
-        await new Promise(resolve => setTimeout(resolve, 100));
+        const delayMs = Number(generationDelayMs) || 0;
+        if (delayMs > 0) {
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
       }
     } catch (err) {
       console.error("Error generating responses:", err);

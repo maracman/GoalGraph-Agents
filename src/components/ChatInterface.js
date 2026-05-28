@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Play, Pause, ChevronDown, PlusCircle, RefreshCw, Copy, Trash } from 'lucide-react';
+import { Send, Play, Pause, ChevronDown, PlusCircle, RefreshCw, Copy, Trash, Zap } from 'lucide-react';
 import { submitMessage, generateResponse, interruptTask } from '../services/api';
 import { useSession } from '../contexts/SessionContext';
 
@@ -10,6 +10,7 @@ const ChatInterface = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null); // 'delete' | 'reset' | null
   const [maxTurns, setMaxTurns] = useState(12);
+  const [fastGraphRun, setFastGraphRun] = useState(Boolean(sessionState.fastGraphRun));
   const chatBoxRef = useRef(null);
   const cancelledRef = useRef(false);
   
@@ -19,6 +20,10 @@ const ChatInterface = () => {
       chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
     }
   }, [sessionState.history]);
+
+  useEffect(() => {
+    setFastGraphRun(Boolean(sessionState.fastGraphRun));
+  }, [sessionState.fastGraphRun]);
   
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -37,7 +42,7 @@ const ChatInterface = () => {
         cancelledRef.current = false;
         // Submit empty to set play state on server
         const turns = parseInt(maxTurns) || 12;
-        const response = await submitMessage('', true, turns);
+        const response = await submitMessage('', true, turns, { fastGraphRun });
         if (response.success) {
           setSessionState(prev => ({
             ...prev,
@@ -45,10 +50,12 @@ const ChatInterface = () => {
             maxGenerations: response.max_generations,
             isPlaying: response.play,
             currentGeneration: 0,
-            isUser: false
+            isUser: false,
+            fastGraphRun: response.fast_graph_run,
+            generationDelayMs: response.generation_delay_ms
           }));
           if (response.play) {
-            generateAgentResponses();
+            generateAgentResponses(response.generation_delay_ms);
           }
         }
       } catch (error) {
@@ -64,7 +71,7 @@ const ChatInterface = () => {
       cancelledRef.current = false;
 
       const turns = parseInt(maxTurns) || 12;
-      const response = await submitMessage(userMessage, true, turns);
+      const response = await submitMessage(userMessage, true, turns, { fastGraphRun });
       if (response.success) {
         setSessionState(prev => ({
           ...prev,
@@ -72,14 +79,16 @@ const ChatInterface = () => {
           maxGenerations: response.max_generations,
           isPlaying: response.play,
           currentGeneration: 0,
-          isUser: false
+          isUser: false,
+          fastGraphRun: response.fast_graph_run,
+          generationDelayMs: response.generation_delay_ms
         }));
 
         setUserMessage('');
 
         // Start generation if play is true
         if (response.play) {
-          generateAgentResponses();
+          generateAgentResponses(response.generation_delay_ms);
         }
       }
     } catch (error) {
@@ -89,7 +98,7 @@ const ChatInterface = () => {
     }
   };
   
-  const generateAgentResponses = async () => {
+  const generateAgentResponses = async (generationDelayMs = fastGraphRun ? 0 : 100) => {
     try {
       let keepGoing = true;
       while (keepGoing) {
@@ -125,15 +134,19 @@ const ChatInterface = () => {
           history: response.history || prev.history,
           isPlaying: keepGoing,
           currentGeneration: response.current_generation,
-          maxGenerations: response.max_generations
+          maxGenerations: response.max_generations,
+          fastGraphRun: response.fast_graph_run,
+          generationDelayMs: response.generation_delay_ms
         }));
 
         if (!keepGoing) {
           break;
         }
 
-        // Small delay to avoid hammering the server
-        await new Promise(resolve => setTimeout(resolve, 100));
+        const delayMs = Number(generationDelayMs) || 0;
+        if (delayMs > 0) {
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
       }
     } catch (error) {
       console.error("Error generating responses:", error);
@@ -171,10 +184,11 @@ const ChatInterface = () => {
   const duplicateChat = async () => {
     setDropdownOpen(false);
     try {
-      const response = await fetch('/duplicate_chat', { method: 'POST' });
+      const response = await fetch('/duplicate', { method: 'POST' });
       const data = await response.json();
-      if (data.success || data.session_id) {
-        if (data.session_id) setSessionId(data.session_id);
+      const newSessionId = data.session_id || data.new_session_id;
+      if (data.success || newSessionId) {
+        if (newSessionId) setSessionId(newSessionId);
         await loadPastChats();
       }
     } catch (error) {
@@ -380,6 +394,20 @@ const ChatInterface = () => {
           />
           <span className="turns-label">turns</span>
         </div>
+        <label
+          className={`rapid-toggle ${fastGraphRun ? 'active' : ''}`}
+          title="Skip turn and judge throttling for faster graph runs"
+        >
+          <input
+            type="checkbox"
+            checked={fastGraphRun}
+            onChange={(e) => setFastGraphRun(e.target.checked)}
+            disabled={sessionState.isPlaying}
+            aria-label="Rapid graph run"
+          />
+          <Zap size={16} />
+          <span>Rapid</span>
+        </label>
         <button
           type="submit"
           className={`dynamic-button ${sessionState.isPlaying ? 'pause' : userMessage ? 'send' : 'play'}`}

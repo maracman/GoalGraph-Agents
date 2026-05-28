@@ -1,0 +1,79 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d1" for="edge" attr.name="weight" attr.type="double" />
+  <key id="d0" for="edge" attr.name="label" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="start" />
+    <node id="state cancellation intent" />
+    <node id="anchor competitor price" />
+    <node id="ask for 50 percent discount" />
+    <node id="reject small loyalty credit" />
+    <node id="surface low usage evidence" />
+    <node id="accept 40 percent plus pause" />
+    <node id="request written confirmation" />
+    <node id="final save offer" />
+    <node id="resolution" />
+    <node id="accept 10 percent_NoGo" />
+    <node id="argue about sunk cost_NoGo" />
+    <node id="threaten chargeback_NoGo" />
+    <node id="upsell premium tier_NoGo" />
+    <node id="delay cancellation_NoGo" />
+    <node id="ignore competitor data_NoGo" />
+    <edge source="start" target="state cancellation intent">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="state cancellation intent" target="anchor competitor price">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="state cancellation intent" target="argue about sunk cost_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="anchor competitor price" target="ask for 50 percent discount">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="anchor competitor price" target="upsell premium tier_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="ask for 50 percent discount" target="reject small loyalty credit">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="ask for 50 percent discount" target="accept 10 percent_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="reject small loyalty credit" target="surface low usage evidence">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="reject small loyalty credit" target="threaten chargeback_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">3.0</data>
+    </edge>
+    <edge source="surface low usage evidence" target="accept 40 percent plus pause">
+      <data key="d0">Go</data>
+      <data key="d1">3.0</data>
+    </edge>
+    <edge source="surface low usage evidence" target="delay cancellation_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="accept 40 percent plus pause" target="request written confirmation">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="request written confirmation" target="resolution">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="request written confirmation" target="ignore competitor data_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">1.0</data>
+    </edge>
+  </graph>
+</graphml>
