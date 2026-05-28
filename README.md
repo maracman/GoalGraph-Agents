@@ -17,6 +17,10 @@ These screenshots are generated from the current web app UI.
 Curated water-rights dispute graph with 22 nodes and 22 edges.
 ![Graph Visualization](screenshots/graph_visualization.png)
 
+### Rapid Graph Run UI
+Actual GoalGraph UI showing a dense rapid adversarial run. The 2x2 use-case image below is re-rendered from GraphML data for side-by-side comparison.
+![Rapid Graph Run UI](screenshots/ui_graph_run.png)
+
 ### Agent Settings
 ![Agent Settings](screenshots/agent_settings.png)
 
@@ -313,6 +317,8 @@ The Developer tab provides real-time debugging:
 ## Example Graph Use Cases
 
 GoalGraph is strongest when each agent has a clear objective and the conversation has real tradeoffs. Useful graph examples include:
+
+The 2x2 grid is reconstructed from the included GraphML examples so the use cases can be compared in one image. Use the **Rapid Graph Run UI** screenshot above for the actual in-app graph view.
 
 ![Curated adversarial graph examples](screenshots/usecase_graph_examples.png)
 
