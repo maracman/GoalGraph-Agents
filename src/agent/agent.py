@@ -104,8 +104,10 @@ def llm_judge_call(system_prompt, user_prompt, generation_vars):
 
     try:
         raw = llm_service.complete(messages, options)
-        # Small delay to respect rate limits (especially ChatGPT Plus OAuth)
-        time.sleep(1)
+        # Small delay to respect rate limits. Rapid graph runs can set this to 0.
+        judge_delay = float(generation_vars.get('judge_delay_seconds', 1))
+        if judge_delay > 0:
+            time.sleep(judge_delay)
         return raw
     except Exception as e:
         logger.error(f"LLM judge call failed: {e}")
@@ -474,6 +476,9 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
         if agent['is_agent_generation_variables']
         else settings.copy()
     )
+    for runtime_key in ('fast_graph_run', 'judge_delay_seconds'):
+        if runtime_key in settings:
+            generation_vars[runtime_key] = settings[runtime_key]
     if offline:
         generation_vars['offline'] = True
 

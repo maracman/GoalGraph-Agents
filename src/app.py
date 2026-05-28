@@ -42,6 +42,8 @@ global_log_queue = queue.Queue()
 offline = os.environ.get('OFFLINE_MODE', 'false').lower() == 'true'
 VERSION = time.time()
 current_device = None
+DEFAULT_GENERATION_DELAY_MS = 100
+DEFAULT_JUDGE_DELAY_SECONDS = 1.0
 
 # Create a QueueHandler for logging
 class QueueHandler(logging.Handler):
@@ -311,7 +313,11 @@ def initialize_session():
         'max_generations': 0,
         'current_generation': 0,
         'user_message': '',
-        'number_of_agents': len(agents_df)
+        'number_of_agents': len(agents_df),
+        'chat_mode': 'you_agent',
+        'fast_graph_run': False,
+        'generation_delay_ms': DEFAULT_GENERATION_DELAY_MS,
+        'judge_delay_seconds': DEFAULT_JUDGE_DELAY_SECONDS
     }
 
     flask_logger.info(f"New session initialized with ID: {session_id}")
@@ -1176,6 +1182,7 @@ def submit():
         # Get user message and is_user flag from client side
         user_message = request.form.get('user_message', '')
         is_user = request.form.get('is_user') == 'true'
+        previous_history_len = len(session['state'].get('session_history', []))
         flask_logger.info(f"Received user message: '{user_message}', is_user: {is_user}")
 
         # Record user message in history if is_user is true
@@ -1191,6 +1198,11 @@ def submit():
         else:
             flask_logger.info("No user message added to session history")
 
+        if user_message:
+            session['state']['len_last_history'] = previous_history_len
+        else:
+            session['state']['len_last_history'] = max(-1, previous_history_len - 1)
+
         # Get the max_generations value
         # If the client sent a max_turns value, use it; otherwise default
         client_max_turns = request.form.get('max_turns', None)
@@ -1204,6 +1216,11 @@ def submit():
             max_rounds = 6  # Each agent speaks this many times
             max_generations = num_agents * max_rounds
         flask_logger.info(f"Set max_generations to {max_generations}")
+
+        fast_graph_run = request.form.get('fast_graph_run', 'false').lower() == 'true'
+        session['state']['fast_graph_run'] = fast_graph_run
+        session['state']['generation_delay_ms'] = 0 if fast_graph_run else DEFAULT_GENERATION_DELAY_MS
+        session['state']['judge_delay_seconds'] = 0 if fast_graph_run else DEFAULT_JUDGE_DELAY_SECONDS
 
         # Initialize the generation process
         session['state']['current_generation'] = 0
@@ -1219,7 +1236,9 @@ def submit():
             "success": True,
             "max_generations": max_generations,
             "history": session['state']['session_history'],
-            "play": session['state']['play']
+            "play": session['state']['play'],
+            "fast_graph_run": session['state']['fast_graph_run'],
+            "generation_delay_ms": session['state']['generation_delay_ms']
         })
         flask_logger.info(f"Submit response prepared: {response.get_data(as_text=True)}")
         flask_logger.info("Exiting submit function successfully")
@@ -1275,6 +1294,15 @@ def generate():
         if llm_settings:
             # Update settings with LLM configuration
             settings.update(llm_settings)
+
+        fast_graph_run = bool(session['state'].get('fast_graph_run', False))
+        settings['fast_graph_run'] = fast_graph_run
+        settings['judge_delay_seconds'] = float(
+            session['state'].get(
+                'judge_delay_seconds',
+                0 if fast_graph_run else DEFAULT_JUDGE_DELAY_SECONDS
+            )
+        )
         
         # Pass current_generation so agent.main() can round-robin agents
         current_gen = session['state']['current_generation']
@@ -1322,7 +1350,9 @@ def generate():
             "play": session['state']['play'],
             "clear_chatbox": True,
             "current_generation": session['state']['current_generation'],
-            "max_generations": session['state']['max_generations']
+            "max_generations": session['state']['max_generations'],
+            "fast_graph_run": session['state'].get('fast_graph_run', False),
+            "generation_delay_ms": session['state'].get('generation_delay_ms', DEFAULT_GENERATION_DELAY_MS)
         })
         flask_logger.info("Exiting generate function successfully")
         return response
@@ -1351,6 +1381,7 @@ def reset_chat():
         agents_df = pd.DataFrame(session['state']['agents_df'])
         settings = session['state']['settings']
         user_name = session['state']['user_name']
+        chat_mode = session['state'].get('chat_mode', 'you_agent')
         
         # Reset dynamic conversation elements
         for idx, agent in agents_df.iterrows():
@@ -1380,7 +1411,11 @@ def reset_chat():
             'max_generations': 0,
             'current_generation': 0,
             'user_message': '',
-            'number_of_agents': len(agents_df)
+            'number_of_agents': len(agents_df),
+            'chat_mode': chat_mode,
+            'fast_graph_run': False,
+            'generation_delay_ms': DEFAULT_GENERATION_DELAY_MS,
+            'judge_delay_seconds': DEFAULT_JUDGE_DELAY_SECONDS
         }
         
         # Save the reset state
@@ -1518,8 +1553,8 @@ def create_new_chat():
                     'graph_file_path': graph_file_path,
                     'persistance_count': 0,
                     'persistance_score': None,
-                    'patience': 8,
-                    'persistance': 4,
+                    'patience': int(preset.get('patience', 8)),
+                    'persistance': int(preset.get('persistance', 4)),
                     'last_response': '',
                     'last_narration': '',
                     'current_aim': None,
@@ -1550,7 +1585,10 @@ def create_new_chat():
                 'current_generation': 0,
                 'user_message': '',
                 'number_of_agents': len(agents_df),
-                'chat_mode': mode
+                'chat_mode': mode,
+                'fast_graph_run': False,
+                'generation_delay_ms': DEFAULT_GENERATION_DELAY_MS,
+                'judge_delay_seconds': DEFAULT_JUDGE_DELAY_SECONDS
             }
 
             if 'llm_settings' in defaults:
@@ -2181,6 +2219,8 @@ def create_agent_preset():
             "target_impression": data.get("target_impression", ""),
             "provider": data.get("provider", ""),
             "model": data.get("model", ""),
+            "persistance": int(data.get("persistance", 3)),
+            "patience": int(data.get("patience", 6)),
             "created_at": datetime.now().isoformat()
         }
 
@@ -2212,6 +2252,9 @@ def update_agent_preset(preset_id):
         for key in ["agent_name", "description", "goal", "target_impression", "provider", "model"]:
             if key in data:
                 preset[key] = data[key]
+        for key in ["persistance", "patience"]:
+            if key in data:
+                preset[key] = int(data[key])
         preset["updated_at"] = datetime.now().isoformat()
 
         with open(filepath, 'w') as f:

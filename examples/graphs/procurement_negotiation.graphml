@@ -1,0 +1,102 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d1" for="edge" attr.name="weight" attr.type="double" />
+  <key id="d0" for="edge" attr.name="label" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="start" />
+    <node id="define must-have terms" />
+    <node id="anchor alternative vendor" />
+    <node id="ask for pilot discount" />
+    <node id="bundle support credits" />
+    <node id="trade case study for price" />
+    <node id="lock renewal cap" />
+    <node id="request security addendum" />
+    <node id="approve phased rollout" />
+    <node id="signed contract" />
+    <node id="accept list price_NoGo" />
+    <node id="hide budget limit_NoGo" />
+    <node id="demand unlimited liability_NoGo" />
+    <node id="skip legal review_NoGo" />
+    <node id="bundle unused seats_NoGo" />
+    <node id="threaten public churn_NoGo" />
+    <node id="compare implementation risk" />
+    <node id="add termination for cause" />
+    <node id="schedule QBR checkpoint" />
+    <edge source="start" target="define must-have terms">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="define must-have terms" target="anchor alternative vendor">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="define must-have terms" target="accept list price_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="anchor alternative vendor" target="ask for pilot discount">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="anchor alternative vendor" target="compare implementation risk">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="anchor alternative vendor" target="hide budget limit_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">3.0</data>
+    </edge>
+    <edge source="ask for pilot discount" target="bundle support credits">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="ask for pilot discount" target="demand unlimited liability_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="bundle support credits" target="trade case study for price">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="bundle support credits" target="bundle unused seats_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">3.0</data>
+    </edge>
+    <edge source="trade case study for price" target="lock renewal cap">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="trade case study for price" target="threaten public churn_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="lock renewal cap" target="request security addendum">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="request security addendum" target="approve phased rollout">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="request security addendum" target="skip legal review_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="approve phased rollout" target="signed contract">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="compare implementation risk" target="add termination for cause">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="add termination for cause" target="schedule QBR checkpoint">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="schedule QBR checkpoint" target="signed contract">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+  </graph>
+</graphml>

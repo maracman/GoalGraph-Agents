@@ -1,0 +1,424 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d1" for="edge" attr.name="weight" attr.type="double" />
+  <key id="d0" for="edge" attr.name="label" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="subscription_retention/start" />
+    <node id="subscription_retention/state cancellation intent" />
+    <node id="subscription_retention/anchor competitor price" />
+    <node id="subscription_retention/ask for 50 percent discount" />
+    <node id="subscription_retention/reject small loyalty credit" />
+    <node id="subscription_retention/surface low usage evidence" />
+    <node id="subscription_retention/accept 40 percent plus pause" />
+    <node id="subscription_retention/request written confirmation" />
+    <node id="subscription_retention/final save offer" />
+    <node id="subscription_retention/resolution" />
+    <node id="subscription_retention/accept 10 percent_NoGo" />
+    <node id="subscription_retention/argue about sunk cost_NoGo" />
+    <node id="subscription_retention/threaten chargeback_NoGo" />
+    <node id="subscription_retention/upsell premium tier_NoGo" />
+    <node id="subscription_retention/delay cancellation_NoGo" />
+    <node id="subscription_retention/ignore competitor data_NoGo" />
+    <node id="water_rights_dispute/start" />
+    <node id="water_rights_dispute/declare water need" />
+    <node id="water_rights_dispute/cite drought data" />
+    <node id="water_rights_dispute/map legal seniority" />
+    <node id="water_rights_dispute/offer seasonal cap" />
+    <node id="water_rights_dispute/request shared metering" />
+    <node id="water_rights_dispute/trade access for data" />
+    <node id="water_rights_dispute/draft emergency schedule" />
+    <node id="water_rights_dispute/sign monitoring MOU" />
+    <node id="water_rights_dispute/resolution" />
+    <node id="water_rights_dispute/threaten injunction_NoGo" />
+    <node id="water_rights_dispute/dismiss cattle losses_NoGo" />
+    <node id="water_rights_dispute/hide flow readings_NoGo" />
+    <node id="water_rights_dispute/demand total diversion_NoGo" />
+    <node id="water_rights_dispute/reject all monitoring_NoGo" />
+    <node id="water_rights_dispute/personal attack_NoGo" />
+    <node id="water_rights_dispute/ask neutral hydrologist" />
+    <node id="water_rights_dispute/revise release windows" />
+    <node id="water_rights_dispute/set review date" />
+    <node id="water_rights_dispute/publish shared dashboard" />
+    <node id="water_rights_dispute/appeal to town council_NoGo" />
+    <node id="water_rights_dispute/stall for rainy season_NoGo" />
+    <node id="security_red_team/start" />
+    <node id="security_red_team/recon public assets" />
+    <node id="security_red_team/identify exposed admin" />
+    <node id="security_red_team/test password reset" />
+    <node id="security_red_team/trigger anomaly alert" />
+    <node id="security_red_team/rotate credentials" />
+    <node id="security_red_team/segment admin panel" />
+    <node id="security_red_team/add rate limit" />
+    <node id="security_red_team/document control gap" />
+    <node id="security_red_team/close incident" />
+    <node id="security_red_team/phish finance user_NoGo" />
+    <node id="security_red_team/spray reused passwords_NoGo" />
+    <node id="security_red_team/disable logging_NoGo" />
+    <node id="security_red_team/ignore MFA prompt_NoGo" />
+    <node id="security_red_team/block all traffic_NoGo" />
+    <node id="security_red_team/blame vendor_NoGo" />
+    <node id="security_red_team/compare threat intel" />
+    <node id="security_red_team/patch vulnerable plugin" />
+    <node id="security_red_team/run tabletop review" />
+    <node id="security_red_team/update playbook" />
+    <node id="procurement_negotiation/start" />
+    <node id="procurement_negotiation/define must-have terms" />
+    <node id="procurement_negotiation/anchor alternative vendor" />
+    <node id="procurement_negotiation/ask for pilot discount" />
+    <node id="procurement_negotiation/bundle support credits" />
+    <node id="procurement_negotiation/trade case study for price" />
+    <node id="procurement_negotiation/lock renewal cap" />
+    <node id="procurement_negotiation/request security addendum" />
+    <node id="procurement_negotiation/approve phased rollout" />
+    <node id="procurement_negotiation/signed contract" />
+    <node id="procurement_negotiation/accept list price_NoGo" />
+    <node id="procurement_negotiation/hide budget limit_NoGo" />
+    <node id="procurement_negotiation/demand unlimited liability_NoGo" />
+    <node id="procurement_negotiation/skip legal review_NoGo" />
+    <node id="procurement_negotiation/bundle unused seats_NoGo" />
+    <node id="procurement_negotiation/threaten public churn_NoGo" />
+    <node id="procurement_negotiation/compare implementation risk" />
+    <node id="procurement_negotiation/add termination for cause" />
+    <node id="procurement_negotiation/schedule QBR checkpoint" />
+    <edge source="subscription_retention/start" target="subscription_retention/state cancellation intent">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="subscription_retention/state cancellation intent" target="subscription_retention/anchor competitor price">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="subscription_retention/state cancellation intent" target="subscription_retention/argue about sunk cost_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="subscription_retention/anchor competitor price" target="subscription_retention/ask for 50 percent discount">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="subscription_retention/anchor competitor price" target="subscription_retention/upsell premium tier_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="subscription_retention/anchor competitor price" target="procurement_negotiation/anchor alternative vendor">
+      <data key="d0">Similar</data>
+      <data key="d1">0.1</data>
+    </edge>
+    <edge source="subscription_retention/ask for 50 percent discount" target="subscription_retention/reject small loyalty credit">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="subscription_retention/ask for 50 percent discount" target="subscription_retention/accept 10 percent_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="subscription_retention/reject small loyalty credit" target="subscription_retention/surface low usage evidence">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="subscription_retention/reject small loyalty credit" target="subscription_retention/threaten chargeback_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">3.0</data>
+    </edge>
+    <edge source="subscription_retention/surface low usage evidence" target="subscription_retention/accept 40 percent plus pause">
+      <data key="d0">Go</data>
+      <data key="d1">3.0</data>
+    </edge>
+    <edge source="subscription_retention/surface low usage evidence" target="subscription_retention/delay cancellation_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="subscription_retention/accept 40 percent plus pause" target="subscription_retention/request written confirmation">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="subscription_retention/request written confirmation" target="subscription_retention/resolution">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="subscription_retention/request written confirmation" target="subscription_retention/ignore competitor data_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="subscription_retention/request written confirmation" target="water_rights_dispute/sign monitoring MOU">
+      <data key="d0">Similar</data>
+      <data key="d1">0.1</data>
+    </edge>
+    <edge source="water_rights_dispute/start" target="water_rights_dispute/declare water need">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="water_rights_dispute/declare water need" target="water_rights_dispute/cite drought data">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="water_rights_dispute/declare water need" target="water_rights_dispute/threaten injunction_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">3.0</data>
+    </edge>
+    <edge source="water_rights_dispute/cite drought data" target="water_rights_dispute/map legal seniority">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="water_rights_dispute/cite drought data" target="water_rights_dispute/dismiss cattle losses_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="water_rights_dispute/map legal seniority" target="water_rights_dispute/offer seasonal cap">
+      <data key="d0">Go</data>
+      <data key="d1">3.0</data>
+    </edge>
+    <edge source="water_rights_dispute/map legal seniority" target="water_rights_dispute/hide flow readings_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">4.0</data>
+    </edge>
+    <edge source="water_rights_dispute/offer seasonal cap" target="water_rights_dispute/request shared metering">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="water_rights_dispute/offer seasonal cap" target="water_rights_dispute/demand total diversion_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="water_rights_dispute/request shared metering" target="water_rights_dispute/trade access for data">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="water_rights_dispute/request shared metering" target="water_rights_dispute/ask neutral hydrologist">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="water_rights_dispute/request shared metering" target="water_rights_dispute/reject all monitoring_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="water_rights_dispute/trade access for data" target="water_rights_dispute/draft emergency schedule">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="water_rights_dispute/trade access for data" target="water_rights_dispute/personal attack_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="water_rights_dispute/draft emergency schedule" target="water_rights_dispute/sign monitoring MOU">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="water_rights_dispute/draft emergency schedule" target="water_rights_dispute/appeal to town council_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">3.0</data>
+    </edge>
+    <edge source="water_rights_dispute/sign monitoring MOU" target="water_rights_dispute/resolution">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="water_rights_dispute/sign monitoring MOU" target="subscription_retention/request written confirmation">
+      <data key="d0">Similar</data>
+      <data key="d1">0.1</data>
+    </edge>
+    <edge source="water_rights_dispute/ask neutral hydrologist" target="water_rights_dispute/revise release windows">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="water_rights_dispute/ask neutral hydrologist" target="security_red_team/compare threat intel">
+      <data key="d0">Similar</data>
+      <data key="d1">0.1</data>
+    </edge>
+    <edge source="water_rights_dispute/revise release windows" target="water_rights_dispute/set review date">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="water_rights_dispute/set review date" target="water_rights_dispute/publish shared dashboard">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="water_rights_dispute/set review date" target="water_rights_dispute/stall for rainy season_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="water_rights_dispute/set review date" target="procurement_negotiation/schedule QBR checkpoint">
+      <data key="d0">Similar</data>
+      <data key="d1">0.1</data>
+    </edge>
+    <edge source="water_rights_dispute/publish shared dashboard" target="water_rights_dispute/resolution">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="security_red_team/start" target="security_red_team/recon public assets">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="security_red_team/recon public assets" target="security_red_team/identify exposed admin">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="security_red_team/recon public assets" target="security_red_team/phish finance user_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="security_red_team/identify exposed admin" target="security_red_team/test password reset">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="security_red_team/identify exposed admin" target="security_red_team/compare threat intel">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="security_red_team/identify exposed admin" target="security_red_team/spray reused passwords_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">3.0</data>
+    </edge>
+    <edge source="security_red_team/test password reset" target="security_red_team/trigger anomaly alert">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="security_red_team/test password reset" target="security_red_team/disable logging_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">4.0</data>
+    </edge>
+    <edge source="security_red_team/trigger anomaly alert" target="security_red_team/rotate credentials">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="security_red_team/trigger anomaly alert" target="security_red_team/ignore MFA prompt_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="security_red_team/rotate credentials" target="security_red_team/segment admin panel">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="security_red_team/rotate credentials" target="security_red_team/block all traffic_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">3.0</data>
+    </edge>
+    <edge source="security_red_team/segment admin panel" target="security_red_team/add rate limit">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="security_red_team/add rate limit" target="security_red_team/document control gap">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="security_red_team/document control gap" target="security_red_team/close incident">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="security_red_team/document control gap" target="security_red_team/blame vendor_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="security_red_team/document control gap" target="procurement_negotiation/request security addendum">
+      <data key="d0">Similar</data>
+      <data key="d1">0.1</data>
+    </edge>
+    <edge source="security_red_team/compare threat intel" target="security_red_team/patch vulnerable plugin">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="security_red_team/compare threat intel" target="water_rights_dispute/ask neutral hydrologist">
+      <data key="d0">Similar</data>
+      <data key="d1">0.1</data>
+    </edge>
+    <edge source="security_red_team/patch vulnerable plugin" target="security_red_team/run tabletop review">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="security_red_team/run tabletop review" target="security_red_team/update playbook">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="security_red_team/update playbook" target="security_red_team/close incident">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="procurement_negotiation/start" target="procurement_negotiation/define must-have terms">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="procurement_negotiation/define must-have terms" target="procurement_negotiation/anchor alternative vendor">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="procurement_negotiation/define must-have terms" target="procurement_negotiation/accept list price_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="procurement_negotiation/anchor alternative vendor" target="procurement_negotiation/ask for pilot discount">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="procurement_negotiation/anchor alternative vendor" target="procurement_negotiation/compare implementation risk">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="procurement_negotiation/anchor alternative vendor" target="procurement_negotiation/hide budget limit_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">3.0</data>
+    </edge>
+    <edge source="procurement_negotiation/anchor alternative vendor" target="subscription_retention/anchor competitor price">
+      <data key="d0">Similar</data>
+      <data key="d1">0.1</data>
+    </edge>
+    <edge source="procurement_negotiation/ask for pilot discount" target="procurement_negotiation/bundle support credits">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="procurement_negotiation/ask for pilot discount" target="procurement_negotiation/demand unlimited liability_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="procurement_negotiation/bundle support credits" target="procurement_negotiation/trade case study for price">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="procurement_negotiation/bundle support credits" target="procurement_negotiation/bundle unused seats_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">3.0</data>
+    </edge>
+    <edge source="procurement_negotiation/trade case study for price" target="procurement_negotiation/lock renewal cap">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="procurement_negotiation/trade case study for price" target="procurement_negotiation/threaten public churn_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="procurement_negotiation/lock renewal cap" target="procurement_negotiation/request security addendum">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="procurement_negotiation/request security addendum" target="procurement_negotiation/approve phased rollout">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="procurement_negotiation/request security addendum" target="procurement_negotiation/skip legal review_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="procurement_negotiation/request security addendum" target="security_red_team/document control gap">
+      <data key="d0">Similar</data>
+      <data key="d1">0.1</data>
+    </edge>
+    <edge source="procurement_negotiation/approve phased rollout" target="procurement_negotiation/signed contract">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="procurement_negotiation/compare implementation risk" target="procurement_negotiation/add termination for cause">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="procurement_negotiation/add termination for cause" target="procurement_negotiation/schedule QBR checkpoint">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="procurement_negotiation/schedule QBR checkpoint" target="procurement_negotiation/signed contract">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="procurement_negotiation/schedule QBR checkpoint" target="water_rights_dispute/set review date">
+      <data key="d0">Similar</data>
+      <data key="d1">0.1</data>
+    </edge>
+  </graph>
+</graphml>

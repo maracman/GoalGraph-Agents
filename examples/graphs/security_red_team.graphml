@@ -1,0 +1,107 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d1" for="edge" attr.name="weight" attr.type="double" />
+  <key id="d0" for="edge" attr.name="label" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="start" />
+    <node id="recon public assets" />
+    <node id="identify exposed admin" />
+    <node id="test password reset" />
+    <node id="trigger anomaly alert" />
+    <node id="rotate credentials" />
+    <node id="segment admin panel" />
+    <node id="add rate limit" />
+    <node id="document control gap" />
+    <node id="close incident" />
+    <node id="phish finance user_NoGo" />
+    <node id="spray reused passwords_NoGo" />
+    <node id="disable logging_NoGo" />
+    <node id="ignore MFA prompt_NoGo" />
+    <node id="block all traffic_NoGo" />
+    <node id="blame vendor_NoGo" />
+    <node id="compare threat intel" />
+    <node id="patch vulnerable plugin" />
+    <node id="run tabletop review" />
+    <node id="update playbook" />
+    <edge source="start" target="recon public assets">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="recon public assets" target="identify exposed admin">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="recon public assets" target="phish finance user_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="identify exposed admin" target="test password reset">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="identify exposed admin" target="compare threat intel">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="identify exposed admin" target="spray reused passwords_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">3.0</data>
+    </edge>
+    <edge source="test password reset" target="trigger anomaly alert">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="test password reset" target="disable logging_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">4.0</data>
+    </edge>
+    <edge source="trigger anomaly alert" target="rotate credentials">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="trigger anomaly alert" target="ignore MFA prompt_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="rotate credentials" target="segment admin panel">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="rotate credentials" target="block all traffic_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">3.0</data>
+    </edge>
+    <edge source="segment admin panel" target="add rate limit">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="add rate limit" target="document control gap">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="document control gap" target="close incident">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="document control gap" target="blame vendor_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="compare threat intel" target="patch vulnerable plugin">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="patch vulnerable plugin" target="run tabletop review">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="run tabletop review" target="update playbook">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="update playbook" target="close incident">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+  </graph>
+</graphml>

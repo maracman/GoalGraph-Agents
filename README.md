@@ -8,10 +8,13 @@ Agents don't just chat — they work toward goals. A lightweight LLM judge rates
 
 ## Screenshots
 
+These screenshots are generated from the current web app UI.
+
 ### Chat Interface
 ![Chat Interface](screenshots/chat_interface.png)
 
 ### Graph Visualization
+Curated water-rights dispute graph with 22 nodes and 22 edges.
 ![Graph Visualization](screenshots/graph_visualization.png)
 
 ### Agent Settings
@@ -28,11 +31,13 @@ Agents don't just chat — they work toward goals. A lightweight LLM judge rates
   - [Persistence & Patience](#persistence--patience)
 - [Features](#features)
   - [Conversation Modes](#conversation-modes)
+  - [Rapid Adversarial Graph Runs](#rapid-adversarial-graph-runs)
   - [Agent Library & Per-Agent LLM Configuration](#agent-library--per-agent-llm-configuration)
   - [Graph Library — Save, Visualize, and Merge](#graph-library--save-visualize-and-merge)
   - [Multi-Provider LLM Support](#multi-provider-llm-support)
   - [Session Management](#session-management)
   - [Developer Tools](#developer-tools)
+- [Example Graph Use Cases](#example-graph-use-cases)
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
@@ -206,6 +211,18 @@ The platform supports two conversation modes, selected when creating a new chat:
 
 **Agent vs Agent** — Watch two or more agents converse with each other. You act as a "narrator," providing scene-setting context. Each agent takes turns responding, each pursuing their own goal with their own decision graph. This mode is designed for studying multi-agent negotiation, debate, and emergent behavior.
 
+### Rapid Adversarial Graph Runs
+
+For fast graph-building experiments, enable **Rapid** in the chat footer before pressing **Play**. Rapid mode removes the client-side turn delay and sets the lightweight judge delay to `0`, while preserving provider retry/backoff behavior for real rate limits.
+
+A good adversarial setup is:
+
+1. Create two or more agent presets with opposing goals.
+2. Assign each preset a fast provider/model in the Agent Library.
+3. Set low `persistance` and `patience` values, such as `1` and `2`, when you want many Go/NoGo edges quickly.
+4. Start an **Agent vs Agent** chat, set the turn count to a larger number, enable **Rapid**, and press **Play**.
+5. Save each agent graph, then merge saved graphs to compare strategies across runs.
+
 ### Agent Library & Per-Agent LLM Configuration
 
 The **Agent Library** lets you create reusable agent presets with:
@@ -218,6 +235,7 @@ The **Agent Library** lets you create reusable agent presets with:
 | **Target Impression** | How the agent wants to be perceived by others |
 | **LLM Provider** | Which AI provider to use (OpenAI, Anthropic, Cohere, etc.) |
 | **Model** | Specific model within that provider |
+| **Persistence / Patience** | How quickly the agent abandons or completes subgoals, useful for graph density |
 
 **Per-agent LLM configuration** means you can pit different models against each other in the same conversation. For example:
 - **Jordan** uses `claude-sonnet-4-20250514` (Anthropic)
@@ -289,6 +307,36 @@ The Developer tab provides real-time debugging:
 - **Logs**: Server-side log output.
 - **Auto-refresh**: Configurable polling interval (default 3s).
 - **Download/Clear**: Export or reset logs.
+
+---
+
+## Example Graph Use Cases
+
+GoalGraph is strongest when each agent has a clear objective and the conversation has real tradeoffs. Useful graph examples include:
+
+![Curated adversarial graph examples](screenshots/usecase_graph_examples.png)
+
+| Use case | Agent pairing | What the graph reveals |
+|----------|---------------|------------------------|
+| Subscription retention | Customer vs retention specialist | Discount anchors, cancellation threats, save offers, and failed persuasion loops |
+| Water rights dispute | Rancher vs research station director | Concession paths, hardline demands, compromise offers, and recurring NoGo tactics |
+| Procurement negotiation | Buyer vs vendor account lead | Price, contract length, support terms, and bundling strategies |
+| Security red team | Attacker planner vs defender analyst | Attack paths, mitigation responses, dead ends, and resilient defense patterns |
+| Policy debate | Regulator vs startup founder | Compliance concessions, risk framing, enforcement pressure, and persuasion failures |
+| Product strategy | Growth lead vs reliability lead | Feature tradeoffs, launch blockers, risk acceptance, and escalation points |
+| Mediation practice | Mediator vs two conflicting stakeholders | Which reframes lower conflict and which proposals repeatedly stall |
+
+For dense graph examples, use short goals, strong opposition, low persistence, and 30-100 rapid turns. For higher-quality strategy maps, raise persistence/patience and run several shorter sessions, then merge the saved graphs.
+
+Seed GraphML examples are included in `examples/graphs/`:
+
+| GraphML | Contents |
+|---------|----------|
+| [`subscription_retention.graphml`](examples/graphs/subscription_retention.graphml) | Customer-retention negotiation with discount paths and failed save tactics |
+| [`water_rights_dispute.graphml`](examples/graphs/water_rights_dispute.graphml) | Resource-allocation dispute with monitoring, mediation, and legal-pressure branches |
+| [`security_red_team.graphml`](examples/graphs/security_red_team.graphml) | Security drill showing investigation, control gaps, mitigations, and unsafe dead ends |
+| [`procurement_negotiation.graphml`](examples/graphs/procurement_negotiation.graphml) | Buyer-vendor negotiation around price, risk, legal terms, and rollout commitments |
+| [`adversarial_use_cases_showcase.graphml`](examples/graphs/adversarial_use_cases_showcase.graphml) | Merged multi-domain strategy map with semantic links across scenarios |
 
 ---
 
@@ -453,8 +501,9 @@ OFFLINE_MODE=true python app.py
 2. Click **New Chat** in the sidebar to open the chat creation dialog.
 3. Choose a mode (**You + Agent** or **Agent vs Agent**), select your agents, and optionally assign existing graphs.
 4. In the chat, type a message and click **Send**, or click **Play** to let agents generate responses automatically.
-5. Watch the **Graph** tab as agents build their decision graphs over time.
-6. **Save** interesting graphs to the library for reuse or merging.
+5. For adversarial graph-building, use **Agent vs Agent**, pick two fast model presets, enable **Rapid**, and run 30+ turns.
+6. Watch the **Graph** tab as agents build their decision graphs over time.
+7. **Save** interesting graphs to the library for reuse or merging.
 
 ## API Reference
 
@@ -467,6 +516,13 @@ OFFLINE_MODE=true python app.py
 | POST | `/submit` | Submit a user message and optionally start generation |
 | GET | `/generate` | Generate the next agent response (one turn) |
 | POST | `/interrupt` | Stop the current generation loop |
+
+`POST /submit` accepts optional form fields:
+
+| Field | Meaning |
+|-------|---------|
+| `max_turns` | Number of generation turns to run before stopping |
+| `fast_graph_run` | `true` removes the client turn delay and judge delay for rapid graph building |
 
 ### Agent Management
 
@@ -520,12 +576,11 @@ OFFLINE_MODE=true python app.py
 | Method | Route | Description |
 |--------|-------|-------------|
 | GET | `/get_past_chats` | List saved chat sessions |
-| POST | `/create_new_chat` | Create a new empty chat session |
-| POST | `/create_configured_chat` | Create a chat with specific agents, mode, and graphs |
-| POST | `/duplicate_chat` | Duplicate the current session |
+| POST | `/create_new_chat` | Create a default session, or pass JSON to create a configured chat with mode, presets, and graph assignments |
+| POST | `/duplicate` | Duplicate the current session |
 | POST | `/delete_chat` | Delete the current session |
 | POST | `/reset` | Reset the current chat (clear history, keep agents) |
-| POST | `/load_chat/<chat_id>` | Load a previous session |
+| GET | `/load_chat/<chat_id>` | Load a previous session |
 
 ---
 

@@ -1,0 +1,117 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d1" for="edge" attr.name="weight" attr.type="double" />
+  <key id="d0" for="edge" attr.name="label" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="start" />
+    <node id="declare water need" />
+    <node id="cite drought data" />
+    <node id="map legal seniority" />
+    <node id="offer seasonal cap" />
+    <node id="request shared metering" />
+    <node id="trade access for data" />
+    <node id="draft emergency schedule" />
+    <node id="sign monitoring MOU" />
+    <node id="resolution" />
+    <node id="threaten injunction_NoGo" />
+    <node id="dismiss cattle losses_NoGo" />
+    <node id="hide flow readings_NoGo" />
+    <node id="demand total diversion_NoGo" />
+    <node id="reject all monitoring_NoGo" />
+    <node id="personal attack_NoGo" />
+    <node id="ask neutral hydrologist" />
+    <node id="revise release windows" />
+    <node id="set review date" />
+    <node id="publish shared dashboard" />
+    <node id="appeal to town council_NoGo" />
+    <node id="stall for rainy season_NoGo" />
+    <edge source="start" target="declare water need">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="declare water need" target="cite drought data">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="declare water need" target="threaten injunction_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">3.0</data>
+    </edge>
+    <edge source="cite drought data" target="map legal seniority">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="cite drought data" target="dismiss cattle losses_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="map legal seniority" target="offer seasonal cap">
+      <data key="d0">Go</data>
+      <data key="d1">3.0</data>
+    </edge>
+    <edge source="map legal seniority" target="hide flow readings_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">4.0</data>
+    </edge>
+    <edge source="offer seasonal cap" target="request shared metering">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="offer seasonal cap" target="demand total diversion_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="request shared metering" target="trade access for data">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="request shared metering" target="ask neutral hydrologist">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="request shared metering" target="reject all monitoring_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="trade access for data" target="draft emergency schedule">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="trade access for data" target="personal attack_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="draft emergency schedule" target="sign monitoring MOU">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="draft emergency schedule" target="appeal to town council_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">3.0</data>
+    </edge>
+    <edge source="sign monitoring MOU" target="resolution">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="ask neutral hydrologist" target="revise release windows">
+      <data key="d0">Go</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="revise release windows" target="set review date">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="set review date" target="publish shared dashboard">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+    <edge source="set review date" target="stall for rainy season_NoGo">
+      <data key="d0">NoGo</data>
+      <data key="d1">2.0</data>
+    </edge>
+    <edge source="publish shared dashboard" target="resolution">
+      <data key="d0">Go</data>
+      <data key="d1">1.0</data>
+    </edge>
+  </graph>
+</graphml>

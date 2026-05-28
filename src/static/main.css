@@ -457,7 +457,8 @@ body, html {
   flex-shrink: 0;
 }
 
-.turns-input input[type="number"] {
+.turns-input input[type="number"],
+.turns-input input[type="text"] {
   width: 52px;
   padding: 8px 6px;
   border: 1px solid var(--border-color);
@@ -475,7 +476,8 @@ body, html {
   margin: 0;
 }
 
-.turns-input input[type="number"]:focus {
+.turns-input input[type="number"]:focus,
+.turns-input input[type="text"]:focus {
   border-color: var(--primary-color);
 }
 
@@ -483,6 +485,42 @@ body, html {
   font-size: 12px;
   color: #888;
   white-space: nowrap;
+}
+
+.rapid-toggle {
+  position: relative;
+  min-width: 82px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-light);
+  background-color: white;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.2s, background-color 0.2s, color 0.2s;
+  flex-shrink: 0;
+}
+
+.rapid-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rapid-toggle.active {
+  border-color: var(--warning-color);
+  background-color: #fff7e8;
+  color: #9a5b00;
+}
+
+.rapid-toggle:has(input:disabled) {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .dynamic-button {
