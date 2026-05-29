@@ -17,10 +17,6 @@ These screenshots are generated from the current web app UI.
 Detailed 129-node aim workspace in the actual GoalGraph UI, with the expanded graph viewport and explorer controls for search, labels, and path-following.
 ![Graph Visualization](screenshots/detailed_graph_explorer.png)
 
-### Actual Chat-Derived Negotiation Graph
-Real 16-turn agent-vs-agent run in the GoalGraph UI. The graph is reconstructed from the agents' generated aims and judge reviews, not hand-authored.
-![Actual Chat Negotiation Graph](screenshots/actual_chat_negotiation_graph.png)
-
 ### Rapid Graph Run UI
 Actual GoalGraph UI showing a dense rapid adversarial run.
 ![Rapid Graph Run UI](screenshots/ui_graph_run.png)
@@ -249,7 +245,7 @@ The **Agent Library** lets you create reusable agent presets with:
 
 **Per-agent LLM configuration** means you can pit different models against each other in the same conversation. For example:
 - **Jordan** uses `claude-sonnet-4-20250514` (Anthropic)
-- **Alex** uses `gpt-5.2` (OpenAI Codex subscription auth)
+- **Alex** uses `gpt-5.1-codex-mini` (OpenAI)
 
 When an agent has a custom provider/model set, its `is_agent_generation_variables` flag is `true`, and the system routes that agent's LLM calls through its own provider instead of the session default.
 
@@ -285,13 +281,11 @@ The platform abstracts LLM access through a unified service layer with automatic
 | Provider | Models | Auth |
 |----------|--------|------|
 | **OpenAI** | GPT-4o, GPT-4o Mini, GPT-4 Turbo, GPT-3.5 Turbo | `OPENAI_API_KEY` |
-| **OpenAI Codex** | GPT-5.2 | `~/.codex/auth.json` (ChatGPT Plus/Pro OAuth) |
+| **OpenAI Codex** | GPT-5.1-codex-mini, GPT-5.1, GPT-5.2 variants | `~/.codex/auth.json` (ChatGPT Plus/Pro OAuth) |
 | **Anthropic** | Claude Sonnet 4, Claude 3.5 Sonnet, Claude 3.5 Haiku | `ANTHROPIC_API_KEY` |
 | **Cohere** | Command R+, Command R | `COHERE_API_KEY` |
 | **HuggingFace** | Mistral 7B Instruct | `HUGGINGFACE_API_KEY` |
 | **Local** | Any GGUF model via llama_cpp | Local file path |
-
-Older saved Codex session configs that reference stale Codex model names are mapped to `gpt-5.2` so they do not fail at generation time.
 
 **Fallback chain**: If the primary provider fails, the system tries openai-codex → openai → anthropic → cohere → local, in order.
 
@@ -338,28 +332,6 @@ GoalGraph is strongest when each agent has a clear objective and the conversatio
 | Mediation practice | Mediator vs two conflicting stakeholders | Which reframes lower conflict and which proposals repeatedly stall |
 
 For detailed graph examples, use strong situational constraints, evolving aims, low-to-medium persistence, and rapid turns. For higher-quality strategy maps, raise persistence/patience and run several shorter sessions, then merge the saved graphs.
-
-### Actual Chat-Derived Example
-
-The repo includes a real LLM-backed run generated with the app's own agent loop:
-
-```bash
-ACTUAL_CHAT_TURNS=16 python examples/run_actual_chat_negotiation.py
-```
-
-The included run pits a community clinic director against a developer asset manager over a post-flood warehouse resilience hub. Both publicly want the same outcome, but their goals quietly conflict around license vs lease form, storm-season continuity, patient privacy, ESG reporting, liability caps, and redevelopment exit rights.
-
-Artifacts are saved in `examples/actual_chat_runs/shoreline_clinic_warehouse/`:
-
-| Artifact | Contents |
-|----------|----------|
-| [`transcript.md`](examples/actual_chat_runs/shoreline_clinic_warehouse/transcript.md) | 16-turn actual negotiation transcript plus outcome summary |
-| [`actual_negotiation_run.json`](examples/actual_chat_runs/shoreline_clinic_warehouse/actual_negotiation_run.json) | Scenario, model settings, turn logs, graph stats, and final agent state |
-| [`mara_graph.graphml`](examples/actual_chat_runs/shoreline_clinic_warehouse/mara_graph.graphml) | Mara's aim graph from the run |
-| [`anton_graph.graphml`](examples/actual_chat_runs/shoreline_clinic_warehouse/anton_graph.graphml) | Anton's aim graph from the run |
-| [`merged_actual_negotiation.graphml`](examples/actual_chat_runs/shoreline_clinic_warehouse/merged_actual_negotiation.graphml) | Merged 15-node / 14-edge graph for the app's saved graph library |
-
-In the local run used for the screenshot, no external provider API keys were present and ChatGPT Codex auth accepted `gpt-5.2`, so the two agents used the same available model with different goals and generation profiles. The runner supports distinct per-agent models via `MARA_PROVIDER`, `MARA_MODEL`, `ANTON_PROVIDER`, and `ANTON_MODEL` when those provider credentials are available.
 
 Seed GraphML examples are included in `examples/graphs/`:
 

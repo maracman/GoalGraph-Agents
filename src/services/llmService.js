@@ -140,7 +140,7 @@ class LLMService {
         const messages = Array.isArray(prompt)
           ? prompt
           : [{ role: 'user', content: prompt }];
-        const defaultModel = this.provider === 'openai-codex' ? 'gpt-5.2' : 'gpt-3.5-turbo';
+        const defaultModel = this.provider === 'openai-codex' ? 'gpt-4o' : 'gpt-3.5-turbo';
 
         return {
           model: options.model || defaultModel,
@@ -407,9 +407,11 @@ class LLMService {
           url = `${baseUrl}/models`;
           break;
         case 'openai-codex':
-          // Return the model currently accepted by ChatGPT Codex subscription auth.
+          // Return hardcoded list of models available via Codex subscription
           return Promise.resolve([
-            { id: 'gpt-5.2', name: 'GPT-5.2' },
+            { id: 'gpt-4o', name: 'GPT-4o' },
+            { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
+            { id: 'o3-mini', name: 'o3-mini' },
           ]);
         case 'anthropic':
           // Anthropic doesn't have a models endpoint, return hardcoded list
