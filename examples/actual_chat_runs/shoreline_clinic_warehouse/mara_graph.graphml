@@ -1,0 +1,43 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d1" for="edge" attr.name="weight" attr.type="long" />
+  <key id="d0" for="edge" attr.name="label" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="start" />
+    <node id="Convert the proposed arrangement from a lease-like commitment into a lender-safe, time-bounded “License + Storm-Season Continuity Addendum” that is (a) publicly announceable this week, (b) sufficient to satisfy the grant’s site-stability/privacy/relocation requirements, and (c) preserves an explicit developer exit path without mid-storm disruption." />
+    <node id="Finalize lender-approved license term sheet + exhibits for signature and public announcement" />
+    <node id="Lock open variables (standstill tail + relocation cap) and obtain lender counsel sign-off for signature package" />
+    <node id="lender_counsel_bracket_selection_and_signature_package" />
+    <node id="Secure a lender-approved, announcement-safe ‘Track A’ package (nonbinding term sheet + Storm-Season Continuity Addendum summary + PHI/no-lease certification + Exhibit E press/signage language) that City Emergency Management can use publicly this week without implying a lease, while preserving the path to execute the full interim license immediately after counsel triage." />
+    <node id="Assemble_and_get_lender_greenlight_for_Track_A_announcement_package" />
+    <node id="Secure lender-counsel “green light to announce” this week via an announcement-only, nonbinding public-facing packet that (a) avoids any lease/tenancy signals, and (b) still satisfies the storm-season grant’s documentation needs (site stability through Nov 30, privacy controls, and a workable relocation path)." />
+    <edge source="start" target="Convert the proposed arrangement from a lease-like commitment into a lender-safe, time-bounded “License + Storm-Season Continuity Addendum” that is (a) publicly announceable this week, (b) sufficient to satisfy the grant’s site-stability/privacy/relocation requirements, and (c) preserves an explicit developer exit path without mid-storm disruption.">
+      <data key="d0">Go</data>
+      <data key="d1">2</data>
+    </edge>
+    <edge source="Convert the proposed arrangement from a lease-like commitment into a lender-safe, time-bounded “License + Storm-Season Continuity Addendum” that is (a) publicly announceable this week, (b) sufficient to satisfy the grant’s site-stability/privacy/relocation requirements, and (c) preserves an explicit developer exit path without mid-storm disruption." target="Finalize lender-approved license term sheet + exhibits for signature and public announcement">
+      <data key="d0">Go</data>
+      <data key="d1">1</data>
+    </edge>
+    <edge source="Finalize lender-approved license term sheet + exhibits for signature and public announcement" target="Lock open variables (standstill tail + relocation cap) and obtain lender counsel sign-off for signature package">
+      <data key="d0">Go</data>
+      <data key="d1">1</data>
+    </edge>
+    <edge source="Lock open variables (standstill tail + relocation cap) and obtain lender counsel sign-off for signature package" target="lender_counsel_bracket_selection_and_signature_package">
+      <data key="d0">Go</data>
+      <data key="d1">1</data>
+    </edge>
+    <edge source="lender_counsel_bracket_selection_and_signature_package" target="Secure a lender-approved, announcement-safe ‘Track A’ package (nonbinding term sheet + Storm-Season Continuity Addendum summary + PHI/no-lease certification + Exhibit E press/signage language) that City Emergency Management can use publicly this week without implying a lease, while preserving the path to execute the full interim license immediately after counsel triage.">
+      <data key="d0">Go</data>
+      <data key="d1">1</data>
+    </edge>
+    <edge source="Secure a lender-approved, announcement-safe ‘Track A’ package (nonbinding term sheet + Storm-Season Continuity Addendum summary + PHI/no-lease certification + Exhibit E press/signage language) that City Emergency Management can use publicly this week without implying a lease, while preserving the path to execute the full interim license immediately after counsel triage." target="Assemble_and_get_lender_greenlight_for_Track_A_announcement_package">
+      <data key="d0">Go</data>
+      <data key="d1">1</data>
+    </edge>
+    <edge source="Assemble_and_get_lender_greenlight_for_Track_A_announcement_package" target="Secure lender-counsel “green light to announce” this week via an announcement-only, nonbinding public-facing packet that (a) avoids any lease/tenancy signals, and (b) still satisfies the storm-season grant’s documentation needs (site stability through Nov 30, privacy controls, and a workable relocation path).">
+      <data key="d0">Go</data>
+      <data key="d1">1</data>
+    </edge>
+  </graph>
+</graphml>

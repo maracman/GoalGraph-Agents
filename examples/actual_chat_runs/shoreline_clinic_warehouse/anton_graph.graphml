@@ -1,0 +1,43 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d1" for="edge" attr.name="weight" attr.type="long" />
+  <key id="d0" for="edge" attr.name="label" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="start" />
+    <node id="Convert Mara’s proposal into a lender-safe, announcement-ready interim license framework by locking down the three highest-risk deal points this week: (1) non-lease characterization (no exclusive possession/control), (2) termination + storm standstill language acceptable to lender counsel, and (3) liability/insurance boundaries that avoid open-ended owner exposure." />
+    <node id="Bracket-and-close lender counsel on notice/standstill tail + relocation cap for signable interim license" />
+    <node id="Lock lender counsel’s acceptance of a non-lease interim license by converting the remaining open variables (standstill/tail, relocation cap, relocation standard, and grant “site stability” wording) into a short, objective bracket set that can be approved on a single triage call, enabling a City announcement this week without triggering lease characterization." />
+    <node id="Secure lender-counsel “no-lease characterization” signoff on a narrowly scoped, announcement-ready Interim Operating License packet by carving out a public-facing Letter of Intent + safety/privacy exhibits now, while the full license is finalized—so the City can announce this week without triggering lease/default risk and the clinic can evidence grant-required site stability/controls/relocation." />
+    <node id="Obtain lender counsel written greenlight for announce-safe LOI/term-sheet + Exhibit E while keeping it nonbinding/non-lease" />
+    <node id="Secure a lender-counsel “announce-only” approval that expressly confirms the public announcement package does not create (or imply) a lease/tenancy/exclusive possession and that any binding commitment is conditioned on final lender consent and definitive documentation." />
+    <node id="Secure a lender-counsel “announcement greenlight” (limited-scope written approval) that (i) explicitly confirms the public announcement language does not imply a lease/tenancy/exclusive possession, and (ii) allows the City/grant team to document site stability, privacy controls, and relocation path using exhibit stubs—while deferring execution of the full interim license until lender review is complete." />
+    <edge source="start" target="Convert Mara’s proposal into a lender-safe, announcement-ready interim license framework by locking down the three highest-risk deal points this week: (1) non-lease characterization (no exclusive possession/control), (2) termination + storm standstill language acceptable to lender counsel, and (3) liability/insurance boundaries that avoid open-ended owner exposure.">
+      <data key="d0">Go</data>
+      <data key="d1">2</data>
+    </edge>
+    <edge source="Convert Mara’s proposal into a lender-safe, announcement-ready interim license framework by locking down the three highest-risk deal points this week: (1) non-lease characterization (no exclusive possession/control), (2) termination + storm standstill language acceptable to lender counsel, and (3) liability/insurance boundaries that avoid open-ended owner exposure." target="Bracket-and-close lender counsel on notice/standstill tail + relocation cap for signable interim license">
+      <data key="d0">Go</data>
+      <data key="d1">1</data>
+    </edge>
+    <edge source="Bracket-and-close lender counsel on notice/standstill tail + relocation cap for signable interim license" target="Lock lender counsel’s acceptance of a non-lease interim license by converting the remaining open variables (standstill/tail, relocation cap, relocation standard, and grant “site stability” wording) into a short, objective bracket set that can be approved on a single triage call, enabling a City announcement this week without triggering lease characterization.">
+      <data key="d0">Go</data>
+      <data key="d1">1</data>
+    </edge>
+    <edge source="Lock lender counsel’s acceptance of a non-lease interim license by converting the remaining open variables (standstill/tail, relocation cap, relocation standard, and grant “site stability” wording) into a short, objective bracket set that can be approved on a single triage call, enabling a City announcement this week without triggering lease characterization." target="Secure lender-counsel “no-lease characterization” signoff on a narrowly scoped, announcement-ready Interim Operating License packet by carving out a public-facing Letter of Intent + safety/privacy exhibits now, while the full license is finalized—so the City can announce this week without triggering lease/default risk and the clinic can evidence grant-required site stability/controls/relocation.">
+      <data key="d0">Go</data>
+      <data key="d1">1</data>
+    </edge>
+    <edge source="Secure lender-counsel “no-lease characterization” signoff on a narrowly scoped, announcement-ready Interim Operating License packet by carving out a public-facing Letter of Intent + safety/privacy exhibits now, while the full license is finalized—so the City can announce this week without triggering lease/default risk and the clinic can evidence grant-required site stability/controls/relocation." target="Obtain lender counsel written greenlight for announce-safe LOI/term-sheet + Exhibit E while keeping it nonbinding/non-lease">
+      <data key="d0">Go</data>
+      <data key="d1">1</data>
+    </edge>
+    <edge source="Obtain lender counsel written greenlight for announce-safe LOI/term-sheet + Exhibit E while keeping it nonbinding/non-lease" target="Secure a lender-counsel “announce-only” approval that expressly confirms the public announcement package does not create (or imply) a lease/tenancy/exclusive possession and that any binding commitment is conditioned on final lender consent and definitive documentation.">
+      <data key="d0">Go</data>
+      <data key="d1">1</data>
+    </edge>
+    <edge source="Secure a lender-counsel “announce-only” approval that expressly confirms the public announcement package does not create (or imply) a lease/tenancy/exclusive possession and that any binding commitment is conditioned on final lender consent and definitive documentation." target="Secure a lender-counsel “announcement greenlight” (limited-scope written approval) that (i) explicitly confirms the public announcement language does not imply a lease/tenancy/exclusive possession, and (ii) allows the City/grant team to document site stability, privacy controls, and relocation path using exhibit stubs—while deferring execution of the full interim license until lender review is complete.">
+      <data key="d0">Go</data>
+      <data key="d1">1</data>
+    </edge>
+  </graph>
+</graphml>
