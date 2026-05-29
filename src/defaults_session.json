@@ -11,7 +11,7 @@
       "use_gpu": true,
       "llm": null,
       "provider": "openai-codex",
-      "model": "gpt-5.2"
+      "model": "gpt-5.1-codex-mini"
     },
     "agents_df": [
       {

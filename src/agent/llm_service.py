@@ -35,7 +35,11 @@ PROVIDER_MODELS = {
         {'id': 'gpt-3.5-turbo', 'name': 'GPT-3.5 Turbo'},
     ],
     'openai-codex': [
+        {'id': 'gpt-5.1-codex-mini', 'name': 'GPT-5.1 Codex Mini (Subscription)'},
+        {'id': 'gpt-5.1', 'name': 'GPT-5.1 (Subscription)'},
+        {'id': 'gpt-5.1-codex-max', 'name': 'GPT-5.1 Codex Max (Subscription)'},
         {'id': 'gpt-5.2', 'name': 'GPT-5.2 (Subscription)'},
+        {'id': 'gpt-5.2-codex', 'name': 'GPT-5.2 Codex (Subscription)'},
     ],
     'anthropic': [
         {'id': 'claude-sonnet-4-20250514', 'name': 'Claude Sonnet 4'},
@@ -262,32 +266,22 @@ class LLMService:
         - instructions field is REQUIRED
         - No temperature parameter (reasoning models)
         - Input content must use {"type": "input_text", "text": "..."} format
-        - Current ChatGPT Codex auth accepts gpt-5.2 in this environment.
+        - Only codex-specific models work (gpt-5.1-codex-mini, gpt-5.1, etc.)
         """
         token = self.api_keys.get('openai-codex')
         if not token:
             raise ValueError("No Codex OAuth token available. Run 'codex' CLI to authenticate.")
 
         account_id = self._extract_codex_account_id(token)
-        model = options.get('model') or 'gpt-5.2'
+        model = options.get('model', 'gpt-5.1-codex-mini')
         max_tokens = options.get('max_tokens', 250)
 
-        # Preserve compatibility with older saved sessions that referenced
-        # model names no longer accepted by the Codex subscription endpoint.
+        # Map non-codex model names to codex equivalents
         codex_model_map = {
-            'gpt-4o': 'gpt-5.2',
-            'gpt-4o-mini': 'gpt-5.2',
-            'gpt-3.5-turbo': 'gpt-5.2',
-            'o3-mini': 'gpt-5.2',
-            'gpt-5': 'gpt-5.2',
-            'gpt-5-mini': 'gpt-5.2',
-            'gpt-5-codex': 'gpt-5.2',
-            'gpt-5-codex-mini': 'gpt-5.2',
-            'gpt-5.1': 'gpt-5.2',
-            'gpt-5.1-codex': 'gpt-5.2',
-            'gpt-5.1-codex-mini': 'gpt-5.2',
-            'gpt-5.1-codex-max': 'gpt-5.2',
-            'gpt-5.2-codex': 'gpt-5.2',
+            'gpt-4o': 'gpt-5.1-codex-mini',
+            'gpt-4o-mini': 'gpt-5.1-codex-mini',
+            'gpt-3.5-turbo': 'gpt-5.1-codex-mini',
+            'o3-mini': 'gpt-5.1-codex-mini',
         }
         if model in codex_model_map:
             logger.info(f"Mapping model {model} to Codex model {codex_model_map[model]}")
@@ -535,7 +529,7 @@ class LLMService:
 
         if provider in ('openai', 'openai-codex'):
             messages = [{'role': 'user', 'content': prompt}] if isinstance(prompt, str) else prompt
-            default_model = 'gpt-4o-mini' if provider == 'openai' else 'gpt-5.2'
+            default_model = 'gpt-4o-mini' if provider == 'openai' else 'gpt-4o'
             return {
                 'model': options.get('model', default_model),
                 'messages': messages,
