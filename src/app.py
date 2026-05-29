@@ -9,7 +9,6 @@ import os
 import sys
 import json
 import uuid
-import html
 import networkx as nx
 import numpy as np
 from datetime import datetime
@@ -297,6 +296,7 @@ def inject_graph_explorer(html_path, node_count):
       ? edge.color
       : (edge.color && edge.color.color) || (edge.dashes ? '#c2410c' : '#2f855a');
     return Object.assign({{}}, edge, {{
+      fullLabel: edge.fullLabel || edge.label || '',
       baseColor: baseColor,
       baseWidth: edge.width || 1
     }});
@@ -338,7 +338,7 @@ def inject_graph_explorer(html_path, node_count):
   }});
 
   function labelsVisible() {{
-    return graphNodeCount < 80 || labelToggle.checked || network.getScale() >= 0.85;
+    return labelToggle.checked || network.getScale() >= 1.35;
   }}
 
   function escapeHtml(value) {{
@@ -351,6 +351,11 @@ def inject_graph_explorer(html_path, node_count):
         "'": '&#39;'
       }})[char];
     }});
+  }}
+
+  function canvasLabel(value) {{
+    var text = String(value || '');
+    return text.length > 72 ? text.slice(0, 69) + '...' : text;
   }}
 
   function getConnections(nodeId) {{
@@ -406,7 +411,7 @@ def inject_graph_explorer(html_path, node_count):
       }}
       return {{
         id: node.id,
-        label: showNodeLabel ? node.fullLabel : '',
+        label: showNodeLabel ? canvasLabel(node.fullLabel) : '',
         value: isActive ? node.baseValue + 4 : isConnected ? node.baseValue + 2 : node.baseValue,
         font: {{
           size: showNodeLabel ? 16 : 0,
@@ -419,10 +424,17 @@ def inject_graph_explorer(html_path, node_count):
     }}));
     edges.update(originalEdges.map(function (edge) {{
       var isConnectedEdge = activeNodeId && connections.edgeIds[edge.id];
+      var showEdgeLabel = show && edge.fullLabel;
       return {{
         id: edge.id,
+        label: showEdgeLabel ? edge.fullLabel : '',
         color: isConnectedEdge ? '#f97316' : activeNodeId ? '#d1d5db' : edge.baseColor,
         width: isConnectedEdge ? 3 : edge.baseWidth,
+        font: {{
+          size: showEdgeLabel ? 12 : 0,
+          strokeWidth: showEdgeLabel ? 3 : 0,
+          strokeColor: '#ffffff'
+        }},
         hidden: false
       }};
     }}));
@@ -560,8 +572,6 @@ def visualize_graph_pyvis(graph_file_path, session_id):
         G = nx.read_graphml(graph_file_path)
 
         net = Network(notebook=True, directed=True, cdn_resources='in_line', height='100%', width='100%')
-        large_graph = G.number_of_nodes() >= 80
-
         # Separate "Go" and "NoGo" edges
         go_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get('label') == 'Go']
         nogo_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get('label') == 'NoGo']
@@ -604,15 +614,10 @@ def visualize_graph_pyvis(graph_file_path, session_id):
             label = graph_node_label(node, node_data)
             outgoing_count = G.out_degree(node)
             incoming_count = G.in_degree(node)
-            title = (
-                f"<strong>{html.escape(label)}</strong><br>"
-                f"{incoming_count} incoming / {outgoing_count} outgoing edges"
-            )
             net.add_node(
                 node,
-                label='' if large_graph else label,
+                label='',
                 fullLabel=label,
-                title=title,
                 color=color,
                 value=max(1, incoming_count + outgoing_count)
             )
@@ -621,11 +626,11 @@ def visualize_graph_pyvis(graph_file_path, session_id):
             weight = float(data.get('weight', 1))
             edge_label = data.get('label', '')
             if edge_label == 'NoGo':
-                net.add_edge(u, v, label='' if large_graph else edge_label, title=edge_label, weight=weight, length=nogo_length, color='#c2410c', dashes=True)
+                net.add_edge(u, v, label='', fullLabel=edge_label, title=edge_label, weight=weight, length=nogo_length, color='#c2410c', dashes=True)
             elif edge_label == 'Progress':
-                net.add_edge(u, v, label='' if large_graph else edge_label, title=edge_label, weight=weight, length=weight * 100, color='#2563eb')
+                net.add_edge(u, v, label='', fullLabel=edge_label, title=edge_label, weight=weight, length=weight * 100, color='#2563eb')
             else:
-                net.add_edge(u, v, label='' if large_graph else edge_label, title=edge_label, weight=weight, length=weight * 100, color='#2f855a')
+                net.add_edge(u, v, label='', fullLabel=edge_label, title=edge_label, weight=weight, length=weight * 100, color='#2f855a')
 
         # Customize physics to better reflect distances
         net.set_options("""
@@ -697,7 +702,7 @@ def load_default_settings(filename='defaults_session.json'):
     if 'llm_settings' not in defaults:
         defaults['llm_settings'] = {
             'provider': 'openai-codex',
-            'model': 'gpt-4o',
+            'model': 'gpt-5.2',
             'temperature': 0.7,
             'max_tokens': 250,
             'top_p': 0.9,
@@ -797,7 +802,7 @@ def initialize_session():
     if 'llm_settings' not in session_state:
         session_state['llm_settings'] = defaults.get('llm_settings', {
             'provider': 'openai-codex',
-            'model': 'gpt-4o',
+            'model': 'gpt-5.2',
             'temperature': 0.7,
             'max_tokens': 250,
             'top_p': 0.9,
