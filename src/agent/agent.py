@@ -24,6 +24,10 @@ from .graph_intelligence import (
 logger = logging.getLogger('agent_logger')
 
 
+class AgentGenerationError(RuntimeError):
+    """Raised when an agent response cannot be generated."""
+
+
 # ---------------------------------------------------------------------------
 # JSON helpers
 # ---------------------------------------------------------------------------
@@ -448,7 +452,9 @@ def get_agent_response(prompt, agent_name, generation_vars, last_narration=''):
 
     except Exception as e:
         logger.error(f"Error generating response: {str(e)}")
-        return f"I apologize, but I encountered an error: {str(e)}", ""
+        raise AgentGenerationError(
+            f"Failed to generate response for {agent_name}: {str(e)}"
+        ) from e
 
 
 # ---------------------------------------------------------------------------
@@ -580,9 +586,23 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
     )
 
     logger.info(f"Generating response for {agent_name}")
-    response_text, narration = get_agent_response(
-        prompt, agent_name, generation_vars, last_narration
-    )
+    try:
+        response_text, narration = get_agent_response(
+            prompt, agent_name, generation_vars, last_narration
+        )
+    except AgentGenerationError as e:
+        logger.error(str(e))
+        logs.append(str(e))
+
+        agent_df = pd.DataFrame(agents_df)
+        agent_df.at[agent_idx, 'current_aim'] = current_aim
+        agent_df.at[agent_idx, 'suggestion'] = suggestion
+        agent_df.at[agent_idx, 'persistance_count'] = persistence_count
+        agent_df.at[agent_idx, 'persistance_score'] = persistence_score
+        agent_df.at[agent_idx, 'current_node_location'] = current_node
+        nx.write_graphml(G, graph_path)
+        return history, agent_df, logs
+
     logs.append(f"Generated response for {agent_name}")
 
     # Combine response with narration for display

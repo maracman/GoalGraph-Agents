@@ -697,7 +697,7 @@ def load_default_settings(filename='defaults_session.json'):
     if 'llm_settings' not in defaults:
         defaults['llm_settings'] = {
             'provider': 'openai-codex',
-            'model': 'gpt-4o',
+            'model': 'gpt-5.2',
             'temperature': 0.7,
             'max_tokens': 250,
             'top_p': 0.9,
@@ -797,7 +797,7 @@ def initialize_session():
     if 'llm_settings' not in session_state:
         session_state['llm_settings'] = defaults.get('llm_settings', {
             'provider': 'openai-codex',
-            'model': 'gpt-4o',
+            'model': 'gpt-5.2',
             'temperature': 0.7,
             'max_tokens': 250,
             'top_p': 0.9,
