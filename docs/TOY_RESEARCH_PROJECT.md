@@ -140,18 +140,40 @@ what to do next.
 
 ## Running it
 
-Start the app, open **Decision Graph** in the sidebar, and set:
+Everything below is done in the app. There is no separate harness — the script
+in `studies/` sets exactly these settings through the same endpoints the panel
+uses, and reads exactly the CSV the panel's download button produces.
+
+**1. Set up the task.** Open **Decision Graph** in the sidebar:
 
 | setting | value |
 |---|---|
 | What this session is doing | `constraints` |
-| Hidden rule | `5 rules at once: …` |
+| Hidden rule | `4 rules at once: …` |
 | Messages the agent can see | `4` — short enough that early evidence scrolls away |
-| What the agent is told about ruled-out aims | `none` for the control, then `graph` |
-| Run label | something that identifies the arm, e.g. `cx-graph` |
+| What the agent is told about ruled-out aims | `none` for the control arm |
+| Run label | `cx-none` |
 
-Press **Start new run**, then **Play**. When the arm finishes, press
-**Download this run as CSV** and repeat with the other memory mode.
+Press **Save graph settings**, then **Start new run**.
+
+**2. Run it.** Go to **Chat**, set the turns box to `24`, and press **Play**.
+The keeper opens with one accepted sentence; the agent proposes candidates and
+is told only yes or no.
+
+**3. Get the data.** Back in **Decision Graph**, press **Download this run as
+CSV**.
+
+**4. Repeat with the memory on.** Change *What the agent is told about
+ruled-out aims* to `graph`, set the run label to `cx-graph`, **Start new run**,
+and play again. The two CSVs share a column layout and carry their own settings
+on every row, so they concatenate into one file and group without reshaping.
+
+To do the same thing unattended:
+
+```bash
+python3 studies/constraints_study.py --level four_constraints \
+        --reps 5 --windows 4 --modes none inline graph --max-calls 24
+```
 
 The window is the setting that decides whether any of this matters. At `0` the
 agent can re-read everything and the graph is pure overhead; the shorter it

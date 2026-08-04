@@ -285,6 +285,18 @@ See **[docs/TOY_RESEARCH_PROJECT.md](docs/TOY_RESEARCH_PROJECT.md)** for the
 worked example, its data, and an account of the four earlier task designs that
 failed to show anything — which is the more useful half of the write-up.
 
+Everything in it can be run by hand from the Decision Graph panel. To run it
+unattended instead:
+
+```bash
+python3 studies/constraints_study.py --level four_constraints \
+        --reps 5 --windows 4 --modes none inline graph --max-calls 24
+```
+
+That script is the UI scripted, not a separate harness: it sets the same
+settings through the same endpoints the panel uses, and reads the same CSV the
+panel's download button produces. Results land in `studies/results/`.
+
 With a keeper, three things become facts the app can compute rather than
 opinions it has to ask for: whether a move satisfied the rule, whether a stated
 hypothesis contradicts the evidence, and whether the final answer is actually
