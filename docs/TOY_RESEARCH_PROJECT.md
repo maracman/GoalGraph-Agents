@@ -304,33 +304,28 @@ Rendered by the app's own Graph tab, from a `constraints` run:
 ![Decision graph from a constraints run](../screenshots/ui_graph_constraints.png)
 
 ```
-nodes 6   edges 5   max depth 5
-labels  {'Go': 5}
+nodes 13   edges 12   depth 1
+labels  {'NoGo': 12}
+sources {'evidence': 12}
 ```
 
-**This is a chain, not a star** — and that is the structural result the earlier
-tasks could not produce. Guessing a single rule gave a hub of dead ends at depth
-1; the transformation task reached depth 2. Here each belief the agent forms
-builds on the last, so the graph records the *route* its reasoning took:
+Twelve refutations, **every one settled by the keeper rather than judged** — the
+agent stated a checkable belief, an observation contradicted it, and the edge
+carries confidence `1.0`. This is the memory the `graph` arm gets handed back
+four aims at a time, and the `none` arm does not.
 
-```
-start
-  -> Test a compact hypothesis that accepted sentences share...
-  -> Test a single hidden lexical/orthographic constraint...
-  -> Test punctuation / tag-form constraint...
-  -> Test whether rejection is driven by sentence length...
-  -> Test whether the rejection is caused by...
-```
+**The star shape is correct here, and that is worth saying plainly**, because
+elsewhere in this project a star was the symptom of a broken task. When the
+agent is *routing* — the transformation task — a hub of dead ends means no route
+was built, and that was a real failure. When the agent is *eliminating*, as it is
+here, a hub is exactly what accumulating knowledge looks like: each spoke is a
+belief ruled out, hanging off the position it was ruled out from. Shape follows
+task; the mistake would be expecting the same shape from both.
 
-That is what makes route reuse meaningful rather than hypothetical: there is now
-a path for `find_path_to_goal` to find.
-
-One caveat visible in the same data. Every edge here is `Go` at confidence
-`0.45–0.53`, all `judge`-sourced — this particular run had the agent refining
-beliefs rather than having them refuted, so the keeper had little to settle.
-Runs that produce refutations carry `evidence` edges at `1.0` alongside these.
-Which you get depends on how wrong the agent happens to be, and both are
-informative.
+Turn on **Hide ruled-out aims** in the Graph tab to see what is left once the
+eliminations are folded away — on a run like this, almost nothing, which is an
+honest picture of an agent that has narrowed the space without yet landing on
+the answer.
 
 ---
 

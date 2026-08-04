@@ -42,12 +42,16 @@ the Graph view is often the only way to see the route the agent actually took.
 |---|---|
 | ![Full graph](screenshots/graph_full.png) | ![Route only](screenshots/graph_clean.png) |
 
-### A Decision Graph With Actual Depth
-From a `constraints` run: each belief the agent forms builds on the last, so the
-graph records the route its reasoning took rather than a hub of dead ends. Max
-depth 5, against depth 1–2 for the simpler tasks.
+### What the Agent Has Ruled Out
+From a `constraints` run, rendered by the Graph tab: twelve refutations, every
+one settled by the keeper in code rather than judged, each carrying confidence
+`1.0`. This is the memory the graph arm is handed back four aims at a time and
+the no-memory arm never sees.
 
 ![Constraints run graph](screenshots/ui_graph_constraints.png)
+
+A hub is the right shape for a task about *elimination*. On a task about
+*routing* it would mean no route had been built — shape follows task.
 
 ### Confidence Is Visible in the Graph
 A `transformation` run, with line weight showing how much each verdict is worth
