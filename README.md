@@ -33,14 +33,19 @@ produced it.
 ![Decision Graph settings](screenshots/decision_graph_panel.png)
 
 ### A Decision Graph, With and Without Ruled-Out Aims
-The same run, drawn twice. On the left the full graph: a hub of refuted aims
-(orange) around `start`, with one surviving route threading out to the goal.
-Refuted aims are usually the majority of nodes, so **Hide ruled-out aims** in
-the Graph view is often the only way to see the route the agent actually took.
+The same `constraints` run, drawn twice by the Graph tab. On the left everything
+the agent knows: thirteen refuted aims (solid orange) around the hub, and two
+`Go` steps (dashed blue). On the right, **Hide ruled-out aims** — sixteen nodes
+become three, leaving the route the agent thought it was on.
 
 | everything | ruled-out aims hidden |
 |---|---|
-| ![Full graph](screenshots/graph_full.png) | ![Route only](screenshots/graph_clean.png) |
+| ![Full graph](screenshots/ui_graph_mixed.png) | ![Route only](screenshots/ui_graph_clean.png) |
+
+Refuted aims are **13 of the 15 edges** here, and they will be the majority on
+any task about elimination, so the toggle is often the only way to see the route
+at all. Note that both surviving edges are dashed: everything this agent knows
+for certain is negative, and its positive beliefs are still unverified opinion.
 
 ### What the Agent Has Ruled Out
 From a `constraints` run, rendered by the Graph tab: twelve refutations, every

@@ -152,7 +152,13 @@ def graph_node_label(node, data=None):
 
 
 def inject_graph_explorer(html_path, node_count):
-    """Add lightweight search, fit, and zoom-aware labels to the PyVis HTML."""
+    """Add lightweight search, fit, and zoom-aware labels to the PyVis HTML.
+
+    Labels start on for a graph small enough to read and off for one that would
+    become a wall of text. A small graph with every label hidden is just dots,
+    which is no use to anyone opening it for the first time.
+    """
+    label_checked = "checked " if node_count <= 20 else ""
     layout_css = f"""
 <style>
   html, body, #mynetwork {{
@@ -274,7 +280,7 @@ def inject_graph_explorer(html_path, node_count):
     <button id="goalgraph-fit" type="button">Fit</button>
   </div>
   <datalist id="goalgraph-node-options"></datalist>
-  <label><input id="goalgraph-label-toggle" type="checkbox" /> Labels</label>
+  <label><input id="goalgraph-label-toggle" type="checkbox" {label_checked}/> Labels</label>
   <div id="goalgraph-selected-node">{node_count} nodes. Hover, select, or search a node.</div>
 </div>
 <script>
@@ -589,7 +595,6 @@ def visualize_graph_pyvis(graph_file_path, session_id, hide_nogo=False):
         net = Network(notebook=True, directed=True, cdn_resources='in_line', height='100%', width='100%')
         # Separate "Go" and "NoGo" edges
         go_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get('label') == 'Go']
-        nogo_edges = [(u, v) for u, v, d in G.edges(data=True) if d.get('label') == 'NoGo']
 
         # Extract weights for "Go" edges
         go_weights = [G[u][v]['weight'] for u, v in go_edges]
@@ -601,38 +606,49 @@ def visualize_graph_pyvis(graph_file_path, session_id, hide_nogo=False):
         # Calculate the length for "NoGo" edges
         nogo_length = (mean_weight - (std_weight * 2)) * 100 if mean_weight and std_weight else 100
 
-        # Extract weights for "NoGo" edges
-        nogo_weights = [G[u][v]['weight'] for u, v in nogo_edges]
+        # Nodes are coloured by what was decided about them, not by edge
+        # weight. Weight now carries a *confidence*, and every verdict the
+        # keeper settles has exactly 1.0 - so the old greyscale-by-weight
+        # ramp collapsed to a single shade and rendered every node the same
+        # pale grey.
+        NODE_COLOURS = {
+            'NoGo': '#eb6834',      # ruled out
+            'Go': '#2a78d6',        # reached
+            'Progress': '#7c8794',  # refined into something else
+        }
 
-        # Calculate the range for "NoGo" weights
-        min_weight = min(nogo_weights, default=0)
-        max_weight = max(nogo_weights, default=1)
+        def verdict_on(node):
+            """What the graph decided about this node, from its incoming edge."""
+            for _, _, d in G.in_edges(node, data=True):
+                if d.get('label') in NODE_COLOURS:
+                    return d.get('label'), d
+            return None, {}
 
-        # Function to calculate color based on weight
-        def weight_to_color(weight, min_weight, max_weight):
-            if max_weight == min_weight:  # Avoid division by zero
-                return 'lightgrey'
-            normalized = (weight - min_weight) / (max_weight - min_weight)
-            grey_value = int(255 * (1 - normalized))
-            return f'#{grey_value:02x}{grey_value:02x}{grey_value:02x}'
-
-        # Add nodes and edges to the network
         for node, node_data in G.nodes(data=True):
-            incoming_edges = G.in_edges(node, data=True)
-            if any(d.get('label') == 'NoGo' for u, v, d in incoming_edges):
-                weight = next(d.get('weight', 1) for u, v, d in incoming_edges if d.get('label') == 'NoGo')
-                color = weight_to_color(weight, min_weight, max_weight)
-            elif node == 'start' or str(node).endswith('/start'):
+            verdict, edge = verdict_on(node)
+            if node == 'start' or str(node).endswith('/start'):
                 color = '#111827'
             else:
-                color = 'blue'
+                color = NODE_COLOURS.get(verdict, '#b9b8b2')
+
             label = graph_node_label(node, node_data)
+            confidence = edge.get('weight')
+            source = edge.get('verdict_source')
+            hover = label
+            if verdict:
+                hover = (f"{verdict} · confidence {confidence}"
+                         f"{' · checked against evidence' if source == 'evidence' else ''}"
+                         f"\n{label}")
+            if node_data.get('reason'):
+                hover += f"\n\nruled out because {node_data['reason']}"
+
             outgoing_count = G.out_degree(node)
             incoming_count = G.in_degree(node)
             net.add_node(
                 node,
                 label='',
                 fullLabel=label,
+                title=hover,
                 color=color,
                 value=max(1, incoming_count + outgoing_count)
             )
@@ -640,12 +656,19 @@ def visualize_graph_pyvis(graph_file_path, session_id, hide_nogo=False):
         for u, v, data in G.edges(data=True):
             weight = float(data.get('weight', 1))
             edge_label = data.get('label', '')
-            if edge_label == 'NoGo':
-                net.add_edge(u, v, label='', fullLabel=edge_label, title=edge_label, weight=weight, length=nogo_length, color='#c2410c', dashes=True)
-            elif edge_label == 'Progress':
-                net.add_edge(u, v, label='', fullLabel=edge_label, title=edge_label, weight=weight, length=weight * 100, color='#2563eb')
-            else:
-                net.add_edge(u, v, label='', fullLabel=edge_label, title=edge_label, weight=weight, length=weight * 100, color='#2f855a')
+            # Line width shows how much the verdict is worth, and a dashed
+            # line means it was a judge's opinion rather than something
+            # checked. A proven refutation should not look like a hunch.
+            confidence = min(max(weight, 0.0), 1.0)
+            opinion = data.get('verdict_source') != 'evidence'
+            width = 1 + 4 * confidence
+            hover = (f"{edge_label} · confidence {confidence}"
+                     f"{' · judge opinion' if opinion else ' · checked against evidence'}")
+            colour = {'NoGo': '#eb6834', 'Progress': '#7c8794'}.get(edge_label, '#2a78d6')
+            length = nogo_length if edge_label == 'NoGo' else 150
+            net.add_edge(u, v, label='', fullLabel=edge_label, title=hover,
+                         weight=weight, length=length, color=colour,
+                         width=width, dashes=opinion)
 
         # Customize physics to better reflect distances
         net.set_options("""

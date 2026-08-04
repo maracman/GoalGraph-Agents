@@ -356,6 +356,50 @@ here, a hub is exactly what accumulating knowledge looks like: each spoke is a
 belief ruled out, hanging off the position it was ruled out from. Shape follows
 task; the mistake would be expecting the same shape from both.
 
+### Proof and opinion are drawn differently
+
+A longer run from the same task, where the agent got far enough to hold beliefs
+of both kinds:
+
+![Go and NoGo, proof and opinion](../screenshots/ui_graph_mixed.png)
+
+```
+nodes 16   edges 15   depth 2
+labels  {'NoGo': 13, 'Go': 2}
+sources {'evidence': 13, 'judge': 2}
+```
+
+The two edge styles are the paradigm made visible. The thirteen **solid, full-width
+orange** edges are refutations the keeper settled from evidence at confidence
+`1.0` — facts, not readings. The two **dashed, thin blue** edges are `Go`
+verdicts the LLM judge offered at `0.525`; the agent believes it is making
+progress along them, but nothing has checked that belief. Width is
+`1 + 4 × confidence` and dashes mark opinion, so a hunch cannot be mistaken for a
+proof at a glance.
+
+This asymmetry is not a rendering choice, it is the task's logic showing through.
+A rejection is decidable — the keeper ran the predicate and it returned false —
+whereas "this line of attack is working" is never decidable from inside the run.
+The graph declines to promote the second to the status of the first.
+
+### Hiding ruled-out aims leaves the route
+
+The same graph with **Hide ruled-out aims** ticked in the Graph tab:
+
+![The surviving route](../screenshots/ui_graph_clean.png)
+
+Sixteen nodes become three. What is left is the entire route the agent thought it
+was on: `start` → test whether acceptance depends on the exact noun class → refine
+that hypothesis against the keeper's reply. Both surviving edges are dashed,
+which is the honest picture — the agent's *positive* knowledge at this moment is
+two unverified judge opinions, while everything it knows for certain is negative.
+
+That is the filter earning its place in the UI rather than decorating it. On this
+run refutations are **13 of 15 edges**, and they will be the majority on any
+elimination task, so without the toggle the route is not merely cluttered but
+invisible. It is also the clearest statement of what the `graph` arm is actually
+carrying: not a plan, but a large and growing record of what will not work.
+
 Turn on **Hide ruled-out aims** in the Graph tab to see what is left once the
 eliminations are folded away — on a run like this, almost nothing, which is an
 honest picture of an agent that has narrowed the space without yet landing on
