@@ -246,9 +246,10 @@ export const fetchSessionId = async () => {
    * @param {string} agentId The ID of the agent
    * @returns {Promise<Object>} The graph visualization data
    */
-  export const visualizeGraph = async (agentId) => {
+  export const visualizeGraph = async (agentId, hideNoGo = false) => {
     try {
-      const response = await fetch(`/visualize_pyvis?agent_id=${agentId}`);
+      const response = await fetch(
+        `/visualize_pyvis?agent_id=${agentId}${hideNoGo ? '&hide_nogo=true' : ''}`);
       return await response.json();
     } catch (error) {
       console.error('Error visualizing graph:', error);

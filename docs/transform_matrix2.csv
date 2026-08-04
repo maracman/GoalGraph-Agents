@@ -1,0 +1,5 @@
+run_label,rule,mode,context_window,judged_turns,probes,reached_goal,llm_calls,input_tokens,output_tokens,total_tokens,graph_nodes,mean_recall_chars,seconds
+even_letter_count-none-w0,even_letter_count,none,0,11,11,1,32,25751,3963,29714,6,0.0,168
+even_letter_count-graph-w0,even_letter_count,graph,0,11,11,0,32,28439,4191,32630,6,379.5,192
+even_letter_count-none-w4,even_letter_count,none,4,11,11,0,32,18551,4013,22564,6,0.0,159
+even_letter_count-graph-w4,even_letter_count,graph,4,3,3,1,8,4558,974,5532,2,0.0,54

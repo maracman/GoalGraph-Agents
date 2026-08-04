@@ -35,7 +35,13 @@ PROVIDER_MODELS = {
         {'id': 'gpt-3.5-turbo', 'name': 'GPT-3.5 Turbo'},
     ],
     'openai-codex': [
-        {'id': 'gpt-5.2', 'name': 'GPT-5.2 (Subscription)'},
+        {'id': 'gpt-5.6-sol', 'name': 'GPT-5.6 Sol (Subscription)'},
+        {'id': 'gpt-5.6-luna', 'name': 'GPT-5.6 Luna (Subscription)'},
+        {'id': 'gpt-5.6-terra', 'name': 'GPT-5.6 Terra (Subscription)'},
+        {'id': 'gpt-5.5', 'name': 'GPT-5.5 (Subscription)'},
+        {'id': 'gpt-5.4', 'name': 'GPT-5.4 (Subscription)'},
+        {'id': 'gpt-5.4-mini', 'name': 'GPT-5.4 Mini (Subscription)'},
+        {'id': 'gpt-5.3-codex-spark', 'name': 'GPT-5.3 Codex Spark (Subscription)'},
     ],
     'anthropic': [
         {'id': 'claude-sonnet-4-20250514', 'name': 'Claude Sonnet 4'},
@@ -59,6 +65,11 @@ PROVIDER_BASE_URLS = {
     'openai-codex': 'https://chatgpt.com/backend-api/codex/responses',
 }
 
+# The Codex subscription endpoint retires model ids as new ones ship, and
+# rejects retired ones outright ("not supported when using Codex with a
+# ChatGPT account"). Keep this pointed at a currently-accepted id.
+CODEX_DEFAULT_MODEL = 'gpt-5.4'
+
 import base64
 
 LOCAL_MODELS = {}
@@ -67,8 +78,38 @@ LOCAL_MODELS = {}
 class LLMService:
     """Service for interacting with various LLM providers with graceful fallbacks"""
 
+    # Every model call in the pipeline - agent, judge, planner, scorer - goes
+    # through complete(), so accounting here catches all of them rather than
+    # only the one someone remembered to instrument.
+    def reset_usage(self):
+        self._usage = {'calls': 0, 'input_tokens': 0, 'output_tokens': 0,
+                       'estimated': 0}
+
+    def usage(self):
+        return dict(getattr(self, '_usage', None)
+                    or {'calls': 0, 'input_tokens': 0, 'output_tokens': 0,
+                        'estimated': 0})
+
+    def _record_usage(self, prompt, response_text, reported=None):
+        u = getattr(self, '_usage', None)
+        if u is None:
+            self.reset_usage()
+            u = self._usage
+        u['calls'] += 1
+        if reported:
+            u['input_tokens'] += int(reported.get('input_tokens', 0) or 0)
+            u['output_tokens'] += int(reported.get('output_tokens', 0) or 0)
+        else:
+            # No usage reported by the provider. Roughly four characters to a
+            # token; flagged so an estimate is never mistaken for a count.
+            text = prompt if isinstance(prompt, str) else json.dumps(prompt)
+            u['input_tokens'] += len(text) // 4
+            u['output_tokens'] += len(response_text or '') // 4
+            u['estimated'] += 1
+
     def __init__(self, config=None):
         """Initialize the LLM service with the given configuration."""
+        self.reset_usage()
         self.config = {**DEFAULT_CONFIG, **(config or {})}
         self.api_keys = {}
         self.base_urls = dict(PROVIDER_BASE_URLS)  # copy defaults
@@ -230,7 +271,9 @@ class LLMService:
 
         response = self.make_api_request(url, data, headers)
 
-        return self.parse_response(response, provider)
+        text = self.parse_response(response, provider)
+        self._record_usage(prompt, text, (response or {}).get('usage'))
+        return text
 
     def _extract_codex_account_id(self, token: str) -> str:
         """Extract chatgpt_account_id from JWT token."""
@@ -262,36 +305,30 @@ class LLMService:
         - instructions field is REQUIRED
         - No temperature parameter (reasoning models)
         - Input content must use {"type": "input_text", "text": "..."} format
-        - Current ChatGPT Codex auth accepts gpt-5.2 in this environment.
+        - Retired model ids are rejected with a 400; see CODEX_DEFAULT_MODEL
+
+        Pass options['json_schema'] to constrain the reply to a JSON Schema.
         """
         token = self.api_keys.get('openai-codex')
         if not token:
             raise ValueError("No Codex OAuth token available. Run 'codex' CLI to authenticate.")
 
         account_id = self._extract_codex_account_id(token)
-        model = options.get('model') or 'gpt-5.2'
+        model = options.get('model') or CODEX_DEFAULT_MODEL
         max_tokens = options.get('max_tokens', 250)
 
         # Preserve compatibility with older saved sessions that referenced
         # model names no longer accepted by the Codex subscription endpoint.
-        codex_model_map = {
-            'gpt-4o': 'gpt-5.2',
-            'gpt-4o-mini': 'gpt-5.2',
-            'gpt-3.5-turbo': 'gpt-5.2',
-            'o3-mini': 'gpt-5.2',
-            'gpt-5': 'gpt-5.2',
-            'gpt-5-mini': 'gpt-5.2',
-            'gpt-5-codex': 'gpt-5.2',
-            'gpt-5-codex-mini': 'gpt-5.2',
-            'gpt-5.1': 'gpt-5.2',
-            'gpt-5.1-codex': 'gpt-5.2',
-            'gpt-5.1-codex-mini': 'gpt-5.2',
-            'gpt-5.1-codex-max': 'gpt-5.2',
-            'gpt-5.2-codex': 'gpt-5.2',
-        }
-        if model in codex_model_map:
-            logger.info(f"Mapping model {model} to Codex model {codex_model_map[model]}")
-            model = codex_model_map[model]
+        # gpt-5.2 is itself retired now, so it maps forward like the rest.
+        retired = [
+            'gpt-4o', 'gpt-4o-mini', 'gpt-3.5-turbo', 'o3-mini',
+            'gpt-5', 'gpt-5-mini', 'gpt-5-codex', 'gpt-5-codex-mini',
+            'gpt-5.1', 'gpt-5.1-codex', 'gpt-5.1-codex-mini', 'gpt-5.1-codex-max',
+            'gpt-5.2', 'gpt-5.2-codex',
+        ]
+        if model in retired:
+            logger.info(f"Mapping retired model {model} to Codex model {CODEX_DEFAULT_MODEL}")
+            model = CODEX_DEFAULT_MODEL
 
         # Build messages in Responses API format
         system_prompt = 'You are a helpful assistant.'
@@ -319,14 +356,32 @@ class LLMService:
         if not input_messages:
             input_messages = [{"role": "user", "content": [{"type": "input_text", "text": "Hello"}]}]
 
+        # Optional structured output. When options['json_schema'] is supplied
+        # the endpoint constrains the reply to that schema, so the caller gets
+        # parseable JSON back instead of prose it has to scrape.
+        text_opts = {"verbosity": options.get('verbosity', 'medium')}
+        json_schema = options.get('json_schema')
+        if json_schema:
+            text_opts["format"] = {
+                "type": "json_schema",
+                "name": options.get('schema_name', 'response'),
+                "strict": True,
+                "schema": json_schema,
+            }
+
         body = {
             "model": model,
             "store": False,
             "stream": True,  # Required by Codex API
             "instructions": system_prompt,
             "input": input_messages,
-            "text": {"verbosity": "medium"},
+            "text": text_opts,
         }
+
+        # Reasoning models accept an effort knob in place of temperature.
+        reasoning_effort = options.get('reasoning_effort')
+        if reasoning_effort:
+            body["reasoning"] = {"effort": reasoning_effort}
 
         headers = {
             'Authorization': f'Bearer {token}',
@@ -363,7 +418,10 @@ class LLMService:
                     response.raise_for_status()
 
                 # Parse SSE stream to extract text
-                return self._parse_codex_stream(response)
+                text = self._parse_codex_stream(response)
+                self._record_usage(prompt, text,
+                                   getattr(self, '_last_reported_usage', None))
+                return text
 
             except requests.exceptions.RequestException as e:
                 last_error = e
@@ -375,8 +433,15 @@ class LLMService:
 
     def _parse_codex_stream(self, response) -> str:
         """Parse SSE stream from Codex Responses API and return final text."""
-        text_parts = []
+        # A response may carry more than one output item (for example a
+        # reasoning item alongside the message, or a re-emitted message).
+        # Deltas must therefore be accumulated per output_index and never
+        # concatenated across items - joining them blindly produces text like
+        # '{...}{...}', which is not valid JSON and not what the model said.
+        deltas = {}
+        done_text = {}
         final_response = None
+        self._last_reported_usage = None
 
         for raw_line in response.iter_lines():
             if not raw_line:
@@ -393,32 +458,43 @@ class LLMService:
                     continue
 
                 event_type = data.get('type', '')
+                idx = data.get('output_index', 0)
 
-                # Collect text deltas
+                # Collect text deltas, keyed by the item they belong to
                 if event_type == 'response.output_text.delta':
-                    delta = data.get('delta', '')
-                    text_parts.append(delta)
+                    deltas[idx] = deltas.get(idx, '') + data.get('delta', '')
+
+                # The done event carries that item's complete text - authoritative
+                elif event_type == 'response.output_text.done':
+                    if data.get('text'):
+                        done_text[idx] = data['text']
 
                 # Or grab the final completed response
                 elif event_type == 'response.completed':
                     final_response = data.get('response', {})
+                    self._last_reported_usage = final_response.get('usage')
 
                 elif event_type == 'error':
                     msg = data.get('message', str(data))
                     raise Exception(f"Codex stream error: {msg}")
 
-        # If we got text deltas, join them
-        if text_parts:
-            return ''.join(text_parts).strip()
-
-        # Fallback: parse from the completed response
+        # Prefer the completed response: it is the model's final word.
         if final_response:
-            output = final_response.get('output', [])
-            for item in output:
-                if item.get('type') == 'message':
-                    for content in item.get('content', []):
-                        if content.get('type') == 'output_text':
-                            return content.get('text', '').strip()
+            texts = [
+                content.get('text', '')
+                for item in final_response.get('output', [])
+                if item.get('type') == 'message'
+                for content in item.get('content', [])
+                if content.get('type') == 'output_text'
+            ]
+            texts = [t for t in texts if t.strip()]
+            if texts:
+                return texts[-1].strip()
+
+        # Otherwise the last completed item, then the last item's deltas.
+        for source in (done_text, deltas):
+            if source:
+                return source[max(source)].strip()
 
         raise Exception("No text output in Codex response")
 

@@ -24,6 +24,32 @@ Actual GoalGraph UI showing a dense rapid adversarial run.
 ### Agent Settings
 ![Agent Settings](screenshots/agent_settings.png)
 
+### Decision Graph Settings
+Controls what the graph feeds back to the agent, how much conversation it can
+see, and what it takes to abandon an aim. Every setting is recorded on every row
+of the run export, so a result can always be traced to the configuration that
+produced it.
+
+![Decision Graph settings](screenshots/decision_graph_panel.png)
+
+### A Decision Graph, With and Without Ruled-Out Aims
+The same run, drawn twice. On the left the full graph: a hub of refuted aims
+(orange) around `start`, with one surviving route threading out to the goal.
+Refuted aims are usually the majority of nodes, so **Hide ruled-out aims** in
+the Graph view is often the only way to see the route the agent actually took.
+
+| everything | ruled-out aims hidden |
+|---|---|
+| ![Full graph](screenshots/graph_full.png) | ![Route only](screenshots/graph_clean.png) |
+
+### Confidence Is Visible in the Graph
+A `transformation` run, with line weight showing how much each verdict is worth
+and dashes marking opinion. The thin dashed edge from `start` is a `Go` the LLM
+judge offered at confidence `0.525`; the thick solid edges are refutations the
+keeper settled from evidence at `1.0`.
+
+![Confidence in a transformation run](screenshots/transform_graph_full.png)
+
 ---
 
 ## Table of Contents
@@ -33,6 +59,8 @@ Actual GoalGraph UI showing a dense rapid adversarial run.
   - [The Decision Graph — Technical Detail](#the-decision-graph--technical-detail)
   - [Graph Intelligence](#graph-intelligence)
   - [Persistence & Patience](#persistence--patience)
+  - [Research Mode: Keepers, Memory Modes and Run Data](#research-mode-keepers-memory-modes-and-run-data)
+- [A Toy Research Project](docs/TOY_RESEARCH_PROJECT.md) — a worked example, runnable in twenty minutes
 - [Features](#features)
   - [Conversation Modes](#conversation-modes)
   - [Rapid Adversarial Graph Runs](#rapid-adversarial-graph-runs)
@@ -115,18 +143,30 @@ Each agent maintains its own **directed graph** (NetworkX `DiGraph`) stored as a
 
 | Edge Label | Direction | Weight | Meaning |
 |------------|-----------|--------|---------|
-| `Go` | `current_node` → `aim_text` | `persistence_count` | Successful progression. The agent achieved this aim in N turns. |
-| `Progress` | `current_node` → `aim_text` | `persistence_count` | The aim evolved into a better, more specific, or more current aim. |
-| `NoGo` | `current_node` → `{aim}_NoGo` | `persistence_count` | Failed approach. The agent tried N turns and gave up. |
+| `Go` | `current_node` → `aim_text` | confidence `0–1` | Successful progression. The agent achieved this aim. |
+| `Progress` | `current_node` → `aim_text` | confidence `0–1` | The aim evolved into a better, more specific, or more current aim. |
+| `NoGo` | `current_node` → `{aim}_NoGo` | confidence `0–1` | Failed approach, with how sure we are that it failed. |
 | `Similar` | Bidirectional | `0.1` | Semantic link between nodes with cosine similarity > 0.8. Created during graph merge operations. |
 
 #### Edge Weight Semantics
 
-The edge weight has a dual purpose:
+The edge weight is a **confidence in [0, 1]** — how much this verdict should be trusted — and every consumer reads that one number.
 
-1. **As a record**: It captures how many conversation turns the agent spent pursuing that aim. Lower weight = the agent advanced quickly. Higher weight = it took more effort.
-2. **For pathfinding**: When searching for routes through the graph, edge weight determines cost. NoGo edges are penalized 10x, so the pathfinder strongly prefers successful (Go) routes.
-3. **For visualization**: PyVis renders edge length as `weight × 100`, so quick wins cluster tightly and hard-fought aims spread out visually.
+| source of the verdict | confidence | why |
+|---|---|---|
+| checked against evidence (a keeper, or the agent's own predicate applied to observations) | `1.0` | refutation is decidable; a contradicted claim is dead as a matter of fact |
+| the LLM judge | `0.30 – 0.53` | opinion, capped below certainty so no rating can impersonate a proof |
+
+**For pathfinding**, confidence is converted to a cost: `1.1 − c` for a route,
+`1 + 10c` for a dead end. So a well-supported route is cheap to take and a
+*proven* dead end is far more strongly avoided than a doubtful one. Costs never
+reach zero — a free edge would always win regardless of merit, which is what
+stored weights of `0` used to do.
+
+Why opinion is capped: measured against ground truth over 349 judged turns, the
+judge's verdicts are not equally reliable — `NoGo` runs at **93% precision /
+84% recall**, while `achieved` runs at **33% / 3%**. Letting a 33%-precision
+verdict outweigh a checked one is how noise ends up steering route selection.
 
 #### Graph Lifecycle
 
@@ -206,6 +246,91 @@ Each agent has configurable persistence parameters that control how long it purs
 - If `persistance_count > patience`: **NoGo** — timeout, agent has been stuck too long.
 
 ---
+
+### Research Mode: Keepers, Memory Modes and Run Data
+
+GoalGraph can run as a measuring instrument rather than only a conversation. The
+difference is a **keeper**: a counterparty that answers from code instead of from
+a model, so the agent's claims can be *checked* rather than judged.
+
+#### Run types
+
+| `run_type` | the counterparty | what an aim is |
+|---|---|---|
+| `chat` | a person or another agent | a strategy. Nothing is decidable. |
+| `rule_induction` | code holding a hidden rule about number triples | a hypothesis. Refutation is a proof. |
+| `word_induction` | code holding a hidden rule about single words | a hypothesis about spelling and letters |
+| `sentence_induction` | code holding a hidden rule about whole sentences | a hypothesis over a much larger feature space |
+| **`transformation`** | **code holding a hidden constraint on legal states** | **an intermediate state on the way to a goal** |
+| `hidden_norm` | code deciding warm or flat replies from a hidden property of your message | a hypothesis, tested through dialogue |
+
+`transformation` is the one to start with. The agent must reach a target
+sentence one small edit at a time while every intermediate sentence obeys a rule
+it has not been told. Unlike the pure guessing tasks it has a **goal**,
+**measurable progress** (distance to the target), and **states you can route
+through** — so the decision graph records a path rather than a hub of dead ends.
+See [docs/TOY_RESEARCH_PROJECT.md](docs/TOY_RESEARCH_PROJECT.md) for a worked
+example you can run in twenty minutes.
+
+With a keeper, three things become facts the app can compute rather than
+opinions it has to ask for: whether a move satisfied the rule, whether a stated
+hypothesis contradicts the evidence, and whether the final answer is actually
+right when tested on held-out items it never saw.
+
+#### Memory modes
+
+`graph_memory_mode` selects what the agent is told about aims already ruled out.
+The four modes are a comparison, not a preference — running the same task under
+each is how you find out whether the graph earns its place.
+
+| mode | what reaches the prompt | cost |
+|---|---|---|
+| `none` | nothing. The graph is still recorded. | zero — the control arm |
+| `inline` | the refutation is stated **once**, in the conversation, then left to scroll out of the window | one sentence, once |
+| `inline` | the refutation is stated **once**, in the conversation, then left to scroll out of the window | one sentence, once |
+| `description` | every ruled-out aim, re-inserted every turn | grows with the graph — ~6,400 chars at 137 aims |
+| `graph` | the nearest few ruled-out aims, each with the observation that killed it | fixed by `graph_recall_k` and `graph_recall_chars` |
+
+#### Context window
+
+`context_window` caps how many recent messages the agent, the judge and the
+subgoal planner may each see — one horizon shared by all three, so the graph is
+the only thing carrying information past it. Each component is told how many
+messages are hidden rather than left to assume it has everything.
+
+This is the setting that decides whether stored aims are worth anything. While
+the relevant history is still visible the agent can simply re-read what failed;
+a memory of refutations only pays once something has scrolled out of view.
+
+#### Run data
+
+Every judged turn is recorded and exported as one CSV row from
+**Decision Graph → Download this run as CSV**:
+
+```
+run_label, run_type, keeper_rule, graph_memory_mode, context_window, graph_recall_k,
+nogo_ungated, model, turn, agent, aim, aim_source, stated_rule, verdict_source,
+rating, aim_status, next_aim, justification, history_len,
+keeper_move, keeper_verdict,
+llm_calls, input_tokens, output_tokens, tokens_estimated,
+graph_contribution_chars, graph_nodes, graph_edges
+```
+
+Two columns carry most of the interpretive weight. **`verdict_source`** is
+`evidence` where the keeper settled a claim in code and `judge` where it is an
+LLM's opinion — it tells you how much of the graph is fact. And
+**`graph_contribution_chars`** is how much the graph actually put into that
+turn's prompt: **if it is 0, the memory never engaged and the run is not a test
+of anything.** Check it before believing any comparison.
+
+The settings are repeated on **every row** rather than written once in a header,
+so exports from runs under different settings can be concatenated into one file
+and grouped without any reshaping. `aim_source` says whether the graph or the
+judge supplied each aim; `keeper_verdict` is ground truth; token counts cover
+every model call in the pipeline — agent, judge and planner — because they are
+recorded at the single point all of them pass through.
+
+Use **Start new run** to mark a boundary between arms in the same session.
 
 ## Features
 

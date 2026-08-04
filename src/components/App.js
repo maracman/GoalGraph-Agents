@@ -5,6 +5,7 @@ import AgentLibrary from './AgentLibrary';
 import GraphLibrary from './GraphLibrary';
 import DeveloperTools from './DeveloperTools';
 import LLMSettings from './LLMSettings';
+import GraphSettings from './GraphSettings';
 import NewChatDialog from './NewChatDialog';
 import { useSession } from '../contexts/SessionContext';
 import { useAgent } from '../contexts/AgentContext';
@@ -15,7 +16,13 @@ const App = () => {
   const { agents } = useAgent();
 
   // Local UI state only
-  const [activeTab, setActiveTab] = useState('chat');
+  // Deep-link a panel with ?tab=graphsettings. Makes a view reproducible from
+  // a URL, which is what screenshots and bug reports both need.
+  const [activeTab, setActiveTab] = useState(() => {
+    const requested = new URLSearchParams(window.location.search).get('tab');
+    const known = ['chat', 'agent', 'graph', 'developer', 'llm', 'graphsettings'];
+    return known.includes(requested) ? requested : 'chat';
+  });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [newChatDialogOpen, setNewChatDialogOpen] = useState(false);
 
@@ -60,6 +67,10 @@ const App = () => {
 
         {activeTab === 'llm' && (
           <LLMSettings />
+        )}
+
+        {activeTab === 'graphsettings' && (
+          <GraphSettings />
         )}
       </main>
 

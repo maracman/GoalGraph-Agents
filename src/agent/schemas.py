@@ -33,7 +33,10 @@ json_schema_response = {
     "type": "object",
     "properties": {
         "agent_response": {"type": "string"},
-        "narration": {"type": "string"}
+        "narration": {"type": "string"},
+        # On keeper runs the agent states its current claim in a checkable
+        # form, so refutation becomes a fact rather than a judgement.
+        "rule": {"type": "string"}
     },
     "required": ["agent_response"]
 }
@@ -127,7 +130,35 @@ json_schemas = {
                     "top_k": {"type": "integer"},
                     "repetition_penalty": {"type": "number"},
                     "use_gpu": {"type": "boolean"},
-                    "llm": {"type": ["object", "null"]}
+                    "llm": {"type": ["object", "null"]},
+                    # How the decision graph feeds back into aim generation.
+                    # "description" is the original behaviour: every ruled-out
+                    # aim label, dumped whole. "graph" retrieves only the
+                    # nearest few and includes why each was ruled out.
+                    "graph_memory_mode": {
+                        "type": "string",
+                        "enum": ["none", "inline", "description", "graph"]
+                    },
+                    "graph_recall_k": {"type": "integer", "minimum": 1, "maximum": 20},
+                    "graph_recall_chars": {"type": "integer", "minimum": 100, "maximum": 4000},
+                    # A keeper turns the counterparty into code, so the
+                    # agent's claims can be checked rather than judged.
+                    "run_type": {
+                        "type": "string",
+                        "enum": ["chat", "rule_induction", "word_induction", "sentence_induction",
+                                 "transformation", "hidden_norm"]
+                    },
+                    "keeper_rule": {"type": "string"},
+                    # Most recent messages an agent may see. 0 means all of
+                    # them. A short window is what makes stored aims worth more
+                    # than raw history.
+                    "context_window": {"type": "integer", "minimum": 0, "maximum": 200},
+                    # Whether a refuted aim can be abandoned before it has been
+                    # held for patience_min turns.
+                    "nogo_ungated": {"type": "boolean"},
+                    # Whether a candidate Go must survive an independent
+                    # attempt to refute it.
+                    "go_corroborate": {"type": "boolean"}
                 }
             },
             "play": {"type": "boolean"},

@@ -13,6 +13,8 @@ from .schemas import (
     json_schema_response
 )
 from .llm_service import llm_service
+from .graph_memory import (GraphMemory, legacy_nogo_statement,
+                           verdict_confidence, PROOF, OPINION)
 from .graph_intelligence import (
     find_path_to_goal,
     import_graph,
@@ -135,6 +137,51 @@ def get_go_nogo_nodes(graph):
     return go_nodes, nogo_nodes
 
 
+# Columns that hold text but can be inferred as float64 when every agent starts
+# with them empty. Under pandas 2.x, writing a string into such a column raises
+# rather than widening it, which breaks the write-back after an aim is set.
+_TEXT_COLUMNS = ('current_aim', 'suggestion', 'current_node_location',
+                 'last_response', 'last_narration', 'persistance_score')
+
+
+def ensure_text_columns(agent_df):
+    """Widen text columns to object so aim write-back cannot fail on dtype."""
+    for col in _TEXT_COLUMNS:
+        if col in agent_df.columns and agent_df[col].dtype != object:
+            agent_df[col] = agent_df[col].astype(object)
+    return agent_df
+
+
+def annotate_aim(graph, node, status, reason=None, rating=None, turn=None,
+                 ruleset=None, enabled=True):
+    """Attach to a node the payload the graph would otherwise throw away.
+
+    Without this, `graph` memory mode has nothing to retrieve: recall looks for
+    nodes marked as aims and finds none, so it silently returns nothing and
+    behaves exactly like having the graph switched off. Node identity is left
+    alone so saved graphs and the graph views keep working.
+    """
+    if not enabled or node not in graph:
+        return graph
+    from .graph_memory import canonical_status
+    data = graph.nodes[node]
+    data['kind'] = 'aim'
+    data['status'] = canonical_status(status)
+    if not data.get('full_text'):
+        data['full_text'] = str(node)
+    if ruleset:
+        data['ruleset'] = ruleset
+    data.setdefault('verified', True)
+    if rating is not None:
+        data['rating'] = int(rating)
+    if turn is not None:
+        data['turn'] = int(turn)
+    # The first, specific justification beats a later vague restatement.
+    if reason and len(str(reason)) > len(str(data.get('reason', ''))):
+        data['reason'] = str(reason)[:300]
+    return graph
+
+
 def update_graph(graph, current_node, next_node, label, weight=1.0):
     """Add or update an edge in the agent's decision graph."""
     if current_node not in graph:
@@ -155,9 +202,127 @@ def update_graph(graph, current_node, next_node, label, weight=1.0):
 # Prompt formatting
 # ---------------------------------------------------------------------------
 
+def clean_text(value, default=None):
+    """A usable string, or the default.
+
+    Values round-trip through a pandas DataFrame between turns, so an absent
+    aim comes back as NaN rather than None. NaN is truthy, so it survives every
+    `if aim:` check and ends up added to the graph as a node, where the first
+    string operation on it fails.
+    """
+    if value is None:
+        return default
+    if isinstance(value, float):          # NaN and anything else numeric
+        return default
+    text = str(value).strip()
+    if not text or text.lower() == 'nan':
+        return default
+    return text
+
+
+def already_ruled_out(graph, proposed, threshold=0.86):
+    """Has this aim, or one meaning the same thing, already been refuted?
+
+    Nothing currently stops the judge handing back an aim the graph has already
+    buried, which is the cheapest possible use of a decision graph and was not
+    being made.
+    """
+    proposed = clean_text(proposed)
+    if not proposed:
+        return None
+    from .graph_memory import rank_by_similarity, normalise, NOGO
+    dead = []
+    for node, data in graph.nodes(data=True):
+        if data.get('status') == NOGO or str(node).endswith('_NoGo'):
+            dead.append((node, data.get('full_text') or str(node).replace('_NoGo', '')))
+    if not dead:
+        return None
+    scores = rank_by_similarity(proposed, [text for _, text in dead], use_embeddings=True)
+    best = max(range(len(scores)), key=lambda i: scores[i])
+    if scores[best] >= threshold or normalise(dead[best][1]) == normalise(proposed):
+        return dead[best][1]
+    return None
+
+
+def choose_aim(graph, current_node, goal_text, proposed, generation_vars,
+               min_similarity=0.45):
+    """Pick the next aim, giving the graph a say rather than only the judge.
+
+    Returns (aim, source, suggestion, rejected). The graph is consulted whenever
+    a new aim is needed - not only when the agent has none, which was the old
+    behaviour and meant the graph never chose anything once a judge started
+    supplying next_aim.
+    """
+    proposed = clean_text(proposed)
+    if generation_vars.get('graph_memory_mode', 'description') == 'none':
+        return proposed, 'carried', None, None
+
+    rejected = already_ruled_out(graph, proposed)
+    if rejected is None and proposed:
+        return proposed, 'carried', None, None
+
+    result = find_path_to_goal(graph, current_node, goal_text, min_similarity)
+    if result is not None:
+        path, target, similarity = result
+        if len(path) > 1:
+            return (path[1], 'graph_path',
+                    f"Follow known path toward '{target}' (similarity={similarity:.2f}). "
+                    f"Path: {' -> '.join(path)}",
+                    rejected)
+
+    # The aim is known dead and the graph has no route to offer. Handing it
+    # back anyway would have the agent pursue something already refuted, so it
+    # is dropped: the planner picks fresh next turn, with the refutation in
+    # front of it.
+    return None, 'rejected', None, rejected
+
+
+def judge_view(history, generation_vars, default=10):
+    """What a judge or planner is allowed to see of the conversation.
+
+    Every component must share one horizon, otherwise the graph is not the only
+    thing carrying information past the window and any measurement of what the
+    graph contributes is confounded. When no window is set this keeps the
+    original last-ten behaviour.
+    """
+    window = 0
+    try:
+        window = int((generation_vars or {}).get('context_window', 0) or 0)
+    except (TypeError, ValueError):
+        window = 0
+    limit = window if window > 0 else default
+    shown = history[-limit:]
+    return shown, max(0, len(history) - len(shown))
+
+
+def windowed(history, context_window):
+    """The most recent messages, plus a note saying what was dropped.
+
+    Silently truncating would let an agent mistake a partial history for the
+    whole one. Saying how much is missing is what makes a short window an
+    honest constraint rather than a hidden one - and it is the condition under
+    which stored aims can be worth more than raw history.
+    """
+    try:
+        window = int(context_window or 0)
+    except (TypeError, ValueError):
+        window = 0
+    if window <= 0 or len(history) <= window:
+        return history, 0
+    return history[-window:], len(history) - window
+
+
 def format_prompt(history, agent_description, goal, name, user_name,
-                  current_aim=None, suggestion=None, last_narration=None):
-    """Format the prompt for the agent, including subgoal context."""
+                  current_aim=None, suggestion=None, last_narration=None,
+                  ruled_out=None, context_window=0, rule_field=''):
+    """Format the prompt for the agent, including subgoal context.
+
+    `ruled_out` is what the decision graph has already established does not
+    work. It belongs here, on every turn, rather than only where a new aim is
+    generated: an agent repeats a dead approach while pursuing an aim, not
+    while choosing one, so consulting the record only at aim-selection time
+    means consulting it at the one moment it cannot help.
+    """
 
     system_prompt = f"""You are {name}, an intelligent agent with the following description:
 {agent_description}
@@ -170,17 +335,24 @@ workspace of possible aims, not as a single fixed route.
         system_prompt += f"\nYour current aim is: {current_aim}\n"
     if suggestion:
         system_prompt += f"Suggested next action: {suggestion}\n"
+    if ruled_out:
+        system_prompt += f"\n{ruled_out}"
 
-    system_prompt += """
+    system_prompt += f"""
 Always respond in character. Maintain consistent behavior and personality throughout the conversation.
 Respond with a JSON object containing:
 - "agent_response": your in-character response text
 - "narration": (optional) brief narration describing actions, appearances, or behaviors accompanying your response
+{rule_field}
 
 IMPORTANT: Do NOT repeat previous responses or narration.
 Respond ONLY with the JSON object, no other text."""
 
+    history, elided = windowed(history, context_window)
     conversation = ""
+    if elided:
+        conversation += (f"[{elided} earlier message(s) are no longer available "
+                         f"to you.]\n")
     for speaker, message in history:
         if speaker == "user":
             conversation += f"{user_name}: {message}\n"
@@ -236,8 +408,10 @@ def review_subgoal(history, agent, generation_vars, graph, current_aim=None):
     agent_name = agent['agent_name']
     current_aim = current_aim or agent['current_aim']
     workspace_goal = agent['goal']
-    recent_exchanges = "\n".join(
-        [f"{m[0]}: {m[1]}" for m in history[-10:]]
+    shown, hidden = judge_view(history, generation_vars)
+    recent_exchanges = ("" if not hidden
+                        else f"[{hidden} earlier message(s) not shown.]\n") + "\n".join(
+        [f"{m[0]}: {m[1]}" for m in shown]
     )
 
     system_prompt = "You are an impartial evaluator. Always respond with valid JSON only."
@@ -313,24 +487,41 @@ def generate_new_subgoal(history, agent, generation_vars, graph):
     environment_changes = agent.get('environment_changes', '')
     new_information = agent.get('new_information', '')
 
-    recent_exchanges = "\n".join(
-        [f"{m[0]}: {m[1]}" for m in history[-10:]]
+    shown, hidden = judge_view(history, generation_vars)
+    recent_exchanges = ("" if not hidden
+                        else f"[{hidden} earlier message(s) not shown.]\n") + "\n".join(
+        [f"{m[0]}: {m[1]}" for m in shown]
     )
 
-    # Get failed approaches from graph
-    _, nogo_nodes = get_go_nogo_nodes(graph)
+    # What the graph contributes to the next aim. "description" is the
+    # original behaviour - every ruled-out label, dumped whole, growing with
+    # the graph. "graph" retrieves only the nearest few and says why each was
+    # ruled out, so the cost is bounded by k rather than by graph size.
+    mode = generation_vars.get('graph_memory_mode', 'description')
     nogo_statement = ""
-    if nogo_nodes:
-        # Strip _NoGo suffix for readability
-        clean_nodes = [n.replace('_NoGo', '') for n in nogo_nodes]
-        nogo_list = "\n".join([f" - {node}" for node in clean_nodes])
-        nogo_statement = f"The following approaches at achieving the goal were unsuccessful:\n{nogo_list}\n\n"
+    if mode == 'graph':
+        mem = GraphMemory(graph, ruleset=agent.get('goal', 'default'))
+        nogo_statement = mem.render(
+            agent.get('current_aim') or agent.get('goal', ''),
+            k=int(generation_vars.get('graph_recall_k', 4)),
+            max_chars=int(generation_vars.get('graph_recall_chars', 600)),
+        )
+    elif mode == 'description':
+        _, nogo_nodes = get_go_nogo_nodes(graph)
+        if nogo_nodes:
+            clean_nodes = [n.replace('_NoGo', '') for n in nogo_nodes]
+            nogo_list = "\n".join([f" - {node}" for node in clean_nodes])
+            nogo_statement = f"The following approaches at achieving the goal were unsuccessful:\n{nogo_list}\n\n"
 
     environment_info = ""
     if environment_changes:
         environment_info += f"Recent environment changes: {environment_changes}\n"
     if new_information:
         environment_info += f"New information: {new_information}\n"
+
+    # Exposed so the run trail can record what the graph actually contributed
+    # to this turn, rather than only that it contributed something.
+    generate_new_subgoal.last_nogo_statement = nogo_statement
 
     system_prompt = "You are a strategic planner. Always respond with valid JSON only."
 
@@ -367,10 +558,15 @@ Respond with JSON: {{"new_subgoal": "<subgoal text>", "planned_action": "<action
 # Agent response generation
 # ---------------------------------------------------------------------------
 
+generate_new_subgoal.last_nogo_statement = ''
+
+
 def get_agent_response(prompt, agent_name, generation_vars, last_narration=''):
     """Generate a response from the agent using the configured LLM.
 
-    Returns (response_text, narration).
+    Returns (response_text, narration, stated_rule). The rule is the agent's
+    current claim in a form a keeper can check; it is empty on chat runs, where
+    there is nothing to check it against.
     """
 
     try:
@@ -380,7 +576,7 @@ def get_agent_response(prompt, agent_name, generation_vars, last_narration=''):
                 f"This is a simulated response from {agent_name}. "
                 f"In production, this would be generated by the AI model."
             )
-            return sim_response, ""
+            return sim_response, "", ""
 
         provider = generation_vars.get('provider', 'local')
         model = generation_vars.get('model')
@@ -428,12 +624,13 @@ def get_agent_response(prompt, agent_name, generation_vars, last_narration=''):
         if output:
             agent_response = output.get('agent_response', raw)
             narration = output.get('narration', '')
+            stated_rule = (output.get('rule') or '').strip()
 
             # Suppress narration if too similar to previous
             if narration and is_too_similar(narration, last_narration):
                 narration = ''
 
-            return agent_response, narration
+            return agent_response, narration, stated_rule
 
         # Fallback: treat entire response as plain text.
         # Strip stray JSON wrapper artifacts the LLM sometimes leaves behind,
@@ -448,7 +645,7 @@ def get_agent_response(prompt, agent_name, generation_vars, last_narration=''):
         else:
             # Just strip a trailing  "}  or  }  that leaked from JSON
             cleaned = re.sub(r'"\s*\}\s*$', '', cleaned)
-        return cleaned.strip(), ""
+        return cleaned.strip(), "", ""
 
     except Exception as e:
         logger.error(f"Error generating response: {str(e)}")
@@ -466,7 +663,8 @@ def offline_main(history, agents_df, settings, user_name, is_user, agent_mutes, 
     return main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last_history, offline=True, turn_index=turn_index)
 
 
-def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last_history, offline=False, turn_index=0):
+def main(history, agents_df, settings, user_name, is_user, agent_mutes,
+         len_last_history, offline=False, turn_index=0, trail=None):
     """Main function for agent processing.
 
     Implements the full loop:
@@ -507,7 +705,10 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
         if agent['is_agent_generation_variables']
         else settings.copy()
     )
-    for runtime_key in ('fast_graph_run', 'judge_delay_seconds'):
+    for runtime_key in ('fast_graph_run', 'judge_delay_seconds',
+                        'graph_memory_mode', 'graph_recall_k',
+                        'graph_recall_chars', 'nogo_ungated',
+                        'context_window', 'run_type', 'keeper_rule', 'seed'):
         if runtime_key in settings:
             generation_vars[runtime_key] = settings[runtime_key]
     if offline:
@@ -523,11 +724,11 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
         G.add_node('start')
 
     agent_name = agent['agent_name']
-    current_aim = agent['current_aim']
-    suggestion = agent['suggestion']
+    current_aim = clean_text(agent['current_aim'])
+    suggestion = clean_text(agent['suggestion'], '')
     persistence_count = agent['persistance_count']
     persistence_score = agent['persistance_score']
-    current_node = agent['current_node_location']
+    current_node = clean_text(agent['current_node_location'], 'start')
     patience_min = agent.get('persistance', 3)      # min turns before NoGo
     patience_max = agent.get('patience', 6)          # max turns (impatience)
     last_narration = agent.get('last_narration', '')
@@ -535,7 +736,20 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
     # ------------------------------------------------------------------
     # Step 1: If no active aim, try graph-guided path first, then LLM
     # ------------------------------------------------------------------
+    # Token accounting covers the whole pipeline for this turn: the agent's
+    # own call plus the judge and the planner. Reset here so each row is a
+    # per-turn figure rather than a running total.
+    if trail is not None:
+        llm_service.reset_usage()
+    verdict_src = OPINION   # upgraded to PROOF when a keeper settles it
+    stated_rule = ''
+    inline_notes = []   # refutations spoken once into the conversation
     guided_path = None  # Will hold the path if graph search finds one
+    # Reset per turn: this is a module-level attribute, so leaving it set
+    # would report a previous turn's recall text on any turn that did not
+    # call the subgoal generator.
+    generate_new_subgoal.last_nogo_statement = ''
+    aim_source = 'carried'
 
     if current_aim is None:
         # First: check if the graph already has a node close to our goal
@@ -554,6 +768,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
                 f"Path: {' -> '.join(path)}"
             )
             guided_path = path
+            aim_source = 'graph_path'
             persistence_count = 0
             persistence_score = None
             logs.append(
@@ -566,14 +781,53 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
                 history, agent, generation_vars, G
             )
             current_aim = new_subgoal
+            aim_source = 'llm_subgoal'
             suggestion = planned_action
             persistence_count = 0
             persistence_score = None
             logs.append(f"New aim for {agent_name}: {current_aim}")
 
     # ------------------------------------------------------------------
+    # What the graph put into this turn's prompt. Recorded rather than
+    # discarded: comparing graph settings across runs is impossible if the
+    # only trace of what the agent was told is a log line.
+
     # Step 2: Generate agent response with aim context
     # ------------------------------------------------------------------
+    # What the graph already knows does not work, retrieved for the aim in
+    # hand. Computed every turn so the record is actually consulted while the
+    # agent is acting on an aim.
+    ruled_out = ''
+    graph_mode = generation_vars.get('graph_memory_mode', 'description')
+    # 'inline' deliberately retrieves nothing: the refutation was stated once,
+    # in the conversation, and survives only as long as the window holds it.
+    # That is the control for what persistent recall actually buys.
+    if graph_mode == 'inline':
+        ruled_out = ''
+    elif graph_mode == 'graph':
+        ruled_out = GraphMemory(G, ruleset=agent.get('goal', 'default')).render(
+            current_aim or agent.get('goal', ''),
+            k=int(generation_vars.get('graph_recall_k', 4)),
+            max_chars=int(generation_vars.get('graph_recall_chars', 600)),
+        )
+    elif graph_mode == 'description':
+        ruled_out = legacy_nogo_statement(G)
+    if ruled_out:
+        generate_new_subgoal.last_nogo_statement = ruled_out
+    graph_contribution = ruled_out
+
+    # On a keeper run the agent must state its claim in a checkable form.
+    # Without it nothing can be proven refuted, so no NoGo is ever recorded and
+    # the graph has nothing to recall - which is what kept every memory mode
+    # behaving identically.
+    keeper = None
+    try:
+        from .keeper import make_keeper
+        keeper = make_keeper(generation_vars if 'run_type' in generation_vars
+                             else settings)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"keeper unavailable: {e}")
+
     prompt = format_prompt(
         history,
         agent['description'],
@@ -582,19 +836,22 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
         user_name,
         current_aim=current_aim,
         suggestion=suggestion,
-        last_narration=last_narration
+        last_narration=last_narration,
+        ruled_out=ruled_out,
+        context_window=generation_vars.get('context_window', 0),
+        rule_field=(keeper.rule_prompt() if keeper else '')
     )
 
     logger.info(f"Generating response for {agent_name}")
     try:
-        response_text, narration = get_agent_response(
+        response_text, narration, stated_rule = get_agent_response(
             prompt, agent_name, generation_vars, last_narration
         )
     except AgentGenerationError as e:
         logger.error(str(e))
         logs.append(str(e))
 
-        agent_df = pd.DataFrame(agents_df)
+        agent_df = ensure_text_columns(pd.DataFrame(agents_df))
         agent_df.at[agent_idx, 'current_aim'] = current_aim
         agent_df.at[agent_idx, 'suggestion'] = suggestion
         agent_df.at[agent_idx, 'persistance_count'] = persistence_count
@@ -622,6 +879,61 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
             agent, generation_vars, G, current_aim=current_aim
         )
 
+        # Where the keeper can settle it, evidence outranks the judge. A claim
+        # contradicted by an observation is refuted as a matter of fact, so the
+        # verdict is taken rather than asked for, and the edge carries proof
+        # confidence instead of opinion.
+        if keeper and stated_rule:
+            check = keeper.check_aim(stated_rule,
+                                     keeper.observations_from(history))
+            if check.get('checkable') and check.get('consistent') is False:
+                contradiction = check.get('contradicted_by') or {}
+                aim_status, rating, verdict_src = 'abandon', 1, PROOF
+                justification = (
+                    f"Refuted by evidence: {contradiction.get('move')} was "
+                    f"{'accepted' if contradiction.get('keeper') else 'rejected'}, "
+                    f"which this rule does not allow.")
+                logs.append(f"REFUTED by evidence: {stated_rule[:60]}")
+            elif check.get('holdout_accuracy') is not None:
+                logs.append(f"Rule holds so far; {check['holdout_accuracy']:.0%} "
+                            f"on unseen items.")
+
+        if trail is not None:
+            # The agent row comes from a DataFrame and the graph from networkx,
+            # so several of these arrive as numpy scalars. They must be plain
+            # Python here: the session is JSON-serialised on every request, and
+            # a numpy int64 anywhere in it fails the whole save.
+            def _int(value):
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    return None
+
+            trail.append({
+                'turn': _int(turn_index),
+                'agent': str(agent_name),
+                'aim': str(current_aim) if current_aim is not None else '',
+                'aim_source': str(aim_source),
+                'stated_rule': str(stated_rule or ''),
+                'verdict_source': str(verdict_src),
+                'rating': _int(rating),
+                'aim_status': str(aim_status) if aim_status else '',
+                'justification': str(justification) if justification else '',
+                'next_aim': str(next_aim) if next_aim else '',
+                'persistence_count': _int(persistence_count),
+                'graph_memory_mode': str(generation_vars.get('graph_memory_mode', 'description')),
+                'context_window': _int(generation_vars.get('context_window', 0)) or 0,
+                'history_len': int(len(history)),
+                'llm_calls': int(llm_service.usage()['calls']),
+                'input_tokens': int(llm_service.usage()['input_tokens']),
+                'output_tokens': int(llm_service.usage()['output_tokens']),
+                'tokens_estimated': int(llm_service.usage()['estimated']),
+                'graph_contribution_chars': int(len(graph_contribution)),
+                'graph_contribution': str(graph_contribution)[:1000],
+                'graph_nodes': int(G.number_of_nodes()),
+                'graph_edges': int(G.number_of_edges()),
+            })
+
         if rating is not None:
             previous_score = persistence_score if persistence_score is not None else 4
             persistence_score = rating
@@ -633,13 +945,23 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
             if rating >= 6 or aim_status == 'achieved':
                 logger.info(f"GO: {agent_name} achieved aim '{current_aim}' (rating={rating})")
                 new_node = current_aim
-                G = update_graph(G, current_node, new_node, "Go", persistence_count)
+                G = update_graph(G, current_node, new_node, "Go",
+                                 verdict_confidence(OPINION, rating))
+                G[current_node][new_node]['verdict_source'] = OPINION
+                annotate_aim(G, new_node, 'Go', reason=justification, rating=rating,
+                             turn=turn_index, ruleset=agent.get('goal'),
+                             enabled=generation_vars.get('graph_memory_mode') == 'graph')
                 current_node = new_node
-                current_aim = next_aim
-                suggestion = new_suggestion if next_aim else ''
+                current_aim, aim_source, graph_hint, rejected = choose_aim(
+                    G, current_node, agent['goal'], next_aim, generation_vars)
+                suggestion = graph_hint or (new_suggestion if current_aim else '')
                 persistence_count = 0
                 persistence_score = None
                 logs.append(f"GO: aim achieved -> {new_node}")
+                if rejected:
+                    logs.append(f"Proposed aim was already ruled out ('{rejected[:60]}')")
+                if aim_source == 'graph_path':
+                    logs.append(f"Graph supplied the next aim: {current_aim}")
                 if next_aim:
                     logs.append(f"Next aim: {next_aim}")
 
@@ -650,42 +972,75 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
                     f"to '{next_aim}' (rating={rating})"
                 )
                 new_node = current_aim
-                G = update_graph(G, current_node, new_node, "Progress", persistence_count)
+                G = update_graph(G, current_node, new_node, "Progress",
+                                 verdict_confidence(OPINION, rating))
+                G[current_node][new_node]['verdict_source'] = OPINION
+                annotate_aim(G, new_node, 'Progress', reason=justification, rating=rating,
+                             turn=turn_index, ruleset=agent.get('goal'),
+                             enabled=generation_vars.get('graph_memory_mode') == 'graph')
                 current_node = new_node
-                current_aim = next_aim
-                suggestion = new_suggestion
+                current_aim, aim_source, graph_hint, rejected = choose_aim(
+                    G, current_node, agent['goal'], next_aim, generation_vars)
+                suggestion = graph_hint or new_suggestion
                 persistence_count = 0
                 persistence_score = None
-                logs.append(f"PROGRESS: aim evolved -> {new_node} -> {next_aim}")
+                logs.append(f"PROGRESS: aim evolved -> {new_node} -> {current_aim}")
+                if rejected:
+                    logs.append(f"Proposed aim was already ruled out ('{rejected[:60]}')")
+                if aim_source == 'graph_path':
+                    logs.append(f"Graph supplied the next aim: {current_aim}")
 
-            # NOGO checks (only after minimum persistence)
-            elif persistence_count >= patience_min:
+            # NOGO checks. Refutation is not gated on persistence: patience
+            # exists to protect an aim that is merely struggling, not one the
+            # judge has flatly rejected. Gating those behind patience_min lost
+            # every NoGo whenever aims moved faster than the gate, because
+            # persistence_count resets on each aim change. The weaker signals -
+            # regression and impatience - still wait for a fair run.
+            else:
                 nogo = False
+                ungated = generation_vars.get('nogo_ungated', True)
+                past_gate = persistence_count >= patience_min
 
                 # Explicit abandon from the judge
-                if aim_status == 'abandon':
+                if aim_status == 'abandon' and (ungated or past_gate):
                     nogo = True
                     logs.append("NOGO: aim abandoned by judge")
 
                 # Strong failure
-                elif rating <= 2:
+                elif rating <= 2 and (ungated or past_gate):
                     nogo = True
                     logs.append(f"NOGO: strong failure (rating={rating})")
 
-                # Regression
-                elif (rating < (previous_score - 1)) and rating <= 4:
-                    nogo = True
-                    logs.append(f"NOGO: regression (rating={rating}, prev={previous_score})")
+                elif past_gate:
+                    # Regression
+                    if (rating < (previous_score - 1)) and rating <= 4:
+                        nogo = True
+                        logs.append(f"NOGO: regression (rating={rating}, prev={previous_score})")
 
-                # Exceeded patience
-                elif persistence_count > patience_max:
-                    nogo = True
-                    logs.append(f"NOGO: exceeded patience ({persistence_count} > {patience_max})")
+                    # Exceeded patience
+                    elif persistence_count > patience_max:
+                        nogo = True
+                        logs.append(f"NOGO: exceeded patience ({persistence_count} > {patience_max})")
 
                 if nogo:
                     logger.info(f"NOGO: {agent_name} abandoning aim '{current_aim}'")
                     nogo_node = f"{current_aim}_NoGo"
-                    G = update_graph(G, current_node, nogo_node, "NoGo", persistence_count)
+                    G = update_graph(G, current_node, nogo_node, "NoGo",
+                                     verdict_confidence(verdict_src, rating))
+                    G[current_node][nogo_node]['verdict_source'] = verdict_src
+                    # The payload goes on the aim itself, so recall surfaces the
+                    # aim and why it failed rather than a bare "_NoGo" marker.
+                    annotate_aim(G, nogo_node, 'NoGo', reason=justification, rating=rating,
+                                 turn=turn_index, ruleset=agent.get('goal'),
+                                 enabled=generation_vars.get('graph_memory_mode') == 'graph')
+                    if nogo_node in G:
+                        G.nodes[nogo_node]['full_text'] = str(current_aim)
+                    if generation_vars.get('graph_memory_mode') == 'inline':
+                        why = (justification or '').strip()
+                        note = (f"That approach has been ruled out: {current_aim}."
+                                + (f" {why[:160]}" if why else ""))
+                        inline_notes.append(('narrator', note))
+                        logs.append("Stated the refutation inline, once.")
                     current_aim = None
                     suggestion = ''
                     persistence_count = 0
@@ -697,7 +1052,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
     # Save graph
     nx.write_graphml(G, graph_path)
 
-    agent_df = pd.DataFrame(agents_df)
+    agent_df = ensure_text_columns(pd.DataFrame(agents_df))
     agent_df.at[agent_idx, 'current_aim'] = current_aim
     agent_df.at[agent_idx, 'suggestion'] = suggestion
     agent_df.at[agent_idx, 'persistance_count'] = persistence_count
@@ -708,7 +1063,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes, len_last
     agent_df.at[agent_idx, 'personal_history'] = history + [(agent_name, display_response)]
 
     # Add the response to the conversation history
-    new_history = history + [(agent_name, display_response)]
+    new_history = history + [(agent_name, display_response)] + inline_notes
 
     logger.info(
         f"Agent processing completed. "

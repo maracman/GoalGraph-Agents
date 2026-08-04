@@ -117,10 +117,15 @@ def find_nearest_goal_node(
     exclude = set(exclude_nodes or [])
     exclude.add('start')  # Always skip the start node
 
-    # Filter out NoGo nodes and excluded nodes
+    # Filter out NoGo nodes and excluded nodes. Ruled-out aims are marked two
+    # ways: the original '_NoGo' name suffix, and a 'status' attribute on the
+    # node. Checking only the suffix would route an agent straight back to an
+    # aim that had already been refuted.
     candidate_nodes = [
         n for n in graph.nodes()
-        if n not in exclude and not n.endswith('_NoGo')
+        if n not in exclude
+        and not n.endswith('_NoGo')
+        and graph.nodes[n].get('status') not in ('NoGo', 'abandon')
     ]
 
     if not candidate_nodes:
@@ -177,12 +182,21 @@ def find_path_to_node(
 
     try:
         if prefer_go_edges:
-            # Create a weight function that penalizes NoGo edges
+            # The stored weight is a confidence in [0, 1], not a hop cost, so
+            # it is converted here. A well-supported route is cheap to take; a
+            # dead end is expensive in proportion to how sure we are it is one,
+            # which is what lets a proven refutation outrank a judge's hunch.
+            # Costs never reach zero - a free edge always wins regardless of
+            # merit, which is what stored weights of 0 used to do.
             def edge_weight(u, v, data):
-                base_weight = data.get('weight', 1.0)
+                try:
+                    confidence = float(data.get('weight', 0.5))
+                except (TypeError, ValueError):
+                    confidence = 0.5
+                confidence = min(max(confidence, 0.0), 1.0)
                 if data.get('label') == 'NoGo':
-                    return base_weight * 10  # Heavy penalty for failed paths
-                return base_weight
+                    return 1.0 + 10.0 * confidence
+                return 1.1 - confidence
 
             path = nx.shortest_path(
                 graph, source=source, target=target, weight=edge_weight

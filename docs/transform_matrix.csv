@@ -1,0 +1,9 @@
+run_label,rule,mode,context_window,judged_turns,probes,reached_goal,llm_calls,input_tokens,output_tokens,total_tokens,graph_nodes,mean_recall_chars,seconds
+even_letter_count-none-w0,even_letter_count,none,0,10,10,1,29,23447,3812,27259,5,0.0,168
+even_letter_count-inline-w0,even_letter_count,inline,0,10,1,1,28,22770,3422,26192,5,0.0,150
+even_letter_count-description-w0,even_letter_count,description,0,9,8,1,25,21173,3418,24591,5,286.2,179
+even_letter_count-graph-w0,even_letter_count,graph,0,11,11,1,32,28874,4586,33460,6,438.7,188
+even_letter_count-none-w4,even_letter_count,none,4,11,9,1,31,17751,4106,21857,6,0.0,183
+even_letter_count-inline-w4,even_letter_count,inline,4,11,2,1,32,16952,4001,20953,6,0.0,163
+even_letter_count-description-w4,even_letter_count,description,4,11,10,1,31,19148,4060,23208,6,303.3,221
+even_letter_count-graph-w4,even_letter_count,graph,4,11,10,1,32,19873,4018,23891,6,377.9,212

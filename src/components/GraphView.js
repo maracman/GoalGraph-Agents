@@ -8,6 +8,7 @@ const GraphView = () => {
   const [agents, setAgents] = useState([]);
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [graphUrl, setGraphUrl] = useState('');
+  const [hideNoGo, setHideNoGo] = useState(false);
   const [loading, setLoading] = useState(false);
   const iframeRef = useRef(null);
 
@@ -36,12 +37,33 @@ const GraphView = () => {
     loadGraph(agentId);
   };
 
+  // Refuted aims are usually the majority of nodes, so hiding them is often
+  // the only way to see the route the agent actually took.
+  const toggleNoGo = (e) => {
+    const next = e.target.checked;
+    setHideNoGo(next);
+    if (selectedAgentId) loadGraphWith(selectedAgentId, next);
+  };
+
+  const loadGraphWith = async (agentId, hide) => {
+    if (!agentId) return;
+    setLoading(true);
+    try {
+      const graphData = await visualizeGraph(agentId, hide);
+      setGraphUrl(graphData.graph_html);
+    } catch (error) {
+      console.error("Error visualizing graph:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadGraph = async (agentId) => {
     if (!agentId) return;
     
     setLoading(true);
     try {
-      const graphData = await visualizeGraph(agentId);
+      const graphData = await visualizeGraph(agentId, hideNoGo);
       setGraphUrl(graphData.graph_html);
     } catch (error) {
       console.error("Error visualizing graph:", error);
@@ -73,6 +95,15 @@ const GraphView = () => {
             ))}
           </select>
         </div>
+        <label className="setting-checkbox" htmlFor="hide-nogo">
+          <input
+            id="hide-nogo"
+            type="checkbox"
+            checked={hideNoGo}
+            onChange={toggleNoGo}
+          />
+          <span>Hide ruled-out aims</span>
+        </label>
       </div>
 
       <div className="graph-display">

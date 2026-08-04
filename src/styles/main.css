@@ -1387,3 +1387,68 @@ body, html {
     max-width: 90%;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Decision Graph settings
+
+   Follows .setting-group / .setting-hint above. The help text under each
+   control is deliberately full-width rather than inline: these settings change
+   how a run behaves, so the explanation is part of the control, not a footnote.
+   --------------------------------------------------------------------------- */
+
+.settings-panel {
+  padding: 24px 28px;
+  max-width: 720px;
+}
+
+.settings-panel h2 {
+  margin: 0 0 6px;
+}
+
+.settings-panel h3 {
+  margin: 28px 0 12px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-color, #e3e3e0);
+  font-size: 15px;
+}
+
+.setting-help {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #6b6b68;
+  margin-top: 6px;
+}
+
+.graph-settings .setting-group {
+  margin-bottom: 22px;
+}
+
+/* The label wraps the checkbox, so the block/bold treatment .setting-group
+   label applies would run the two together. */
+.setting-checkbox {
+  display: flex !important;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 0 !important;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.setting-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex: none;
+  cursor: pointer;
+}
+
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 26px;
+}
+
+.setting-success { font-size: 13px; color: #0f7b2f; }
+.setting-error   { font-size: 13px; color: #b3261e; }

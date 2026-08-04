@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Settings, MessageSquare, Activity, Code, Cloud, PlusCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings, MessageSquare, Activity, Code, Cloud, PlusCircle, Share2 } from 'lucide-react';
 import { useSession } from '../contexts/SessionContext';
 
 const Sidebar = ({ activeTab, setActiveTab, collapsed, toggleSidebar, onNewChat }) => {
@@ -76,6 +76,14 @@ const Sidebar = ({ activeTab, setActiveTab, collapsed, toggleSidebar, onNewChat 
               <span className="tab-text">LLM Settings</span>
             </button>
             
+            <button
+              className={activeTab === 'graphsettings' ? 'active' : ''}
+              onClick={() => handleTabClick('graphsettings')}
+            >
+              <Share2 size={18} />
+              <span className="tab-text">Decision Graph</span>
+            </button>
+
             {onNewChat && (
               <button
                 className=""

@@ -11,6 +11,8 @@ import json
 import uuid
 import networkx as nx
 import numpy as np
+import csv
+import io
 from datetime import datetime
 from flask import Flask, request, render_template, jsonify, session, Response, redirect, url_for, send_from_directory
 from flask_session import Session
@@ -565,11 +567,24 @@ def inject_graph_explorer(html_path, node_count):
         f.write(contents)
 
 
-def visualize_graph_pyvis(graph_file_path, session_id):
-    """Generate a visualization of the agent's decision graph"""
+def visualize_graph_pyvis(graph_file_path, session_id, hide_nogo=False):
+    """Generate a visualization of the agent's decision graph.
+
+    `hide_nogo` drops refuted aims from the picture. On a working graph they
+    are the majority of nodes - about half the edges in a rule-induction run -
+    so hiding them is often the only way to see the route that was actually
+    taken.
+    """
     try:
         # Load the graph from the GraphML file
         G = nx.read_graphml(graph_file_path)
+
+        if hide_nogo:
+            drop = [n for n, d in G.nodes(data=True)
+                    if str(n).endswith('_NoGo') or d.get('status') == 'NoGo']
+            drop += [v for u, v, d in G.edges(data=True) if d.get('label') == 'NoGo']
+            G = G.copy()
+            G.remove_nodes_from(set(drop))
 
         net = Network(notebook=True, directed=True, cdn_resources='in_line', height='100%', width='100%')
         # Separate "Go" and "NoGo" edges
@@ -702,7 +717,8 @@ def load_default_settings(filename='defaults_session.json'):
     if 'llm_settings' not in defaults:
         defaults['llm_settings'] = {
             'provider': 'openai-codex',
-            'model': 'gpt-5.2',
+            # gpt-5.2 is retired and is rejected by the Codex endpoint
+            'model': 'gpt-5.4',
             'temperature': 0.7,
             'max_tokens': 250,
             'top_p': 0.9,
@@ -802,7 +818,8 @@ def initialize_session():
     if 'llm_settings' not in session_state:
         session_state['llm_settings'] = defaults.get('llm_settings', {
             'provider': 'openai-codex',
-            'model': 'gpt-5.2',
+            # gpt-5.2 is retired and is rejected by the Codex endpoint
+            'model': 'gpt-5.4',
             'temperature': 0.7,
             'max_tokens': 250,
             'top_p': 0.9,
@@ -915,6 +932,56 @@ def index():
 def get_session_id():
     check_session_state("get_session_id")
     return jsonify({"session_id": session['state']['session_id']})
+
+
+@app.route('/api/run_types', methods=['GET'])
+def api_run_types():
+    """The tasks this build can run, and the hidden rules each offers.
+
+    Served rather than hardcoded in the UI so a rule added to the Python side
+    appears in the panel without a rebuild — the point of the thing is that a
+    researcher can add a task and use it.
+    """
+    try:
+        from agent.keeper import RUN_TYPES, available_rules
+        described = {
+            'chat': 'Ordinary conversation. No keeper, nothing is checkable.',
+            'rule_induction': 'Guess a hidden rule about triples of numbers.',
+            'word_induction': 'Guess a hidden rule about single words.',
+            'sentence_induction': 'Guess a hidden rule about whole sentences.',
+            'transformation': 'Reach a target sentence one edit at a time, '
+                              'while obeying a rule you have not been told.',
+            'hidden_norm': 'Infer why a conversational partner warms or cools.',
+        }
+        return jsonify({
+            "success": True,
+            "run_types": [
+                {"id": rt, "description": described.get(rt, ''),
+                 "rules": available_rules(rt)}
+                for rt in RUN_TYPES
+            ],
+        })
+    except Exception as e:
+        flask_logger.error(f"Error listing run types: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/get_session_settings', methods=['GET'])
+def get_session_settings():
+    """Current session settings, so a settings panel can show real values.
+
+    Returns defaults rather than an error when no session exists yet: the
+    settings panel is reachable before a chat has been started, and showing it
+    empty would misrepresent what the next run will actually do.
+    """
+    try:
+        if 'state' in session and 'settings' in session['state']:
+            return jsonify({"success": True, "settings": session['state']['settings']})
+        defaults = load_default_settings()
+        return jsonify({"success": True, "settings": defaults.get('settings', {})})
+    except Exception as e:
+        flask_logger.error(f"Error reading session settings: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/debug_session')
 def debug_session():
@@ -1275,6 +1342,7 @@ def update_last_interaction():
 def visualize_pyvis_route():
     selected_agent_id = request.args.get('agent_id')
     selected_chat_id = request.args.get('chat_id')
+    hide_nogo = request.args.get('hide_nogo', '').lower() in ('1', 'true', 'yes')
 
     if 'state' not in session:
         return jsonify({"error": "No active session"}), 400
@@ -1319,7 +1387,7 @@ def visualize_pyvis_route():
     # Generate visualization
     try:
         session_id = session_state['session_id']
-        output_filename = visualize_graph_pyvis(graph_file_path, session_id)
+        output_filename = visualize_graph_pyvis(graph_file_path, session_id, hide_nogo)
         if output_filename:
             app.logger.debug(f'Visualizing graph with PyVis for {selected_agent_id or selected_chat_id or "default"}')
             return jsonify({"graph_html": f"/static/{output_filename}"})
@@ -1779,6 +1847,27 @@ def generate():
 
         # Call the main function
         flask_logger.info(f"Calling main function with: is_user={is_user}, user_name={user_name}, agent_mutes={agent_mutes}, len_last_history={len_last_history}, turn={current_gen}")
+        # One record per judged turn: the aim, the judge's verdict, and what
+        # the graph contributed to the prompt. Kept on the session so a run can
+        # be compared against another afterwards without instrumenting the app
+        # for any particular comparison.
+        # A keeper makes this session a scoreable task rather than a
+        # conversation: it answers from code, so what it says is a fact the app
+        # can check the agent's claims against.
+        from agent.keeper import make_keeper
+        keeper = make_keeper(settings)
+        if keeper:
+            # The run type decides what the agent is for; a leftover persona
+            # from a chat scenario would have it negotiating a subscription
+            # while the keeper answers questions about integers.
+            for row in session['state'].get('agents_df', []):
+                row['goal'] = keeper.agent_goal()
+                row['description'] = keeper.agent_description()
+            agents_df = pd.DataFrame(session['state']['agents_df'])
+            if not session['state']['session_history']:
+                session['state']['session_history'].append(('keeper', keeper.opening()))
+
+        turn_trail = []
         new_history, new_agents_df, logs = main(
             session['state']['session_history'],
             agents_df,
@@ -1787,8 +1876,46 @@ def generate():
             is_user,
             agent_mutes,
             len_last_history,
-            turn_index=current_gen
+            turn_index=current_gen,
+            trail=turn_trail
         )
+        # The keeper answers whatever the agent just said, in code.
+        if keeper and new_history:
+            last_speaker, last_message = new_history[-1]
+            if last_speaker != 'keeper':
+                if hasattr(keeper, 'with_history'):
+                    keeper.with_history(session['state']['session_history'])
+                text, move, verdict = keeper.reply(last_message)
+                new_history = list(new_history) + [('keeper', text)]
+                logs.append(f"Keeper: {text[:80]}")
+                # A finished task ends the run. Without this the agent keeps
+                # proposing moves after it has already won, which is noise in
+                # the transcript and in the cost figures.
+                if hasattr(keeper, 'is_complete') and keeper.is_complete(new_history):
+                    session['state']['play'] = False
+                    session['state']['current_generation'] = \
+                        session['state'].get('max_generations', 0)
+                    logs.append('Task complete: the target was reached.')
+
+                if turn_trail:
+                    turn_trail[-1].update({
+                        'keeper_rule': keeper.rule_name,
+                        'keeper_move': json.dumps(move) if move is not None else '',
+                        'keeper_verdict': ('' if verdict is None
+                                           else ('yes' if verdict else 'no')),
+                    })
+
+        if turn_trail:
+            trail = session['state'].setdefault('aim_trail', [])
+            trail.extend(turn_trail)
+            # Keep the most recent turns. An unbounded trail is saved with the
+            # session on every request, so a long run would grow the session
+            # file without limit.
+            if len(trail) > MAX_TRAIL_ENTRIES:
+                session['state']['aim_trail_dropped'] = (
+                    session['state'].get('aim_trail_dropped', 0)
+                    + len(trail) - MAX_TRAIL_ENTRIES)
+                del trail[:-MAX_TRAIL_ENTRIES]
 
         # Check if new response was generated
         if len(new_history) > len(session['state']['session_history']):
@@ -2190,6 +2317,40 @@ def update_user_settings():
         use_gpu = request.form.get('use_gpu')
         if use_gpu is not None:
             session['state']['settings']['use_gpu'] = use_gpu.lower() == 'true'
+
+        # Decision-graph settings. These change how the graph feeds back into
+        # aim generation and when Go/NoGo fire, so they are exposed rather than
+        # buried: a run is only interpretable if you can see how it was set.
+        run_type = request.form.get('run_type')
+        if run_type in ('chat', 'rule_induction', 'word_induction',
+                        'sentence_induction', 'transformation', 'hidden_norm'):
+            session['state']['settings']['run_type'] = run_type
+        keeper_rule = request.form.get('keeper_rule')
+        if keeper_rule is not None:
+            session['state']['settings']['keeper_rule'] = str(keeper_rule)[:60]
+
+        mode = request.form.get('graph_memory_mode')
+        if mode in ('none', 'inline', 'description', 'graph'):
+            session['state']['settings']['graph_memory_mode'] = mode
+
+        for param, lo, hi in (('graph_recall_k', 1, 20),
+                              ('graph_recall_chars', 100, 4000),
+                              ('context_window', 0, 200)):
+            if param in request.form:
+                try:
+                    session['state']['settings'][param] = max(
+                        lo, min(hi, int(request.form.get(param))))
+                except ValueError:
+                    flask_logger.warning(f"Invalid value for {param}")
+
+        label = request.form.get('run_label')
+        if label is not None:
+            session['state']['settings']['run_label'] = str(label)[:80]
+
+        for flag in ('nogo_ungated', 'go_corroborate'):
+            value = request.form.get(flag)
+            if value is not None:
+                session['state']['settings'][flag] = value.lower() == 'true'
             
         # Save the updated session
         save_current_session(session['state'])
@@ -2486,7 +2647,9 @@ def save_graph():
             
         # Generate the visualization
         session_id = session['state']['session_id']
-        output_filename = visualize_graph_pyvis(graph_file_path, session_id)
+        output_filename = visualize_graph_pyvis(
+            graph_file_path, session_id,
+            request.args.get('hide_nogo', '').lower() in ('1', 'true', 'yes'))
         
         if not output_filename:
             return jsonify({
@@ -2555,6 +2718,112 @@ def export_chat_json():
             "success": False,
             "error": str(e)
         }), 500
+
+MAX_TRAIL_ENTRIES = 500
+
+
+@app.route('/reset_run_trail', methods=['POST'])
+def reset_run_trail():
+    """Start a new run: clear the recorded turns and optionally name it.
+
+    A session can hold several runs one after another. Without a boundary they
+    all export as one undifferentiated file, which defeats the purpose of
+    exporting them for comparison.
+    """
+    try:
+        if 'state' not in session:
+            return jsonify({"error": "No active session"}), 400
+        dropped = len(session['state'].get('aim_trail', []))
+        session['state']['aim_trail'] = []
+        session['state']['aim_trail_dropped'] = 0
+        label = request.form.get('run_label')
+        if label is not None:
+            session['state'].setdefault('settings', {})['run_label'] = str(label)[:80]
+        session.modified = True
+        save_current_session(session['state'])
+        return jsonify({"success": True, "cleared": dropped,
+                        "run_label": session['state']['settings'].get('run_label', '')})
+    except Exception as e:
+        flask_logger.error(f"Error resetting run trail: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/export_run_data', methods=['GET'])
+def export_run_data():
+    """Flat, per-turn record of a run, for comparing runs against each other.
+
+    One row per judged turn. The settings that were in force are repeated on
+    every row rather than written once in a header, so exports from several
+    runs can be concatenated and grouped by setting without any reshaping —
+    which is the whole point: the comparison happens in whatever tool you like,
+    not in the app.
+
+    ?format=json returns the same rows as JSON instead of CSV.
+    """
+    try:
+        if 'state' not in session:
+            return jsonify({"error": "No active session"}), 400
+
+        state = session['state']
+        trail = state.get('aim_trail', [])
+        settings = state.get('settings', {})
+
+        run_columns = {
+            'session_id': state.get('session_id', ''),
+            'run_label': settings.get('run_label', ''),
+            'provider': settings.get('provider', ''),
+            'model': settings.get('model', ''),
+            'temperature': settings.get('temperature', ''),
+            'graph_memory_mode': settings.get('graph_memory_mode', 'description'),
+            'graph_recall_k': settings.get('graph_recall_k', ''),
+            'graph_recall_chars': settings.get('graph_recall_chars', ''),
+            'context_window': settings.get('context_window', 0),
+            'run_type': settings.get('run_type', 'chat'),
+            'keeper_rule': settings.get('keeper_rule', ''),
+            'nogo_ungated': settings.get('nogo_ungated', ''),
+        }
+
+        turn_columns = ['turn', 'agent', 'aim', 'aim_source', 'rating', 'aim_status', 'next_aim',
+                        'history_len', 'keeper_rule', 'keeper_move', 'keeper_verdict',
+                        'llm_calls', 'input_tokens', 'output_tokens', 'tokens_estimated',
+                        'stated_rule', 'verdict_source',
+                        'persistence_count', 'graph_contribution_chars',
+                        'graph_nodes', 'graph_edges', 'justification']
+
+        rows = []
+        for entry in trail:
+            row = dict(run_columns)
+            for col in turn_columns:
+                row[col] = entry.get(col, '')
+            # The mode recorded at the time of the turn wins over the current
+            # setting, so a mid-run change does not silently relabel earlier rows.
+            if entry.get('graph_memory_mode'):
+                row['graph_memory_mode'] = entry['graph_memory_mode']
+            rows.append(row)
+
+        if request.args.get('format') == 'json':
+            return jsonify({"success": True, "rows": rows, "turns": len(rows)})
+
+        fieldnames = list(run_columns) + turn_columns
+        buffer = io.StringIO()
+        writer = csv.DictWriter(buffer, fieldnames=fieldnames, extrasaction='ignore')
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        mode = run_columns['graph_memory_mode']
+        label = re.sub(r'[^A-Za-z0-9_-]+', '-', run_columns['run_label']).strip('-')
+        filename = f"run_{label + '_' if label else ''}{mode}_{timestamp}.csv"
+        return Response(
+            buffer.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        )
+    except Exception as e:
+        flask_logger.error(f"Error exporting run data: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 @app.route('/interrupt', methods=['POST'])
 def interrupt():

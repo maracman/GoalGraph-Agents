@@ -1,0 +1,434 @@
+"""Deterministic counterparties, so a run can be scored rather than admired.
+
+A keeper stands in for the user side of a conversation and answers from code
+rather than from a model. That is what turns a GoalGraph session into a
+research task: the agent's aims become claims about the keeper's rule, and
+every claim has a truth value the app can check without asking a model.
+
+Two keepers, chosen because they exercise opposite graph shapes:
+
+  rule_induction   the keeper accepts or rejects a triple of integers. Aims are
+                   hypotheses, refutation is a proof, and the graph becomes an
+                   elimination record - the wall-finding shape.
+  hidden_norm      the keeper answers warmly or flatly depending on a hidden
+                   property of the agent's message. Aims are still hypotheses,
+                   but the evidence is conversational.
+
+A chat session has no keeper, and nothing here runs.
+"""
+
+import random
+import re
+
+from . import induction_rules as R
+from . import norm_rules as N
+from . import word_rules as W
+from . import sentence_rules as SR
+from . import transform_rules as TR
+from .induction import compile_predicate, UnsafePredicate
+
+RULE_INDUCTION = 'rule_induction'
+HIDDEN_NORM = 'hidden_norm'
+WORD_INDUCTION = 'word_induction'
+SENTENCE_INDUCTION = 'sentence_induction'
+TRANSFORMATION = 'transformation'
+CHAT = 'chat'
+
+RUN_TYPES = (CHAT, RULE_INDUCTION, WORD_INDUCTION, SENTENCE_INDUCTION,
+             TRANSFORMATION, HIDDEN_NORM)
+
+
+def available_rules(run_type):
+    if run_type == TRANSFORMATION:
+        return [{'id': k, 'name': TR.describe(k)} for k in TR.TASKS]
+    if run_type == SENTENCE_INDUCTION:
+        return [{'id': k, 'name': SR.describe(k)} for k in SR.RULES]
+    if run_type == WORD_INDUCTION:
+        return [{'id': k, 'name': W.describe(k)} for k in W.RULES]
+    if run_type == RULE_INDUCTION:
+        return [{'id': k, 'name': R.describe(k)} for k in R.RULES]
+    if run_type == HIDDEN_NORM:
+        return [{'id': k, 'name': N.describe(k)} for k in N.NORMS]
+    return []
+
+
+class Keeper:
+    """Answers the agent, and knows whether the agent's aim is true."""
+
+    def __init__(self, run_type, rule_name=None, seed=0):
+        self.run_type = run_type
+        self.rule_name = rule_name or self._default_rule(run_type)
+        self.seed = seed
+        # Set by the caller before reply() on stateful run types, so the keeper
+        # can replay where the agent currently stands.
+        self._history = []
+
+    def with_history(self, history):
+        self._history = list(history or [])
+        return self
+
+    @staticmethod
+    def _default_rule(run_type):
+        if run_type == RULE_INDUCTION:
+            return R.DEFAULT_RULES[0]
+        if run_type == TRANSFORMATION:
+            return TR.DEFAULT_INVARIANTS[0]
+        if run_type == SENTENCE_INDUCTION:
+            return SR.DEFAULT_RULES[0]
+        if run_type == WORD_INDUCTION:
+            return W.DEFAULT_RULES[0]
+        if run_type == HIDDEN_NORM:
+            return N.DEFAULT_NORMS[0]
+        return None
+
+    # -- the hidden rule ---------------------------------------------------
+
+    def describe(self):
+        if self.run_type == TRANSFORMATION:
+            return TR.describe(self.rule_name)
+        if self.run_type == SENTENCE_INDUCTION:
+            return SR.describe(self.rule_name)
+        if self.run_type == WORD_INDUCTION:
+            return W.describe(self.rule_name)
+        if self.run_type == RULE_INDUCTION:
+            return R.describe(self.rule_name)
+        if self.run_type == HIDDEN_NORM:
+            return N.describe(self.rule_name)
+        return ''
+
+    def task(self):
+        return TR.TASKS.get(self.rule_name) if self.run_type == TRANSFORMATION else None
+
+    def state_from(self, history):
+        """Where the agent currently stands.
+
+        Replayed from the transcript rather than stored: the run loop creates a
+        fresh keeper each turn, and a state kept in memory would be lost. Only
+        accepted moves advance it, so a rejected proposal leaves the agent
+        exactly where it was.
+        """
+        task = self.task()
+        if not task:
+            return None
+        state = task['start']
+        for i, (speaker, message) in enumerate(history):
+            if speaker == 'keeper':
+                continue
+            move = self.extract_move(message)
+            if not move:
+                continue
+            if TR.is_small_step(state, move) and TR.holds(self.rule_name, move):
+                state = move
+        return state
+
+    def is_complete(self, history):
+        """Has the task been finished? Only meaningful where there is a target."""
+        task = self.task()
+        if not task:
+            return False
+        return self.state_from(history) == task['target']
+
+    def agent_goal(self):
+        """What the agent is actually trying to do in this run.
+
+        Without this the session keeps whatever persona the chat scenario had,
+        and the agent argues about a subscription while the keeper answers
+        questions about integers.
+        """
+        if self.run_type == RULE_INDUCTION:
+            return ("Work out the hidden rule that decides which triples of whole "
+                    "numbers are accepted. Propose one triple at a time, say what "
+                    "you currently believe the rule is, and test it deliberately.")
+        if self.run_type == TRANSFORMATION:
+            t = self.task()
+            return (f'Transform the starting sentence into the target sentence, one '
+                    f'small edit at a time. Target: "{t["target"]}". Each sentence you '
+                    f'propose may differ from your current one by at most '
+                    f'{TR.MAX_EDITS} words. Some sentences will be rejected because '
+                    f'they break a rule you have not been told - when that happens you '
+                    f'stay where you are, so work out what the rule is as you go.')
+        if self.run_type == SENTENCE_INDUCTION:
+            return ("Work out the hidden rule that decides which sentences are "
+                    "accepted. Write one sentence at a time in double quotes, say "
+                    "what you currently believe the rule is, and choose each "
+                    "sentence to test that belief rather than to confirm it. The "
+                    "rule is about the sentence itself - its words, letters, "
+                    "punctuation or shape - not about what it means.")
+        if self.run_type == WORD_INDUCTION:
+            return ("Work out the hidden rule that decides which words are accepted. "
+                    "Propose one word at a time in double quotes, say what you "
+                    "currently believe the rule is, and choose each word to test that "
+                    "belief rather than to confirm it. The rule is about the word "
+                    "itself, not about what it means.")
+        if self.run_type == HIDDEN_NORM:
+            return ("Work out the hidden rule that decides when this person "
+                    "answers warmly rather than flatly. It depends only on the "
+                    "message you send. Say what you currently believe it is.")
+        return ''
+
+    def agent_description(self):
+        if self.run_type == CHAT:
+            return ''
+        return ("A careful investigator who forms an explicit hypothesis, states it "
+                "plainly, and chooses each next move to test it rather than to "
+                "confirm it.")
+
+    def opening(self):
+        """The first thing the agent sees — one confirmed positive example."""
+        if self.run_type == TRANSFORMATION:
+            t = self.task()
+            return (f'You are at: "{t["start"]}"\n'
+                    f'Get to: "{t["target"]}"\n'
+                    f'Propose your next sentence in double quotes. It may differ from '
+                    f'where you are by at most {TR.MAX_EDITS} words. Some sentences are '
+                    f'not allowed; I will say so and you will stay put.')
+        if self.run_type == SENTENCE_INDUCTION:
+            return (f'I have a rule about sentences. "{SR.SEED_EXAMPLES[self.rule_name]}" '
+                    f'satisfies it. Propose a sentence in double quotes and I will '
+                    f'tell you whether it does too. Say what you think the rule is '
+                    f'as you go.')
+        if self.run_type == WORD_INDUCTION:
+            return (f'I have a rule about words. "{W.SEED_EXAMPLES[self.rule_name]}" '
+                    f'satisfies it. Propose a word in double quotes and I will tell '
+                    f'you whether it does too. Say what you think the rule is as you go.')
+        if self.run_type == RULE_INDUCTION:
+            a, b, c = R.SEED_EXAMPLES[self.rule_name]
+            return (f"I have a rule about triples of whole numbers from 1 to 100. "
+                    f"{a}, {b}, {c} satisfies it. Propose a triple and I will tell "
+                    f"you whether it does too. Say what you think the rule is as you go.")
+        if self.run_type == HIDDEN_NORM:
+            return (f"Hello. Talk to me about whatever you like — I answer some "
+                    f"messages warmly and others flatly, and there is a reason for it.")
+        return ''
+
+    # -- reading the agent's move -----------------------------------------
+
+    TRIPLE_RE = re.compile(r'(?<!\d)(\d{1,3})\D{1,12}?(\d{1,3})\D{1,12}?(\d{1,3})(?!\d)')
+
+    SENTENCE_RE = re.compile(r'["\u201c]([^"\u201c\u201d]{6,300})["\u201d]')
+    WORD_RE = re.compile(r'["\u201c\u2018\']([A-Za-z]{2,20})["\u201d\u2019\']')
+
+    def extract_move(self, message):
+        """What the agent actually proposed, or None if it did not propose one."""
+        if isinstance(message, (bytes, bytearray)):
+            message = message.decode('utf-8', 'ignore')
+        elif message is not None and not isinstance(message, str):
+            message = str(message)
+
+        if self.run_type in (SENTENCE_INDUCTION, TRANSFORMATION):
+            quoted = self.SENTENCE_RE.findall(message or '')
+            return quoted[-1].strip() if quoted else None
+
+        if self.run_type == WORD_INDUCTION:
+            quoted = self.WORD_RE.findall(message or '')
+            if quoted:
+                return quoted[-1].lower()
+            # fall back to a capitalised standalone token, which is how models
+            # tend to write a candidate when they forget the quotes
+            caps = re.findall(r'\b([A-Z]{2,20})\b', message or '')
+            return caps[-1].lower() if caps else None
+        if self.run_type == RULE_INDUCTION:
+            for m in self.TRIPLE_RE.finditer(message or ''):
+                triple = tuple(int(g) for g in m.groups())
+                if all(R.ITEM_MIN <= v <= R.ITEM_MAX for v in triple):
+                    return triple
+            return None
+        if self.run_type == HIDDEN_NORM:
+            return (message or '').strip() or None
+        return None
+
+    def verdict(self, move):
+        """Does this move satisfy the hidden rule? Decided in code."""
+        if move is None:
+            return None
+        if self.run_type == RULE_INDUCTION:
+            return R.label(self.rule_name, move)
+        if self.run_type == TRANSFORMATION:
+            # The invariant is what is being induced, so the verdict on a move
+            # is whether it holds - independent of whether the step was a legal
+            # size. Without this branch every move returned None, every
+            # observation was discarded, and no claim could ever be refuted.
+            return TR.holds(self.rule_name, move)
+        if self.run_type == SENTENCE_INDUCTION:
+            return SR.satisfies(self.rule_name, move)
+        if self.run_type == WORD_INDUCTION:
+            return W.satisfies(self.rule_name, move)
+        if self.run_type == HIDDEN_NORM:
+            return N.satisfies(self.rule_name, move)
+        return None
+
+    def reply(self, message):
+        """The keeper's turn. Returns (text, move, verdict)."""
+        move = self.extract_move(message)
+        verdict = self.verdict(move)
+
+        if self.run_type == RULE_INDUCTION:
+            if move is None:
+                return ("I need three whole numbers between 1 and 100 to answer.",
+                        None, None)
+            a, b, c = move
+            return (f"{a}, {b}, {c} — {'yes' if verdict else 'no'}.", move, verdict)
+
+        if self.run_type == TRANSFORMATION:
+            task = self.task()
+            state = self.state_from(self._history or [])
+            if move is None:
+                return ('Give me your next sentence in double quotes.', None, None)
+            if move == task['target']:
+                if TR.is_small_step(state, move) and TR.holds(self.rule_name, move):
+                    return (f'"{move}" - accepted. That is the target; you are done.',
+                            move, True)
+            d = TR.word_distance(state, move)
+            if d == 0:
+                left = TR.word_distance(state, task['target'])
+                return (f'That is where you already are. You are {left} word(s) from '
+                        f'the target; propose a different sentence.', move, None)
+            if not TR.is_small_step(state, move):
+                return (f'That changes {d} words at once; at most {TR.MAX_EDITS} are '
+                        f'allowed. You are still at "{state}".', move, None)
+            if not TR.holds(self.rule_name, move):
+                return (f'"{move}" - not allowed. You are still at "{state}".',
+                        move, False)
+            left = TR.word_distance(move, task['target'])
+            return (f'"{move}" - accepted. You are {left} word(s) from the target.',
+                    move, True)
+
+        if self.run_type == SENTENCE_INDUCTION:
+            if move is None:
+                return ('Give me a sentence in double quotes and I will answer.',
+                        None, None)
+            short = move if len(move) <= 60 else move[:57] + '...'
+            return (f'"{short}" - {"yes" if verdict else "no"}.', move, verdict)
+
+        if self.run_type == WORD_INDUCTION:
+            if move is None:
+                return ('Give me a single word in double quotes and I will answer.',
+                        None, None)
+            return (f'"{move}" — {"yes" if verdict else "no"}.', move, verdict)
+
+        if self.run_type == HIDDEN_NORM:
+            # The mood is decided here; the wording is left to the caller, which
+            # may pass it to a model. Either way the fact is settled in code.
+            return (('engaged' if verdict else 'withdrawn'), move, verdict)
+
+        return ('', None, None)
+
+    def observations_from(self, history):
+        """Rebuild the evidence trail from the conversation.
+
+        Each agent message may contain a move; the keeper's reply that follows
+        carries the verdict. Reading it back from the transcript keeps the
+        evidence in one place rather than duplicating it in session state.
+        """
+        out = []
+        for i, (speaker, message) in enumerate(history):
+            if speaker == 'keeper':
+                continue
+            move = self.extract_move(message)
+            if move is None:
+                continue
+            verdict = None
+            for later_speaker, later in history[i + 1:i + 3]:
+                if later_speaker == 'keeper':
+                    verdict = self.verdict(move)
+                    break
+            if verdict is not None:
+                out.append((move, verdict))
+        return out
+
+    def rule_prompt(self):
+        """What to ask the agent for, so its claim can be checked."""
+        if self.run_type == RULE_INDUCTION:
+            return ("- \"rule\": your current best guess at the hidden rule, as a Python "
+                    "boolean expression over a, b, c (the three numbers in order). "
+                    "For example 'a < b < c'. Use only arithmetic, comparisons and "
+                    "and/or/not. This is how your guess gets checked, so it must mean "
+                    "exactly what you believe.")
+        if self.run_type in (SENTENCE_INDUCTION, TRANSFORMATION):
+            return ("- \"rule\": your current best guess at the hidden rule that decides "
+                    "which sentences are allowed, as a boolean expression over the "
+                    "sentence you are proposing.\n" + SR.PREDICATE_VOCAB)
+        if self.run_type == WORD_INDUCTION:
+            return ("- \"rule\": your current best guess at the hidden rule, as a boolean "
+                    "expression over the word you are proposing.\n" + W.PREDICATE_VOCAB)
+        if self.run_type == HIDDEN_NORM:
+            return ("- \"rule\": your current best guess at the hidden rule, as a boolean "
+                    "expression over the message you are sending.\n" + N.PREDICATE_VOCAB)
+        return ''
+
+    # -- scoring the agent's aim ------------------------------------------
+
+    def check_aim(self, predicate, observations):
+        """Is the agent's stated rule consistent with what it has been told?
+
+        `observations` is [(move, verdict)]. Returns a dict with a decidable
+        verdict where one exists, so the app can record whether an aim was
+        genuinely refuted rather than only whether a judge disliked it. This is
+        the difference between a NoGo that is a proof and one that is an
+        opinion.
+        """
+        result = {'checkable': False, 'consistent': None,
+                  'contradicted_by': None, 'holdout_accuracy': None}
+        if not predicate or self.run_type == CHAT:
+            return result
+
+        try:
+            if self.run_type == RULE_INDUCTION:
+                fn = compile_predicate(predicate)
+                predict = lambda mv: bool(fn(*mv))          # noqa: E731
+            elif self.run_type == TRANSFORMATION:
+                predict = lambda mv: bool(compile_predicate(   # noqa: E731
+                    predicate, funcs=SR.predicate_helpers(mv), variables=())())
+            elif self.run_type == SENTENCE_INDUCTION:
+                predict = lambda mv: bool(compile_predicate(   # noqa: E731
+                    predicate, funcs=SR.predicate_helpers(mv), variables=())())
+            elif self.run_type == WORD_INDUCTION:
+                predict = lambda mv: bool(compile_predicate(   # noqa: E731
+                    predicate, funcs=W.predicate_helpers(mv), variables=())())
+            else:
+                predict = lambda mv: bool(compile_predicate(   # noqa: E731
+                    predicate, funcs=N.predicate_helpers(mv), variables=())())
+        except UnsafePredicate as e:
+            result['error'] = str(e)
+            return result
+
+        result['checkable'] = True
+        for move, verdict in observations:
+            if move is None or verdict is None:
+                continue
+            try:
+                if predict(move) != verdict:
+                    result['consistent'] = False
+                    result['contradicted_by'] = {'move': move, 'keeper': verdict}
+                    return result
+            except Exception:
+                result['checkable'] = False
+                return result
+        result['consistent'] = True
+
+        if self.run_type == RULE_INDUCTION:
+            holdout = R.holdout_set(self.rule_name, n=24, seed=self.seed)
+        elif self.run_type in (SENTENCE_INDUCTION, TRANSFORMATION):
+            holdout = SR.holdout_labels(self.rule_name, n=24, seed=self.seed)
+        elif self.run_type == WORD_INDUCTION:
+            holdout = W.holdout_labels(self.rule_name, n=24, seed=self.seed)
+        else:
+            holdout = N.holdout_labels(self.rule_name, n=24, seed=self.seed)
+        hits = 0
+        for item, truth in holdout:
+            try:
+                hits += (predict(item) == truth)
+            except Exception:
+                return result
+        result['holdout_accuracy'] = round(hits / len(holdout), 3)
+        return result
+
+
+def make_keeper(settings):
+    """Build the keeper a session's settings ask for, or None for plain chat."""
+    run_type = (settings or {}).get('run_type', CHAT)
+    if run_type not in RUN_TYPES or run_type == CHAT:
+        return None
+    return Keeper(run_type,
+                  rule_name=(settings or {}).get('keeper_rule'),
+                  seed=int((settings or {}).get('seed', 0) or 0))
