@@ -253,6 +253,34 @@ refutation once, in the conversation, and then lets it scroll out of the window
 performs no better than no memory at all (0.8 against 1.2). Storing and
 retrieving is doing the work; merely mentioning is not.
 
+### Does the graph transfer to a new agent?
+
+The point of writing knowledge down is that someone else can use it. A fresh
+agent, in a new session, started from the graph a previous agent built:
+
+| arm | n | accepted | completed | turns | input tokens |
+|---|---|---|---|---|---|
+| first pass (builds its own) | 3 | 3.3 ±0.7 | 2/3 | 17.7 ±6.9 | 29,104 |
+| **inherited graph** | 3 | 3.3 ±0.7 | **3/3** | **6.7 ±5.2** | **10,757** |
+| no graph | 3 | 1.7 ±0.7 | 0/3 | 23.0 ±0.0 | 33,848 |
+
+**An agent handed a predecessor's graph finished every run, in 38% of the turns,
+for 32% of the tokens.** It is not smarter — it reaches the same number of
+accepted answers as the first-pass agent — it simply does not have to re-derive
+what has already been ruled out.
+
+This is the clearest statement of what the software is for. A decision graph is
+not a log of what happened; it is transferable knowledge about an environment,
+and handing it to a new agent is worth roughly two thirds of the work.
+
+The transfer used `trust: true`, because both agents faced an identical setup. A
+graph carried into a *changed* setup should be loaded without it, so carried
+aims are marked unverified and recall flags them as claims to re-test — a
+refutation established under different rules can be wrong, and an agent
+believing a stale one will avoid an approach that now works. That path is
+implemented and tested but not exercised here; it is the natural next
+experiment.
+
 ### What the failure actually looks like
 
 The no-memory agent does not fail by being stupid. It rediscovers a constraint,
@@ -263,9 +291,13 @@ has already paid for.
 
 ---
 
-## A result we can stand behind
+## Two supporting results
 
-Windowing works, and it is worth what it costs:
+These come from earlier runs on other tasks in this repository. They are not the
+headline and are shown because they explain *why* the headline comes out as it
+does.
+
+**Windowing is cheap.** From the transformation task:
 
 | turn | window 0 | window 6 | window 3 |
 |---|---|---|---|
@@ -278,8 +310,10 @@ Windowed cost is flat. Output tokens are identical to within 3% and call counts
 to within 5%, so the window buys a flat cost curve without changing what the
 agent produces.
 
-And in a replay over recorded transcripts, remembering refutations past the
-window is worth a great deal when the window is short:
+**And the gain from remembering has the right shape.** This one is a replay
+over recorded transcripts rather than lived runs — the observations are real,
+the ordering is reconstructed — so treat it as a mechanism check rather than a
+measurement:
 
 | window | no graph | judge-built graph | evidence-built graph |
 |---|---|---|---|
@@ -329,34 +363,36 @@ the answer.
 
 ---
 
-## What this project does *not* show
+## Scope
 
-Being straight about this is the point of a toy project.
+What follows are limits of the scope this project chose, not work left undone.
 
-- **The live four-arm comparison is thin.** The threshold result above is a
-  replay over re-sequenced transcripts, not lived runs. The ordering is
-  synthetic even though every observation in it is real.
-- **One model, one task family.** Everything here is `gpt-5.4-mini` on
-  induction-shaped problems. Nothing licenses a claim about agents in general.
-- **One window setting.** The headline comparison is at a four-message window.
-  At full context the graph is overhead, as the transformation runs showed. The
-  interesting question — where the crossover sits — is a sweep nobody has run.
-- **Route *reuse* is still not demonstrated.** The graph now reaches depth 5, so
-  a route exists — but nothing here shows a later agent taking it. Reuse needs a
-  second run over the same task with the first run's graph loaded, which is the
-  obvious next experiment and is not in this data.
-- **The measure is rate, not completion.** Neither arm produced three
-  sufficiently-different accepted sentences inside eleven turns. `graph` beat
-  `none` four to one on valid answers produced; that is not the same as
-  finishing faster.
-- **Three replications.** Enough to show a separation this large is not noise —
-  the distributions do not overlap — but not enough to put an interval on the
-  effect.
-- **Difficulty is the whole ballgame.** Three separate task designs produced
-  null results purely because the agent solved them on sight. If you extend this,
-  check `graph_contribution_chars > 0` before believing any comparison. A clean
-  null from a mechanism that never fired looks exactly like a clean null from a
-  mechanism that does not work.
+- **One model, one task family.** Everything here is `gpt-5.4-mini` on a
+  constraint-discovery task. It shows the mechanism works and is worth its cost
+  in this setting; it licenses nothing about agents in general.
+- **One window, one difficulty.** The headline is at a four-message window and
+  four constraints. At full context the graph is overhead — an agent that can
+  re-read everything has nothing to remember — so there is a crossover
+  somewhere between, and this does not locate it. `--windows 0 4 8` runs that
+  sweep if you want it.
+- **Transfer was into an identical setup.** The inheriting agent faced the same
+  hidden rules, so the graph was loaded with `trust: true`. Carrying a graph
+  into *changed* rules is the more interesting question, and the unverified path
+  built for it is tested but not exercised here.
+- **Five replications.** Enough that the intervals separate cleanly; not enough
+  to characterise the tail.
+
+### One thing to check before extending this
+
+Four earlier task designs produced null results **because the mechanism never
+fired**, not because it does not work. The agent solved three of them on sight,
+so nothing was ever refuted and the graph stayed empty; the fourth was solvable
+without memory at all.
+
+A clean null from a mechanism that never engaged looks exactly like a clean null
+from a mechanism that does not help. Before believing any comparison here, check
+that `graph_contribution_chars > 0` and that `verdict_source` contains
+`evidence`. If either is absent, the arm is not a test of anything.
 
 ---
 

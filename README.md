@@ -297,6 +297,20 @@ The middle row is the fairness check: stating each refutation once in the
 conversation and letting it scroll away performs no better than no memory at
 all. Storing and retrieving is what does the work.
 
+And the graph transfers. A fresh agent in a new session, started from a
+predecessor's graph:
+
+| arm | completed | turns | input tokens |
+|---|---|---|---|
+| builds its own | 2/3 | 17.7 | 29,104 |
+| **inherits a graph** | **3/3** | **6.7** | **10,757** |
+| no graph | 0/3 | 23.0 | 33,848 |
+
+**Finished every run, in 38% of the turns, for 32% of the tokens.** Not smarter
+— it reaches the same number of answers — it just does not re-derive what has
+already been ruled out. That is the case for treating a decision graph as
+transferable knowledge rather than a log.
+
 See **[docs/TOY_RESEARCH_PROJECT.md](docs/TOY_RESEARCH_PROJECT.md)** for the
 worked example, its data, and an account of the four earlier task designs that
 failed to show anything — which is the more useful half of the write-up.

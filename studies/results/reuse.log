@@ -1,0 +1,22 @@
+=== route reuse: does inheriting a graph help a fresh agent? ===
+
+  rep0 first pass  accepted=3   complete=1 nodes=6
+  [reuse-warm-0] inherited 6 nodes
+  rep0 inherited   accepted=3   complete=1 nodes=7
+  rep0 no graph    accepted=2   complete=0
+  rep1 first pass  accepted=4   complete=1 nodes=10
+  [reuse-warm-1] inherited 10 nodes
+  rep1 inherited   accepted=4   complete=1 nodes=11
+  rep1 no graph    accepted=2   complete=0
+  rep2 first pass  accepted=3   complete=0 nodes=12
+  [reuse-warm-2] inherited 12 nodes
+  rep2 inherited   accepted=3   complete=1 nodes=13
+  rep2 no graph    accepted=1   complete=0
+
+arm                   n        accepted  completed         turns   in tokens
+------------------------------------------------------------------------------
+first pass            3        3.3 ±0.7        2/3     17.7 ±6.9       29104
+inherited graph       3        3.3 ±0.7        3/3      6.7 ±5.2       10757
+no graph              3        1.7 ±0.7        0/3     23.0 ±0.0       33848
+
+written to studies/results/reuse.csv
