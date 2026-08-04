@@ -403,8 +403,10 @@ rather than taken on trust:
 
 | file | what it is |
 |---|---|
-| `transform_matrix.csv` | the eight-arm run: four memory modes at two window sizes |
-| `transform_matrix2.csv` | the two-mode re-run, after the verdict-provenance fix |
+| `headline.csv` | the main result: three memory modes, five replications each |
+| `reuse.csv` | the transfer test: first pass, inherited graph, no graph |
+| `transform_matrix.csv` | an earlier task's run, kept because the write-up cites it |
+| `transform_matrix2.csv` | the same, after the verdict-provenance fix |
 
 Both were produced by driving the app over HTTP exactly as the UI drives it, so
 what they measure is the product and not a private harness.

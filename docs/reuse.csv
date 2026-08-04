@@ -1,0 +1,10 @@
+label,mode,window,level,turns,calls,accepted,repeats,completed,completed_at,input_tokens,output_tokens,recall_chars,graph_nodes,graph_id,arm
+reuse-first-0,graph,4,four_constraints,11,12,3,0,1,12,17935,4567,299.6,6,graph_df93b192-15ac-4ed4-8156-fff71dc3c8e2,first pass
+reuse-warm-0,graph,4,four_constraints,4,5,3,0,1,5,6533,1691,404.5,7,graph_73bb9e98-0dc3-4de5-b18b-e598fece42f9,inherited graph
+reuse-cold-0,none,4,four_constraints,23,24,2,0,0,,33863,8552,0,12,graph_f8e1ded2-14cc-4a0f-b79b-236abbe95d36,no graph
+reuse-first-1,graph,4,four_constraints,19,20,4,0,1,20,31080,7583,352.2,10,graph_a2dbab2c-0f69-4917-9cac-38d2ec895f2f,first pass
+reuse-warm-1,graph,4,four_constraints,12,13,4,0,1,13,18901,4476,441,11,graph_34ad627b-0fcb-40db-a7b5-809dc48ece56,inherited graph
+reuse-cold-1,none,4,four_constraints,23,24,2,0,0,,34391,8946,0,12,graph_f621cfba-5671-4129-a386-883eb63f1588,no graph
+reuse-first-2,graph,4,four_constraints,23,24,3,0,0,,38296,9049,406.1,12,graph_16cee887-7cd1-4902-a426-0dec3ecb83dd,first pass
+reuse-warm-2,graph,4,four_constraints,4,5,3,0,1,5,6836,1546,401,13,graph_895bbc3b-133a-4123-9f64-bf9d6557eaee,inherited graph
+reuse-cold-2,none,4,four_constraints,23,24,1,0,0,,33289,8403,0,12,graph_3557fd74-5c67-470c-a05c-47ae1bdc9545,no graph
