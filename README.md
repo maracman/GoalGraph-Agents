@@ -277,9 +277,21 @@ the decision graph has been shown to be *necessary* rather than merely present.
 Five hidden rules must all hold at once and a rejection says only "no", so the
 agent must accumulate more constraints than a short context window can hold.
 
-With a four-message window, an agent with the graph produced **four times as
-many valid answers** as the same agent with no memory — 8.0 against 2.0 on
-average, with no overlap across three replications, for about 13% more tokens.
+With a four-message window, over five replications per arm:
+
+| arm | accepted answers | completed | turns | input tokens |
+|---|---|---|---|---|
+| no memory | 1.2 ±0.4 | 0/5 | 23.0 | 33,899 |
+| stated once, in conversation | 0.8 ±0.4 | 1/5 | 22.4 | 34,387 |
+| **decision graph** | **5.0 ±0.6** | **3/5** | **18.2** | **31,915** |
+
+The intervals do not overlap. The graph arm is the only one that reliably
+finishes, and it does so in fewer turns and for **fewer tokens** — recall costs
+a few hundred characters a prompt, but not remembering costs whole turns.
+
+The middle row is the fairness check: stating each refutation once in the
+conversation and letting it scroll away performs no better than no memory at
+all. Storing and retrieving is what does the work.
 
 See **[docs/TOY_RESEARCH_PROJECT.md](docs/TOY_RESEARCH_PROJECT.md)** for the
 worked example, its data, and an account of the four earlier task designs that

@@ -1,1 +1,38 @@
 === none | window 4 | rep 0 ===
+  accepted=2   repeats=0 complete=0 turns=23 tokens=35830
+=== none | window 4 | rep 1 ===
+  accepted=1   repeats=0 complete=0 turns=23 tokens=33448
+=== none | window 4 | rep 2 ===
+  accepted=1   repeats=0 complete=0 turns=23 tokens=33234
+=== none | window 4 | rep 3 ===
+  accepted=1   repeats=0 complete=0 turns=23 tokens=33391
+=== none | window 4 | rep 4 ===
+  accepted=1   repeats=0 complete=0 turns=23 tokens=33594
+=== inline | window 4 | rep 0 ===
+  accepted=1   repeats=0 complete=1 turns=20 tokens=31417
+=== inline | window 4 | rep 1 ===
+  accepted=1   repeats=0 complete=0 turns=23 tokens=36092
+=== inline | window 4 | rep 2 ===
+  accepted=1   repeats=0 complete=0 turns=23 tokens=35909
+=== inline | window 4 | rep 3 ===
+  accepted=0   repeats=0 complete=0 turns=23 tokens=32033
+=== inline | window 4 | rep 4 ===
+  accepted=1   repeats=0 complete=0 turns=23 tokens=36482
+=== graph | window 4 | rep 0 ===
+  accepted=4   repeats=0 complete=1 turns=13 tokens=21534
+=== graph | window 4 | rep 1 ===
+  accepted=5   repeats=0 complete=1 turns=18 tokens=30999
+=== graph | window 4 | rep 2 ===
+  accepted=6   repeats=0 complete=0 turns=23 tokens=42756
+=== graph | window 4 | rep 3 ===
+  accepted=5   repeats=0 complete=1 turns=14 tokens=25184
+=== graph | window 4 | rep 4 ===
+  accepted=5   repeats=1 complete=0 turns=23 tokens=39101
+
+arm                   n        accepted  completed         turns   in tokens
+------------------------------------------------------------------------------
+none-w4               5        1.2 ±0.4        0/5     23.0 ±0.0       33899
+inline-w4             5        0.8 ±0.4        1/5     22.4 ±1.2       34387
+graph-w4              5        5.0 ±0.6        3/5     18.2 ±4.2       31915
+
+written to studies/results/headline.csv

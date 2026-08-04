@@ -125,7 +125,9 @@ def run_one(mode, window, level, max_calls, label, prior_graph=None, verbose=Fal
             aid = agents[0].get("id") or agents[0].get("agent_id")
             saved = s.post(f"{BASE}/api/saved_graphs/from_agent/{aid}",
                            json={"name": label}, timeout=60).json()
-            graph_id = saved.get("graph_id")
+            # the id is nested under "graph"; reading it from the top level
+            # silently yields None and the reuse arm then inherits nothing
+            graph_id = (saved.get("graph") or {}).get("graph_id")
     except Exception:                                              # noqa: BLE001
         pass
 

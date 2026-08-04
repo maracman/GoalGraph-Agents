@@ -1,0 +1,16 @@
+label,mode,window,level,turns,calls,accepted,repeats,completed,completed_at,input_tokens,output_tokens,recall_chars,graph_nodes,graph_id,arm
+four_constraints-none-w4-r0,none,4,four_constraints,23,24,2,0,0,,35830,9339,0,12,,none-w4
+four_constraints-none-w4-r1,none,4,four_constraints,23,24,1,0,0,,33448,8594,0,12,,none-w4
+four_constraints-none-w4-r2,none,4,four_constraints,23,24,1,0,0,,33234,8319,0,12,,none-w4
+four_constraints-none-w4-r3,none,4,four_constraints,23,24,1,0,0,,33391,8396,0,12,,none-w4
+four_constraints-none-w4-r4,none,4,four_constraints,23,24,1,0,0,,33594,8405,0,12,,none-w4
+four_constraints-inline-w4-r0,inline,4,four_constraints,20,21,1,0,1,21,31417,7148,0,10,,inline-w4
+four_constraints-inline-w4-r1,inline,4,four_constraints,23,24,1,0,0,,36092,7985,0,12,,inline-w4
+four_constraints-inline-w4-r2,inline,4,four_constraints,23,24,1,0,0,,35909,8538,0,12,,inline-w4
+four_constraints-inline-w4-r3,inline,4,four_constraints,23,24,0,0,0,,32033,8123,0,12,,inline-w4
+four_constraints-inline-w4-r4,inline,4,four_constraints,23,24,1,0,0,,36482,8077,0,12,,inline-w4
+four_constraints-graph-w4-r0,graph,4,four_constraints,13,14,4,0,1,14,21534,5271,391.4,7,,graph-w4
+four_constraints-graph-w4-r1,graph,4,four_constraints,18,19,5,0,1,19,30999,7287,437.3,9,,graph-w4
+four_constraints-graph-w4-r2,graph,4,four_constraints,23,24,6,0,0,,42756,10606,436.6,12,,graph-w4
+four_constraints-graph-w4-r3,graph,4,four_constraints,14,15,5,0,1,15,25184,6191,398,7,,graph-w4
+four_constraints-graph-w4-r4,graph,4,four_constraints,23,24,5,1,0,,39101,9098,437.4,12,,graph-w4

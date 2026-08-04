@@ -229,36 +229,37 @@ Four columns carry most of the meaning:
 
 ## The result
 
-Same agent, same task, same eleven turns, same four-message window. The only
-difference is whether ruled-out aims are recalled.
+Five replications per arm. Same agent, same task, same four-message window; the
+only difference is what it is told about aims already ruled out.
 
-| replication | `none` accepted | `graph` accepted |
-|---|---|---|
-| 1 | 2 | 9 |
-| 2 | 0 | 8 |
-| 3 | 4 | 7 |
-| **mean** | **2.0** | **8.0** |
+| arm | n | accepted answers | completed | turns | input tokens |
+|---|---|---|---|---|---|
+| `none` | 5 | 1.2 ±0.4 | 0/5 | 23.0 ±0.0 | 33,899 |
+| `inline` | 5 | 0.8 ±0.4 | 1/5 | 22.4 ±1.2 | 34,387 |
+| **`graph`** | 5 | **5.0 ±0.6** | **3/5** | **18.2 ±4.2** | **31,915** |
 
-**Four times as many valid answers, and the distributions do not overlap** —
-every graph run beat every no-memory run. Cost was 15.6–16.0k input tokens
-without the graph against 17.1–18.6k with it, so the gain came for about **13%
-more tokens**.
+**The intervals do not overlap.** The graph arm's lower bound (4.4) is nearly
+three times the no-memory arm's upper bound (1.6). It is the only arm that
+reliably finishes — three runs in five against none — and it does so in fewer
+turns and for **fewer tokens**, because a run that solves the task stops early.
 
-What the no-memory agent does wrong is visible in the transcripts: it rediscovers
-a constraint, satisfies it, and then breaks it again a few turns later once the
-evidence has scrolled out of view. The graph arm is told what was ruled out and
-why, so it keeps constraints it has already paid for.
+That last point is worth pausing on. Recall is not free: it adds a few hundred
+characters to every prompt. It still comes out cheapest, because the cost of
+*not* remembering is more turns.
 
-```
-mode    turns  accepted  repeats  input tokens  recall/turn
-none       11         2        0        15,800            0
-graph      11         9        0        18,554          379
-```
+**`inline` is the fairness check, and it fails to help.** That arm states each
+refutation once, in the conversation, and then lets it scroll out of the window
+— which is what you would do if you thought a decision graph were overkill. It
+performs no better than no memory at all (0.8 against 1.2). Storing and
+retrieving is doing the work; merely mentioning is not.
 
-Two honest qualifications. Neither arm finished the full three-novel-answer
-goal inside eleven turns — the novelty bar is strict, so this measures *rate of
-valid output* rather than completion. And three replications is enough to show
-a separation this large is not noise, but not enough to put an interval on it.
+### What the failure actually looks like
+
+The no-memory agent does not fail by being stupid. It rediscovers a constraint,
+satisfies it, and then breaks it again a few turns later once the evidence has
+scrolled out of view — so it circles a solution it has already partly found. The
+graph arm is handed back what was ruled out and why, so it keeps constraints it
+has already paid for.
 
 ---
 
