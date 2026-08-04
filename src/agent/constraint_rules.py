@@ -54,10 +54,15 @@ CONSTRAINT_TEXT = {k: SR.RULES[k][1] for k in CONSTRAINTS}
 LEVELS = {
     "two_constraints": ["is_question", "contains_colour"],
     "three_constraints": ["is_question", "contains_colour", "contains_long_word"],
+    # starts_with_the is deliberately absent. Combined with is_question it
+    # forces the tag-question form ("The X ..., did it not?"), so every valid
+    # answer looks the same and "give me a different one" becomes impossible
+    # rather than hard. contains_comma constrains punctuation instead, which is
+    # orthogonal to sentence shape.
     "four_constraints": ["is_question", "contains_colour", "contains_long_word",
-                         "starts_with_the"],
+                         "mentions_time"],
     "five_constraints": ["is_question", "contains_colour", "contains_long_word",
-                         "starts_with_the", "mentions_time"],
+                         "mentions_time", "contains_comma"],
 }
 
 DEFAULT_LEVELS = list(LEVELS)
@@ -140,8 +145,8 @@ def is_repeat(sentence, previous):
 EXAMPLES = {
     "two_constraints": "Is the yellow folder ready?",
     "three_constraints": "Is the yellow schedule finished?",
-    "four_constraints": "The yellow schedule was completed, was it not?",
-    "five_constraints": "The yellow schedule arrived this morning, did it not?",
+    "four_constraints": "Was the yellow schedule finished yesterday?",
+    "five_constraints": "Was the yellow schedule finished yesterday, or not?",
 }
 
 

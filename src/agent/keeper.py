@@ -184,9 +184,10 @@ class Keeper:
             return ('Write sentences that I will accept. Several rules must all hold '
                     'at once, and I will only tell you yes or no - never which rule '
                     'you broke. Work out what they are and give me '
-                    f'{CR_TARGET} different accepted sentences. Never repeat a '
-                    'sentence I have already rejected; that wastes a turn and tells '
-                    'you nothing new.')
+                    f'{CR_TARGET} accepted sentences that are substantially '
+                    'different from each other and from my example - they should '
+                    'share few words. Never repeat a sentence I have already '
+                    'rejected; that wastes a turn and tells you nothing new.')
         if self.run_type == TRANSFORMATION:
             t = self.task()
             return (f'Transform the starting sentence into the target sentence, one '
@@ -227,8 +228,9 @@ class Keeper:
             return (f'I accept sentences that satisfy several rules at once. '
                     f'"{CR.opening_example(self.rule_name)}" is one I accept. '
                     f'Propose a sentence in double quotes and I will say yes or no - '
-                    f'nothing more. Give me {CR_TARGET} different accepted sentences '
-                    f'to finish.')
+                    f'nothing more. To finish, give me {CR_TARGET} accepted '
+                    f'sentences that share few words with my example or with each '
+                    f'other.')
         if self.run_type == TRANSFORMATION:
             t = self.task()
             return (f'You are at: "{t["start"]}"\n'
@@ -334,12 +336,23 @@ class Keeper:
                 return ('You have already tried that and I rejected it. '
                         'Try something you have not tried.', move, False)
             if verdict:
+                # An accepted sentence that merely rewords one already given
+                # shows nothing new. Say so - the agent cannot satisfy a
+                # requirement it has not been told about, and silently not
+                # counting the answer makes the task unfair rather than hard.
+                known = [CR.opening_example(self.rule_name)] + \
+                    self.distinct_accepted(self._history or [])
+                if not CR.is_novel(move, known):
+                    return (f'"{move[:60]}" - yes, but too close to one I already '
+                            f'have. I need sentences that share few words with the '
+                            f'ones you have given. Still {max(0, CR_TARGET - got)} '
+                            f'to go.', move, True)
                 left = max(0, CR_TARGET - (got + 1))
                 if left == 0:
                     return (f'"{move[:60]}" - yes. That is {CR_TARGET}; you are done.',
                             move, True)
-                return (f'"{move[:60]}" - yes. {left} more different accepted '
-                        f'sentence(s) to go.', move, True)
+                return (f'"{move[:60]}" - yes, and different enough. {left} more '
+                        f'to go.', move, True)
             return (f'"{move[:60]}" - no.', move, False)
 
         if self.run_type == TRANSFORMATION:

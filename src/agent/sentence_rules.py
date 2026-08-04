@@ -15,10 +15,22 @@ import random
 import re
 
 VOWELS = "aeiou"
+# Wide enough that many genuinely different sentences can satisfy a colour
+# constraint. A short list forces every valid answer to reuse the same word,
+# which makes "produce a *different* valid answer" impossible rather than hard.
 COLOURS = ("red", "blue", "green", "yellow", "black", "white", "orange",
-           "purple", "grey", "gray", "brown", "pink")
-TIME_WORDS = ("today", "tomorrow", "yesterday", "morning", "evening", "night",
-              "week", "month", "year", "hour", "minute", "monday", "friday")
+           "purple", "grey", "gray", "brown", "pink", "crimson", "scarlet",
+           "amber", "violet", "indigo", "turquoise", "teal", "maroon",
+           "beige", "cream", "silver", "golden", "gold", "bronze", "copper",
+           "lilac", "lavender", "olive", "navy", "ivory", "charcoal", "ochre")
+TIME_WORDS = ("today", "tomorrow", "yesterday", "morning", "afternoon",
+              "evening", "night", "midnight", "noon", "dawn", "dusk",
+              "week", "weekend", "month", "year", "hour", "minute", "second",
+              "monday", "tuesday", "wednesday", "thursday", "friday",
+              "saturday", "sunday", "january", "february", "march", "april",
+              "june", "july", "august", "september", "october", "november",
+              "december", "spring", "summer", "autumn", "winter", "later",
+              "earlier", "soon", "recently", "daily", "weekly", "monthly")
 NUMBER_WORDS = ("one", "two", "three", "four", "five", "six", "seven",
                 "eight", "nine", "ten", "eleven", "twelve")
 

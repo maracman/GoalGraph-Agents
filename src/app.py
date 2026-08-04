@@ -3089,6 +3089,53 @@ def save_graph_from_agent(agent_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route('/api/saved_graphs/<graph_id>/load_into/<agent_id>', methods=['POST'])
+def load_saved_graph_into_agent(graph_id, agent_id):
+    """Start an agent from a graph another agent learned earlier.
+
+    This is what makes knowledge transferable between runs rather than trapped
+    in the session that produced it. By default the carried-over aims are
+    marked unverified: they were established under some earlier setup, and
+    under a different one they are claims to re-test rather than facts. Pass
+    trust=true to skip that if the setup is known to be identical.
+    """
+    try:
+        if 'state' not in session:
+            return jsonify({"error": "No active session"}), 400
+
+        src = os.path.join(saved_graphs_dir, f"{graph_id}.graphml")
+        if not os.path.exists(src):
+            return jsonify({"success": False, "error": "Saved graph not found"}), 404
+
+        agents_df = pd.DataFrame(session['state']['agents_df'])
+        row = agents_df[agents_df['agent_id'] == agent_id]
+        if row.empty:
+            return jsonify({"success": False, "error": "Agent not found"}), 404
+
+        dest = row.iloc[0]['graph_file_path']
+        G = nx.read_graphml(src)
+
+        data = request.get_json(silent=True) or {}
+        trust = str(data.get('trust', request.form.get('trust', 'false'))).lower() == 'true'
+        unverified = 0
+        if not trust:
+            from agent.graph_memory import GraphMemory
+            mem = GraphMemory(G, ruleset=data.get('ruleset', 'imported'))
+            unverified = mem.mark_unverified(data.get('ruleset', 'imported'))
+            G = mem.G
+
+        nx.write_graphml(G, dest)
+        return jsonify({
+            "success": True,
+            "nodes": G.number_of_nodes(),
+            "edges": G.number_of_edges(),
+            "marked_unverified": unverified,
+        })
+    except Exception as e:
+        flask_logger.error(f"Error loading saved graph into agent: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/api/saved_graphs/merge', methods=['POST'])
 def merge_saved_graphs():
     """Merge multiple saved graphs into a new one."""

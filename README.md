@@ -315,6 +315,26 @@ This is the setting that decides whether stored aims are worth anything. While
 the relevant history is still visible the agent can simply re-read what failed;
 a memory of refutations only pays once something has scrolled out of view.
 
+#### Carrying a graph between runs
+
+A graph is only worth building if it can outlive the session that built it.
+**Decision Graph → Download this run as CSV** exports the data; the graph itself
+is saved to the graph library, and
+
+```
+POST /api/saved_graphs/<graph_id>/load_into/<agent_id>
+```
+
+starts a fresh agent from it. By default every carried-over aim is marked
+**unverified**, and recall says so — *"learned under a different setup, treat as
+unconfirmed and worth re-testing"*. That default matters: a verdict established
+under one configuration is a *claim* under another, not a fact, and an agent
+that trusts a stale NoGo will suppress an approach that now works. Pass
+`trust: true` when the setup is known to be identical.
+
+This is what makes the transfer question askable at all — does a graph help a
+second agent, or does it mislead one?
+
 #### Run data
 
 Every judged turn is recorded and exported as one CSV row from

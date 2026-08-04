@@ -43,12 +43,26 @@ never says which rule was broken.
 hidden rules   is a question
                mentions a colour
                contains a word of 8+ letters
-               starts with "the"
                mentions a time or a day
+               contains a comma
 
-accepted       "The yellow schedule arrived this morning, did it not?"
+accepted       "Was the yellow schedule finished yesterday, or not?"
 goal           produce 3 more accepted sentences, each genuinely different
 ```
+
+The exact five matter, and picking them took two corrections worth recording.
+
+An earlier version used *starts with "the"* instead of *contains a comma*.
+Combined with *is a question* that forces the tag-question form — `"The X ...,
+did it not?"` — so every valid answer looked the same and "give me a different
+one" became impossible rather than hard. The agent was trapped in a template by
+the task, and its failure to escape looked like a failure to reason.
+
+The colour and time vocabularies were also too narrow. `"crimson"` and
+`"Tuesday"` were rejected because neither was on a twelve-word list, so the only
+valid sentences were near-copies of the example. Both lists are now wide enough
+that many genuinely different answers exist — verified before running anything:
+four distinct valid answers are reachable where previously there were zero.
 
 Two properties make this the first task where the graph is *necessary*, and
 neither held in the designs that came before it.
@@ -61,6 +75,11 @@ evidence for the first is long out of a four-message window.
 and from each other by word overlap below 0.6. Swapping a noun in the example
 scores 0.64 and does not count, so the agent has to work out *why* the example
 is accepted rather than pattern-match it.
+
+**And the agent is told so.** When an accepted sentence is too close to one
+already given, the keeper says exactly that. An agent cannot satisfy a
+requirement it has not been told about; silently not counting the answer would
+make the task unfair rather than hard.
 
 ### Why the earlier designs failed
 
