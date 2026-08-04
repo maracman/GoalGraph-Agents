@@ -25,20 +25,28 @@ from . import norm_rules as N
 from . import word_rules as W
 from . import sentence_rules as SR
 from . import transform_rules as TR
+from . import constraint_rules as CR
 from .induction import compile_predicate, UnsafePredicate
+
+# How many distinct accepted sentences finish a constraints run. More than
+# one, so the agent must generalise rather than repeat a lucky answer.
+CR_TARGET = 3
 
 RULE_INDUCTION = 'rule_induction'
 HIDDEN_NORM = 'hidden_norm'
 WORD_INDUCTION = 'word_induction'
 SENTENCE_INDUCTION = 'sentence_induction'
 TRANSFORMATION = 'transformation'
+CONSTRAINTS = 'constraints'
 CHAT = 'chat'
 
 RUN_TYPES = (CHAT, RULE_INDUCTION, WORD_INDUCTION, SENTENCE_INDUCTION,
-             TRANSFORMATION, HIDDEN_NORM)
+             TRANSFORMATION, CONSTRAINTS, HIDDEN_NORM)
 
 
 def available_rules(run_type):
+    if run_type == CONSTRAINTS:
+        return [{'id': k, 'name': CR.describe(k)} for k in CR.LEVELS]
     if run_type == TRANSFORMATION:
         return [{'id': k, 'name': TR.describe(k)} for k in TR.TASKS]
     if run_type == SENTENCE_INDUCTION:
@@ -71,6 +79,8 @@ class Keeper:
     def _default_rule(run_type):
         if run_type == RULE_INDUCTION:
             return R.DEFAULT_RULES[0]
+        if run_type == CONSTRAINTS:
+            return CR.DEFAULT_LEVELS[-1]
         if run_type == TRANSFORMATION:
             return TR.DEFAULT_INVARIANTS[0]
         if run_type == SENTENCE_INDUCTION:
@@ -84,6 +94,8 @@ class Keeper:
     # -- the hidden rule ---------------------------------------------------
 
     def describe(self):
+        if self.run_type == CONSTRAINTS:
+            return CR.describe(self.rule_name)
         if self.run_type == TRANSFORMATION:
             return TR.describe(self.rule_name)
         if self.run_type == SENTENCE_INDUCTION:
@@ -121,8 +133,37 @@ class Keeper:
                 state = move
         return state
 
+    def attempts_from(self, history):
+        """Every candidate proposed so far, split by how it was answered."""
+        accepted, rejected = [], []
+        for speaker, message in history:
+            if speaker == 'keeper':
+                continue
+            move = self.extract_move(message)
+            if not move:
+                continue
+            (accepted if self.verdict(move) else rejected).append(move)
+        return accepted, rejected
+
+    def distinct_accepted(self, history):
+        """Accepted candidates that are genuinely different from each other.
+
+        Seeded with the worked example, and compared by word overlap rather than
+        exact text: an agent that takes the example and swaps one noun has not
+        discovered the constraints, it has copied a template. Requiring real
+        variety is what forces it to work out *why* the example is accepted.
+        """
+        accepted, _ = self.attempts_from(history)
+        out = [CR.opening_example(self.rule_name)]
+        for a in accepted:
+            if CR.is_novel(a, out):
+                out.append(a)
+        return out[1:]
+
     def is_complete(self, history):
         """Has the task been finished? Only meaningful where there is a target."""
+        if self.run_type == CONSTRAINTS:
+            return len(self.distinct_accepted(history)) >= CR_TARGET
         task = self.task()
         if not task:
             return False
@@ -139,6 +180,13 @@ class Keeper:
             return ("Work out the hidden rule that decides which triples of whole "
                     "numbers are accepted. Propose one triple at a time, say what "
                     "you currently believe the rule is, and test it deliberately.")
+        if self.run_type == CONSTRAINTS:
+            return ('Write sentences that I will accept. Several rules must all hold '
+                    'at once, and I will only tell you yes or no - never which rule '
+                    'you broke. Work out what they are and give me '
+                    f'{CR_TARGET} different accepted sentences. Never repeat a '
+                    'sentence I have already rejected; that wastes a turn and tells '
+                    'you nothing new.')
         if self.run_type == TRANSFORMATION:
             t = self.task()
             return (f'Transform the starting sentence into the target sentence, one '
@@ -175,6 +223,12 @@ class Keeper:
 
     def opening(self):
         """The first thing the agent sees — one confirmed positive example."""
+        if self.run_type == CONSTRAINTS:
+            return (f'I accept sentences that satisfy several rules at once. '
+                    f'"{CR.opening_example(self.rule_name)}" is one I accept. '
+                    f'Propose a sentence in double quotes and I will say yes or no - '
+                    f'nothing more. Give me {CR_TARGET} different accepted sentences '
+                    f'to finish.')
         if self.run_type == TRANSFORMATION:
             t = self.task()
             return (f'You are at: "{t["start"]}"\n'
@@ -215,7 +269,7 @@ class Keeper:
         elif message is not None and not isinstance(message, str):
             message = str(message)
 
-        if self.run_type in (SENTENCE_INDUCTION, TRANSFORMATION):
+        if self.run_type in (SENTENCE_INDUCTION, TRANSFORMATION, CONSTRAINTS):
             quoted = self.SENTENCE_RE.findall(message or '')
             return quoted[-1].strip() if quoted else None
 
@@ -243,6 +297,8 @@ class Keeper:
             return None
         if self.run_type == RULE_INDUCTION:
             return R.label(self.rule_name, move)
+        if self.run_type == CONSTRAINTS:
+            return CR.accepts(self.rule_name, move)
         if self.run_type == TRANSFORMATION:
             # The invariant is what is being induced, so the verdict on a move
             # is whether it holds - independent of whether the step was a legal
@@ -268,6 +324,23 @@ class Keeper:
                         None, None)
             a, b, c = move
             return (f"{a}, {b}, {c} — {'yes' if verdict else 'no'}.", move, verdict)
+
+        if self.run_type == CONSTRAINTS:
+            if move is None:
+                return ('Give me a sentence in double quotes.', None, None)
+            accepted, rejected = self.attempts_from(self._history or [])
+            got = len(self.distinct_accepted(self._history or []))
+            if CR.is_repeat(move, rejected):
+                return ('You have already tried that and I rejected it. '
+                        'Try something you have not tried.', move, False)
+            if verdict:
+                left = max(0, CR_TARGET - (got + 1))
+                if left == 0:
+                    return (f'"{move[:60]}" - yes. That is {CR_TARGET}; you are done.',
+                            move, True)
+                return (f'"{move[:60]}" - yes. {left} more different accepted '
+                        f'sentence(s) to go.', move, True)
+            return (f'"{move[:60]}" - no.', move, False)
 
         if self.run_type == TRANSFORMATION:
             task = self.task()
@@ -344,7 +417,7 @@ class Keeper:
                     "For example 'a < b < c'. Use only arithmetic, comparisons and "
                     "and/or/not. This is how your guess gets checked, so it must mean "
                     "exactly what you believe.")
-        if self.run_type in (SENTENCE_INDUCTION, TRANSFORMATION):
+        if self.run_type in (SENTENCE_INDUCTION, TRANSFORMATION, CONSTRAINTS):
             return ("- \"rule\": your current best guess at the hidden rule that decides "
                     "which sentences are allowed, as a boolean expression over the "
                     "sentence you are proposing.\n" + SR.PREDICATE_VOCAB)
@@ -376,6 +449,9 @@ class Keeper:
             if self.run_type == RULE_INDUCTION:
                 fn = compile_predicate(predicate)
                 predict = lambda mv: bool(fn(*mv))          # noqa: E731
+            elif self.run_type == CONSTRAINTS:
+                predict = lambda mv: bool(compile_predicate(   # noqa: E731
+                    predicate, funcs=CR.predicate_helpers(mv), variables=())())
             elif self.run_type == TRANSFORMATION:
                 predict = lambda mv: bool(compile_predicate(   # noqa: E731
                     predicate, funcs=SR.predicate_helpers(mv), variables=())())
@@ -408,6 +484,8 @@ class Keeper:
 
         if self.run_type == RULE_INDUCTION:
             holdout = R.holdout_set(self.rule_name, n=24, seed=self.seed)
+        elif self.run_type == CONSTRAINTS:
+            holdout = CR.holdout_labels(self.rule_name, n=24, seed=self.seed)
         elif self.run_type in (SENTENCE_INDUCTION, TRANSFORMATION):
             holdout = SR.holdout_labels(self.rule_name, n=24, seed=self.seed)
         elif self.run_type == WORD_INDUCTION:

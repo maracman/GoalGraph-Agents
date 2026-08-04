@@ -42,6 +42,13 @@ the Graph view is often the only way to see the route the agent actually took.
 |---|---|
 | ![Full graph](screenshots/graph_full.png) | ![Route only](screenshots/graph_clean.png) |
 
+### A Decision Graph With Actual Depth
+From a `constraints` run: each belief the agent forms builds on the last, so the
+graph records the route its reasoning took rather than a hub of dead ends. Max
+depth 5, against depth 1–2 for the simpler tasks.
+
+![Constraints run graph](screenshots/ui_graph_constraints.png)
+
 ### Confidence Is Visible in the Graph
 A `transformation` run, with line weight showing how much each verdict is worth
 and dashes marking opinion. The thin dashed edge from `start` is a `Go` the LLM
@@ -261,16 +268,22 @@ a model, so the agent's claims can be *checked* rather than judged.
 | `rule_induction` | code holding a hidden rule about number triples | a hypothesis. Refutation is a proof. |
 | `word_induction` | code holding a hidden rule about single words | a hypothesis about spelling and letters |
 | `sentence_induction` | code holding a hidden rule about whole sentences | a hypothesis over a much larger feature space |
-| **`transformation`** | **code holding a hidden constraint on legal states** | **an intermediate state on the way to a goal** |
+| `transformation` | code holding a hidden constraint on legal states | an intermediate state on the way to a goal |
+| **`constraints`** | **code holding several hidden rules that must all hold** | **a belief about one of the rules** |
 | `hidden_norm` | code deciding warm or flat replies from a hidden property of your message | a hypothesis, tested through dialogue |
 
-`transformation` is the one to start with. The agent must reach a target
-sentence one small edit at a time while every intermediate sentence obeys a rule
-it has not been told. Unlike the pure guessing tasks it has a **goal**,
-**measurable progress** (distance to the target), and **states you can route
-through** — so the decision graph records a path rather than a hub of dead ends.
-See [docs/TOY_RESEARCH_PROJECT.md](docs/TOY_RESEARCH_PROJECT.md) for a worked
-example you can run in twenty minutes.
+**`constraints` is the one to start with**, because it is the only task where
+the decision graph has been shown to be *necessary* rather than merely present.
+Five hidden rules must all hold at once and a rejection says only "no", so the
+agent must accumulate more constraints than a short context window can hold.
+
+With a four-message window, an agent with the graph produced **four times as
+many valid answers** as the same agent with no memory — 8.0 against 2.0 on
+average, with no overlap across three replications, for about 13% more tokens.
+
+See **[docs/TOY_RESEARCH_PROJECT.md](docs/TOY_RESEARCH_PROJECT.md)** for the
+worked example, its data, and an account of the four earlier task designs that
+failed to show anything — which is the more useful half of the write-up.
 
 With a keeper, three things become facts the app can compute rather than
 opinions it has to ask for: whether a move satisfied the rule, whether a stated

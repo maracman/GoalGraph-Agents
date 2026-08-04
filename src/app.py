@@ -951,6 +951,9 @@ def api_run_types():
             'sentence_induction': 'Guess a hidden rule about whole sentences.',
             'transformation': 'Reach a target sentence one edit at a time, '
                               'while obeying a rule you have not been told.',
+            'constraints': 'Write sentences that satisfy several hidden rules at '
+                           'once. Rejections say only no, so constraints must be '
+                           'accumulated across many attempts.',
             'hidden_norm': 'Infer why a conversational partner warms or cools.',
         }
         return jsonify({
@@ -2323,7 +2326,7 @@ def update_user_settings():
         # buried: a run is only interpretable if you can see how it was set.
         run_type = request.form.get('run_type')
         if run_type in ('chat', 'rule_induction', 'word_induction',
-                        'sentence_induction', 'transformation', 'hidden_norm'):
+                        'sentence_induction', 'transformation', 'constraints', 'hidden_norm'):
             session['state']['settings']['run_type'] = run_type
         keeper_rule = request.form.get('keeper_rule')
         if keeper_rule is not None:

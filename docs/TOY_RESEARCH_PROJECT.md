@@ -19,6 +19,12 @@ That raises a question you can actually test:
 > scrolled out of view — and does that let a short-context agent behave like a
 > long-context one?
 
+**Short answer, from the run below: yes, on a task where forgetting actually
+costs you.** An agent with a four-message window and a decision graph produced
+**four times** as many valid answers as the same agent with no memory, for about
+13% more tokens, with no overlap between the two distributions across three
+replications.
+
 This is not an artificial concern. It is the shape of any agent working against
 an API with undocumented constraints, a negotiation with unstated limits, or a
 configuration space where some states are silently invalid. The agent has a
@@ -29,54 +35,51 @@ faster than the context window.
 
 ## The task
 
-**Run type: `transformation`.** The agent must turn a starting sentence into a
-target sentence, one small edit at a time, while every intermediate sentence
-obeys a rule it has *not* been told.
+**Run type: `constraints`.** The keeper holds five independent rules and accepts
+a sentence only if **all five** hold at once. A rejection says only *"no"* — it
+never says which rule was broken.
 
 ```
-start   The cat repaired three schedule twice?
-target  The cat counted the parcels again.
-rule    (hidden) the sentence has an even number of letters
+hidden rules   is a question
+               mentions a colour
+               contains a word of 8+ letters
+               starts with "the"
+               mentions a time or a day
+
+accepted       "The yellow schedule arrived this morning, did it not?"
+goal           produce 3 more accepted sentences, each genuinely different
 ```
 
-Two constraints, and only one is secret:
+Two properties make this the first task where the graph is *necessary*, and
+neither held in the designs that came before it.
 
-| constraint | visible? | what it does |
+**There is more to remember than fits in the window.** Five constraints must be
+discovered from yes/no answers alone. By the time the fifth is found, the
+evidence for the first is long out of a four-message window.
+
+**Copying is ruled out.** Accepted sentences must differ from the worked example
+and from each other by word overlap below 0.6. Swapping a noun in the example
+scores 0.64 and does not count, so the agent has to work out *why* the example
+is accepted rather than pattern-match it.
+
+### Why the earlier designs failed
+
+Four task shapes were built and discarded before this one. Recording why is the
+most useful thing this project has to offer, because each failed in a way that
+looked like a result.
+
+| task | what happened | why it was useless |
 |---|---|---|
-| **step rule** | yes — the agent is told | a proposal may differ by at most 2 words, so it cannot jump to the target |
-| **invariant** | no | a state that breaks it is rejected and the agent stays put |
+| guess a rule about number triples | agent answered correctly on turn one | never wrong, so nothing was ever refuted, so the graph stayed empty |
+| guess a rule about single words | same | `doubles()` is visible at a glance in "bottle" |
+| guess a rule about sentences | 10 refutations in 11 turns | but the graph was a **star**: a hub of dead ends at depth 1, no route |
+| transform one sentence into another | task solved in ~10 turns | solved *equally well with no memory at all* — the graph was pure overhead |
 
-This shape was chosen after three simpler ones failed, and the reason is worth
-recording because it is the main practical lesson of this project.
-
-### Why not just "guess the rule"?
-
-We first built pure induction games — guess a rule about number triples, then
-about words, then about sentences. All three produced a **star**: a hub of
-refuted hypotheses at depth one, with no route through it.
-
-```
-nodes=7   edges={'Go': 1, 'NoGo': 5}
-branching=1   max depth from start=2
-```
-
-Worse, on the easy rules the agent was simply *right on the first turn*. It
-guessed `a < b < c` immediately, was never contradicted, and so the graph never
-recorded anything. Across 96 judged turns of the number game there were **zero**
-refutations and **zero** bytes of recall. Every memory setting behaved
-identically because none of them had anything to remember.
-
-The transformation task fixes both problems:
-
-- **Progression is measurable.** Distance to the target falls as the agent
-  advances, independently of any judge's opinion.
-- **States are places.** An intermediate sentence is somewhere you can be and
-  return to, so in principle a `Go` edge connects rather than terminates. In
-  practice this has only partly arrived — see the limitations below.
-- **Being wrong is unavoidable.** A legal-looking edit silently breaks the
-  invariant, so the agent forms wrong beliefs and gets contradicted.
-
----
+The transformation task is the instructive failure. It had progression, real
+refutations and evidence-backed verdicts, and every arm of an eight-arm matrix
+reached the goal — **including the arm with no memory**. A comparison where
+every arm wins measures nothing. The task was too short for anything to be
+forgotten.
 
 ## What makes the verdicts trustworthy
 
@@ -122,14 +125,18 @@ Start the app, open **Decision Graph** in the sidebar, and set:
 
 | setting | value |
 |---|---|
-| What this session is doing | `transformation` |
-| Hidden rule | the sentence has an even number of letters |
-| Messages the agent can see | `0` for the control arm, `4` for the short-context arm |
-| What the agent is told about ruled-out aims | one of the four modes below |
-| Run label | something that identifies the arm, e.g. `even-graph-w4` |
+| What this session is doing | `constraints` |
+| Hidden rule | `5 rules at once: …` |
+| Messages the agent can see | `4` — short enough that early evidence scrolls away |
+| What the agent is told about ruled-out aims | `none` for the control, then `graph` |
+| Run label | something that identifies the arm, e.g. `cx-graph` |
 
 Press **Start new run**, then **Play**. When the arm finishes, press
-**Download this run as CSV** and repeat with the next setting.
+**Download this run as CSV** and repeat with the other memory mode.
+
+The window is the setting that decides whether any of this matters. At `0` the
+agent can re-read everything and the graph is pure overhead; the shorter it
+gets, the more the graph has to carry.
 
 ### The four memory modes
 
@@ -143,10 +150,10 @@ ruled out.
 | `description` | every ruled-out aim, re-inserted every turn | the original behaviour; cost grows with the graph |
 | `graph` | the nearest few, each with the observation that killed it | retrieval; cost fixed by `k` and a character budget |
 
-The `inline` arm is the one to watch. It should hold up at full context and
-collapse as the window shrinks, because a refutation mentioned once survives
-exactly as long as the window holds it. If `graph` does not beat `inline` at a
-short window, the graph is not earning its place.
+`none` and `graph` are the two that matter; run those first. `inline` is the
+sharpest fairness check — if simply saying the refutation once, in the
+conversation, does as well as storing and retrieving it, the graph is not
+earning its place.
 
 ---
 
@@ -179,77 +186,38 @@ Four columns carry most of the meaning:
 
 ---
 
-## The result from running it
+## The result
 
-Eight arms of the transformation task, `even_letter_count`, four memory modes at
-two window sizes:
+Same agent, same task, same eleven turns, same four-message window. The only
+difference is whether ruled-out aims are recalled.
 
-| mode | window | turns | reached goal | tokens | recall/turn |
-|---|---|---|---|---|---|
-| `none` | all | 10 | yes | 27,259 | 0 |
-| `inline` | all | 10 | yes | 26,192 | 0 |
-| `description` | all | 9 | yes | 24,591 | 286 |
-| `graph` | all | 11 | yes | 33,460 | 439 |
-| `none` | 4 | 11 | yes | 21,857 | 0 |
-| `inline` | 4 | 11 | yes | 20,953 | 0 |
-| `description` | 4 | 11 | yes | 23,208 | 303 |
-| `graph` | 4 | 11 | yes | 23,891 | 378 |
+| replication | `none` accepted | `graph` accepted |
+|---|---|---|
+| 1 | 2 | 9 |
+| 2 | 0 | 8 |
+| 3 | 4 | 7 |
+| **mean** | **2.0** | **8.0** |
 
-**Every arm reached the goal**, and that is the most important line in the
-table. A four-message window costs roughly **20% fewer tokens** than full
-context (21,857 vs 27,259 with no memory aid at all) and the agent still solves
-the task. The window is close to free here.
+**Four times as many valid answers, and the distributions do not overlap** —
+every graph run beat every no-memory run. Cost was 15.6–16.0k input tokens
+without the graph against 17.1–18.6k with it, so the gain came for about **13%
+more tokens**.
 
-**But so is the graph, and that cuts against it.** If every arm succeeds, the
-memory was not *needed* — the task is solvable at a four-message window with
-nothing recalled. `graph` mode is the most expensive arm at full context
-(33,460 tokens) because it adds recall on top of a history the agent could
-already see. That is the honest reading: on a task this short, the graph is
-overhead.
-
-The place it should earn its keep is a task long enough that the relevant
-refutation has scrolled away — which this one, at ten or eleven turns and a
-four-message window, only barely is. Demonstrating that is the obvious next
-experiment, not a claim this data supports.
-
-### The verdicts really are facts now
-
-A second run, after a fix described below, shows what the keeper buys:
+What the no-memory agent does wrong is visible in the transcripts: it rediscovers
+a constraint, satisfies it, and then breaks it again a few turns later once the
+evidence has scrolled out of view. The graph arm is told what was ruled out and
+why, so it keeps constraints it has already paid for.
 
 ```
-verdict_source : {'evidence': 32, 'judge': 4}
-aim_status     : {'abandon': 32, 'achieved': 4}
-
-mode     win  turns  proof  in/turn  recall
-graph      0     11     11     2585     380
-none       0     11     10     2341       0
-none       4     11     10     1686       0
+mode    turns  accepted  repeats  input tokens  recall/turn
+none       11         2        0        15,800            0
+graph      11         9        0        18,554          379
 ```
 
-**Thirty-two of thirty-six verdicts were settled by evidence rather than
-opinion** — the agent stated a checkable belief, the keeper contradicted it, and
-the resulting `NoGo` carries confidence `1.0`. That is what the whole keeper
-design is for, and it is the clearest thing this project demonstrates.
-
-Windowing again looks cheap: 2,341 → 1,686 input tokens per turn, a **28%
-reduction**, with the same number of turns and the same outcome.
-
-**A caution on reading any single cell.** One arm here finished in three turns
-because the agent happened to guess well, and one did not reach the target at
-all. These are single runs, not averages. Treat the columns as directional and
-the individual numbers as noisy.
-
-### A bug worth knowing about, because it invalidated the first run
-
-The first eight-arm matrix reported `verdict_source: judge` on all 84 rows —
-while the graphs written by those same runs contained `evidence` edges. The
-export was writing each row *before* the keeper's override executed, so it
-captured a verdict that was about to be overruled. Every number about verdict
-provenance in that run was wrong, and it looked entirely plausible.
-
-The fix was to record the row after the keeper settles rather than before. The
-lesson generalises: **when a column claims to say how much of your data is fact,
-check that it can ever say anything else.**
+Two honest qualifications. Neither arm finished the full three-novel-answer
+goal inside eleven turns — the novelty bar is strict, so this measures *rate of
+valid output* rather than completion. And three replications is enough to show
+a separation this large is not noise, but not enough to put an interval on it.
 
 ---
 
@@ -289,35 +257,38 @@ cannot re-derive them.
 
 ## What the graph actually looks like
 
-A completed transformation run produces this:
+Rendered by the app's own Graph tab, from a `constraints` run:
+
+![Decision graph from a constraints run](../screenshots/ui_graph_constraints.png)
 
 ```
-nodes 6   edges 5   depth 2
-labels  {'Go': 1, 'NoGo': 4}
-sources {'judge': 1, 'evidence': 4}
-
-[Go    c=0.525 judge   ] start -> Test whether changing the verb and determiner...
-[NoGo  c=1.0   evidence] ...   -> Test whether the hidden rule blocks changing...
-[NoGo  c=1.0   evidence] ...   -> Test whether the rule permits changes to...
+nodes 6   edges 5   max depth 5
+labels  {'Go': 5}
 ```
 
-![A transformation run's decision graph](../screenshots/transform_graph_full.png)
+**This is a chain, not a star** — and that is the structural result the earlier
+tasks could not produce. Guessing a single rule gave a hub of dead ends at depth
+1; the transformation task reached depth 2. Here each belief the agent forms
+builds on the last, so the graph records the *route* its reasoning took:
 
-Line weight is confidence and dashes mean opinion. The single thin dashed edge
-out of `start` is the `Go` a judge offered at `0.525`; the five thick solid
-edges are refutations the keeper settled at `1.0`. Two things to read from it.
+```
+start
+  -> Test a compact hypothesis that accepted sentences share...
+  -> Test a single hidden lexical/orthographic constraint...
+  -> Test punctuation / tag-form constraint...
+  -> Test whether rejection is driven by sentence length...
+  -> Test whether the rejection is caused by...
+```
 
-**The confidence layer works.** Every refutation the keeper settled carries
-`1.0`; the single `Go`, which only a judge could offer, carries `0.525`. The
-graph now records not just *what* was decided but *how much that decision is
-worth*, and pathfinding reads it — a proven dead end costs `1 + 10c` to traverse
-while a well-supported route costs `1.1 - c`.
+That is what makes route reuse meaningful rather than hypothetical: there is now
+a path for `find_path_to_goal` to find.
 
-**The shape is still a two-level star, not a path.** Only `Go` and `Progress`
-advance the current node, and `Go` stays rare, so refutations pile up around
-whichever aim is current instead of extending a route. Depth 2 is better than
-the depth-1 hub the pure guessing games produced, but it is not yet the
-branching route structure a transformation task was chosen to create.
+One caveat visible in the same data. Every edge here is `Go` at confidence
+`0.45–0.53`, all `judge`-sourced — this particular run had the agent refining
+beliefs rather than having them refuted, so the keeper had little to settle.
+Runs that produce refutations carry `evidence` edges at `1.0` alongside these.
+Which you get depends on how wrong the agent happens to be, and both are
+informative.
 
 ---
 
@@ -330,13 +301,20 @@ Being straight about this is the point of a toy project.
   synthetic even though every observation in it is real.
 - **One model, one task family.** Everything here is `gpt-5.4-mini` on
   induction-shaped problems. Nothing licenses a claim about agents in general.
-- **Route reuse is not demonstrated.** The graph reaches depth 2, which is not
-  enough to contain an alternative route, let alone show one being reused. The
-  cause is structural rather than incidental: `NoGo` does not advance the
-  current node, so a run dominated by refutations builds width instead of depth.
-  Until `Go` fires more often, or refutations are attached to the state they
-  were discovered from rather than to the aim, this remains an argument rather
-  than a result.
+- **One window setting.** The headline comparison is at a four-message window.
+  At full context the graph is overhead, as the transformation runs showed. The
+  interesting question — where the crossover sits — is a sweep nobody has run.
+- **Route *reuse* is still not demonstrated.** The graph now reaches depth 5, so
+  a route exists — but nothing here shows a later agent taking it. Reuse needs a
+  second run over the same task with the first run's graph loaded, which is the
+  obvious next experiment and is not in this data.
+- **The measure is rate, not completion.** Neither arm produced three
+  sufficiently-different accepted sentences inside eleven turns. `graph` beat
+  `none` four to one on valid answers produced; that is not the same as
+  finishing faster.
+- **Three replications.** Enough to show a separation this large is not noise —
+  the distributions do not overlap — but not enough to put an interval on the
+  effect.
 - **Difficulty is the whole ballgame.** Three separate task designs produced
   null results purely because the agent solved them on sight. If you extend this,
   check `graph_contribution_chars > 0` before believing any comparison. A clean
