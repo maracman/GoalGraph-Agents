@@ -1008,6 +1008,10 @@ def api_run_types():
             'troubleshoot': 'Diagnose a hidden fault by elimination, then fix it. '
                             'Intermediate states are real positions, several routes '
                             'reach the same fix, and a route can be reused.',
+            'diagnosis': 'Two agents: a clinician narrows a hidden condition by '
+                         'asking, a patient answers but will not raise two '
+                         'guarded topics unprompted. Both build a graph, and the '
+                         'two graphs are not the same shape.',
             'hidden_norm': 'Infer why a conversational partner warms or cools.',
         }
         return jsonify({
@@ -1917,11 +1921,23 @@ def generate():
             # The run type decides what the agent is for; a leftover persona
             # from a chat scenario would have it negotiating a subscription
             # while the keeper answers questions about integers.
-            for row in session['state'].get('agents_df', []):
-                row['goal'] = keeper.agent_goal()
-                row['description'] = keeper.agent_description()
+            roles = keeper.roles() if hasattr(keeper, 'roles') else None
+            rows = session['state'].get('agents_df', [])
+            if roles:
+                # Two-agent task: each side gets its own brief, in order.
+                for i, row in enumerate(rows):
+                    role = roles[i % len(roles)]
+                    row['goal'] = role['goal']
+                    row['description'] = role['description']
+                    if role.get('agent_name'):
+                        row['agent_name'] = role['agent_name']
+            else:
+                for row in rows:
+                    row['goal'] = keeper.agent_goal()
+                    row['description'] = keeper.agent_description()
             agents_df = pd.DataFrame(session['state']['agents_df'])
-            if not session['state']['session_history']:
+            if (not session['state']['session_history']
+                    and getattr(keeper, 'speaks', True)):
                 session['state']['session_history'].append(('keeper', keeper.opening()))
 
         turn_trail = []
@@ -1936,8 +1952,11 @@ def generate():
             turn_index=current_gen,
             trail=turn_trail
         )
-        # The keeper answers whatever the agent just said, in code.
-        if keeper and new_history:
+        # The keeper answers whatever the agent just said, in code — unless the
+        # counterparty is another agent. On a two-agent task the keeper still
+        # scores the transcript, but it has no turn to take: adding one would
+        # put a third voice into a conversation that already has two sides.
+        if keeper and new_history and getattr(keeper, 'speaks', True):
             last_speaker, last_message = new_history[-1]
             if last_speaker != 'keeper':
                 if hasattr(keeper, 'with_history'):
@@ -1945,15 +1964,6 @@ def generate():
                 text, move, verdict = keeper.reply(last_message)
                 new_history = list(new_history) + [('keeper', text)]
                 logs.append(f"Keeper: {text[:80]}")
-                # A finished task ends the run. Without this the agent keeps
-                # proposing moves after it has already won, which is noise in
-                # the transcript and in the cost figures.
-                if hasattr(keeper, 'is_complete') and keeper.is_complete(new_history):
-                    session['state']['play'] = False
-                    session['state']['current_generation'] = \
-                        session['state'].get('max_generations', 0)
-                    logs.append('Task complete: the target was reached.')
-
                 if turn_trail:
                     turn_trail[-1].update({
                         'keeper_rule': keeper.rule_name,
@@ -1961,6 +1971,16 @@ def generate():
                         'keeper_verdict': ('' if verdict is None
                                            else ('yes' if verdict else 'no')),
                     })
+
+        # A finished task ends the run, whether or not the keeper spoke.
+        # Without this the agents keep going after the answer is already found,
+        # which is noise in the transcript and in the cost figures.
+        if keeper and new_history and hasattr(keeper, 'is_complete'):
+            if keeper.is_complete(new_history):
+                session['state']['play'] = False
+                session['state']['current_generation'] = \
+                    session['state'].get('max_generations', 0)
+                logs.append('Task complete: the target was reached.')
 
         if turn_trail:
             trail = session['state'].setdefault('aim_trail', [])
@@ -2381,7 +2401,7 @@ def update_user_settings():
         run_type = request.form.get('run_type')
         if run_type in ('chat', 'rule_induction', 'word_induction',
                         'sentence_induction', 'transformation', 'constraints',
-                        'troubleshoot', 'hidden_norm'):
+                        'troubleshoot', 'diagnosis', 'hidden_norm'):
             session['state']['settings']['run_type'] = run_type
         keeper_rule = request.form.get('keeper_rule')
         if keeper_rule is not None:

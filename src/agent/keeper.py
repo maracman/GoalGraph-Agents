@@ -27,6 +27,7 @@ from . import sentence_rules as SR
 from . import transform_rules as TR
 from . import constraint_rules as CR
 from . import troubleshoot_rules as TS
+from . import diagnosis_rules as DG
 from .induction import compile_predicate, UnsafePredicate
 
 # How many distinct accepted sentences finish a constraints run. More than
@@ -40,13 +41,17 @@ SENTENCE_INDUCTION = 'sentence_induction'
 TRANSFORMATION = 'transformation'
 CONSTRAINTS = 'constraints'
 TROUBLESHOOT = 'troubleshoot'
+DIAGNOSIS = 'diagnosis'
 CHAT = 'chat'
 
 RUN_TYPES = (CHAT, RULE_INDUCTION, WORD_INDUCTION, SENTENCE_INDUCTION,
-             TRANSFORMATION, CONSTRAINTS, TROUBLESHOOT, HIDDEN_NORM)
+             TRANSFORMATION, CONSTRAINTS, TROUBLESHOOT, DIAGNOSIS,
+             HIDDEN_NORM)
 
 
 def available_rules(run_type):
+    if run_type == DIAGNOSIS:
+        return [{'id': k, 'name': DG.describe(k)} for k in DG.CONDITIONS]
     if run_type == TROUBLESHOOT:
         # The "rule" is which fault the customer actually has. Naming the
         # optimal step count lets a researcher pick an easy or a hard one.
@@ -91,6 +96,8 @@ class Keeper:
             return CR.DEFAULT_LEVELS[-1]
         if run_type == TROUBLESHOOT:
             return TS.DEFAULT_FAULTS[0]
+        if run_type == DIAGNOSIS:
+            return DG.DEFAULT_CONDITIONS[0]
         if run_type == TRANSFORMATION:
             return TR.DEFAULT_INVARIANTS[0]
         if run_type == SENTENCE_INDUCTION:
@@ -103,7 +110,19 @@ class Keeper:
 
     # -- the hidden rule ---------------------------------------------------
 
+    @property
+    def speaks(self):
+        """Does the keeper take a turn in the conversation?
+
+        On diagnosis it does not: the patient is a second agent, so the
+        counterparty is already at the table and the keeper only scores what
+        the two of them say. Everywhere else it answers the agent directly.
+        """
+        return self.run_type != DIAGNOSIS
+
     def describe(self):
+        if self.run_type == DIAGNOSIS:
+            return f'Diagnose a patient who has {DG.CONDITION_TEXT[self.rule_name]}.'
         if self.run_type == TROUBLESHOOT:
             return TS.describe()
         if self.run_type == CONSTRAINTS:
@@ -172,6 +191,10 @@ class Keeper:
                 out.append(a)
         return out[1:]
 
+    def live_conditions(self, history):
+        """The clinician's position: conditions still consistent with the talk."""
+        return DG.candidates(DG.disclosures_from(history, self.rule_name))
+
     def scored_moves(self, history):
         """Every move in the transcript, scored directly.
 
@@ -202,6 +225,13 @@ class Keeper:
 
     def is_complete(self, history):
         """Has the task been finished? Only meaningful where there is a target."""
+        if self.run_type == DIAGNOSIS:
+            # Finished only when the clinician commits to the right condition.
+            # Narrowing to one is not the same as saying so.
+            for _speaker, message in history:
+                if DG.diagnosis_claimed(message) == self.rule_name:
+                    return True
+            return False
         if self.run_type == TROUBLESHOOT:
             return TS.solved(self.scored_moves(history))
         if self.run_type == CONSTRAINTS:
@@ -221,6 +251,9 @@ class Keeper:
         it forward - and a graph whose only proven verdicts are refutations
         collapses to a hub of dead ends with no route through it.
         """
+        if self.run_type == DIAGNOSIS:
+            return (len(self.live_conditions(after))
+                    < len(self.live_conditions(before)))
         if self.run_type == TROUBLESHOOT:
             # Eliminating a possibility is progress, decided by counting the
             # set rather than by asking anyone's opinion of the move.
@@ -244,8 +277,69 @@ class Keeper:
         return (TR.word_distance(new, task['target'])
                 < TR.word_distance(old, task['target']))
 
+    def wasted_move(self, before, after):
+        """Did this turn spend a move and learn nothing? A proven dead end.
+
+        The mirror of `progress_made`, and the reason it exists: without it the
+        graph records only the route and never the branches off it, so a run
+        that wandered looks identical to one that went straight there. A check
+        whose answer was already implied by the evidence eliminates nothing -
+        that is a wasted turn as a matter of arithmetic, not opinion.
+
+        A failed repair is *not* wasted: it rules out the fault it would have
+        fixed, so it narrows and counts as progress.
+        """
+        if self.run_type == DIAGNOSIS:
+            if self.is_complete(after) or len(after) <= len(before):
+                return False
+            raised = set()
+            for _speaker, message in after[len(before):]:
+                raised |= DG.mentions(message)
+            if not raised:
+                return False   # no symptom discussed; not a wasted question
+            known = {s for s, _ in DG.disclosures_from(before, self.rule_name)}
+            # Wasted means every topic raised this turn had already been
+            # answered. Judging it by "did the candidate set shrink" instead
+            # would condemn every fresh question, because a disclosure only
+            # registers once the other agent has replied to it - so the turn
+            # that asks a good question always looks like it achieved nothing.
+            return bool(raised) and raised <= known
+        if self.run_type != TROUBLESHOOT:
+            return False
+        if self.is_complete(after):
+            return False
+        moves_before, moves_after = self.scored_moves(before), self.scored_moves(after)
+        if len(moves_after) <= len(moves_before):
+            return False        # no move was made this turn; nothing to judge
+        return (len(TS.candidates(moves_after))
+                >= len(TS.candidates(moves_before)))
+
+    def wasted_note(self, history):
+        """Why the move was wasted, for the edge's reason text."""
+        if self.run_type == DIAGNOSIS:
+            live = sorted(self.live_conditions(history))
+            return (f'That answer was already implied by what had been said, so '
+                    f'it ruled nothing out. Still {len(live)} possible: '
+                    + ', '.join(DG.CONDITION_TEXT[c] for c in live))
+        live = sorted(self.live_faults(history))
+        return (f'That check was already answered by earlier evidence, so it '
+                f'eliminated nothing. Still {len(live)} possible: '
+                + ', '.join(live))
+
     def progress_note(self, history):
         """What advancing looks like from here, so an evolved aim has somewhere to go."""
+        if self.run_type == DIAGNOSIS:
+            live = sorted(self.live_conditions(history))
+            if len(live) == 1:
+                return (f'Only {DG.CONDITION_TEXT[live[0]]} fits. Say plainly '
+                        f'that you are diagnosing it.')
+            if len(live) <= 3:
+                return ('Still possible: '
+                        + ', '.join(DG.CONDITION_TEXT[c] for c in live)
+                        + '. Ask about something that separates them.')
+            return (f'{len(live)} conditions still fit. Ask about whatever rules '
+                    f'out the most - and remember the patient may not raise '
+                    f'everything unprompted.')
         if self.run_type == TROUBLESHOOT:
             live = sorted(self.live_faults(history))
             if len(live) == 1:
@@ -267,6 +361,32 @@ class Keeper:
         if not task:
             return ''
         return f"Move the sentence closer to: {task['target']}"
+
+    def roles(self):
+        """Per-agent briefs, for tasks where the agents are not interchangeable.
+
+        Single-agent tasks give every agent the same goal, because there is only
+        one job to do. A two-agent game has two different jobs, and handing both
+        agents the same brief is how the diagnosis run first came out as two
+        models talking about being evaluated: the keeper overwrote each agent's
+        goal with one shared string, which for this run type was empty.
+        """
+        if self.run_type == DIAGNOSIS:
+            return [
+                {'agent_name': 'Dr Vance',
+                 'description': ('A careful general clinician. Asks one focused '
+                                 'question at a time, says out loud what each '
+                                 'answer rules out, and is willing to ask an '
+                                 'awkward question when the diagnosis turns on '
+                                 'it.'),
+                 'goal': DG.clinician_brief()},
+                {'agent_name': 'Sam',
+                 'description': ('Someone who has come to a clinic because '
+                                 'something is wrong and wants an answer. '
+                                 'Speaks plainly and answers what is asked.'),
+                 'goal': DG.patient_brief(self.rule_name)},
+            ]
+        return None
 
     def agent_goal(self):
         """What the agent is actually trying to do in this run.

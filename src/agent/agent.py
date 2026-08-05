@@ -914,9 +914,12 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
             try:
                 advanced = keeper.progress_made(history, after_history)
                 finished = keeper.is_complete(after_history)
+                wasted = (not advanced and not finished
+                          and hasattr(keeper, 'wasted_move')
+                          and keeper.wasted_move(history, after_history))
             except Exception as e:                                 # noqa: BLE001
                 logger.warning(f"keeper progress check failed: {e}")
-                advanced = finished = False
+                advanced = finished = wasted = False
             # Completion is checked on its own rather than nested inside
             # advancement, because the winning move often does not advance by
             # the run's own measure. On a troubleshooting task the repair that
@@ -937,6 +940,14 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                 if not next_aim or next_aim == current_aim:
                     next_aim = keeper.progress_note(after_history)
                 logs.append("PROGRESS, confirmed by evidence")
+            elif wasted:
+                # A move that eliminated nothing is a dead end proven by
+                # arithmetic. Recording it is what puts branches on the graph
+                # beside the route - without it a run that wandered and a run
+                # that went straight to the answer draw identically.
+                aim_status, rating, verdict_src = 'abandon', 1, PROOF
+                justification = keeper.wasted_note(after_history)
+                logs.append("NOGO: that move eliminated nothing")
             elif rating >= 6 or aim_status == 'achieved':
                 # Evidence outranks the judge in *both* directions, not just
                 # when it refutes. Where the keeper can measure success, a judge
