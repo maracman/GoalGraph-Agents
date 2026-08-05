@@ -611,10 +611,13 @@ def visualize_graph_pyvis(graph_file_path, session_id, hide_nogo=False):
         # keeper settles has exactly 1.0 - so the old greyscale-by-weight
         # ramp collapsed to a single shade and rendered every node the same
         # pale grey.
+        # Progress is not a neutral state, it is the route. Grey read as
+        # "unresolved" and made the one thing the agent actually achieved the
+        # faintest mark on the page, while dead ends were the brightest.
         NODE_COLOURS = {
             'NoGo': '#eb6834',      # ruled out
             'Go': '#2a78d6',        # reached
-            'Progress': '#7c8794',  # refined into something else
+            'Progress': '#2f855a',  # advanced, and the run went on from here
         }
 
         def verdict_on(node):
@@ -664,7 +667,7 @@ def visualize_graph_pyvis(graph_file_path, session_id, hide_nogo=False):
             width = 1 + 4 * confidence
             hover = (f"{edge_label} · confidence {confidence}"
                      f"{' · judge opinion' if opinion else ' · checked against evidence'}")
-            colour = {'NoGo': '#eb6834', 'Progress': '#7c8794'}.get(edge_label, '#2a78d6')
+            colour = NODE_COLOURS.get(edge_label, '#2a78d6')
             length = nogo_length if edge_label == 'NoGo' else 150
             net.add_edge(u, v, label='', fullLabel=edge_label, title=hover,
                          weight=weight, length=length, color=colour,

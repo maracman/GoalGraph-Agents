@@ -35,41 +35,55 @@ faster than the context window.
 
 ## The task
 
-**Run type: `constraints`.** The keeper holds five independent rules and accepts
-a sentence only if **all five** hold at once. A rejection says only *"no"* — it
-never says which rule was broken.
+**Run type: `constraints`.** The keeper holds three independent rules and accepts
+a sentence only if **all three** hold at once. A rejection never says which rule
+was broken — only how many held.
 
 ```
 hidden rules   is a question
                mentions a colour
                contains a word of 8+ letters
-               mentions a time or a day
-               contains a comma
 
-accepted       "Was the yellow schedule finished yesterday, or not?"
+accepted       "Is the yellow schedule finished?"
 goal           produce 3 more accepted sentences, each genuinely different
+rejection      "...that satisfies 2 of my 3 rules."
 ```
 
-The exact five matter, and picking them took two corrections worth recording.
+Getting to those three took four corrections, each of which had made the task
+unwinnable in a way that looked like the agent reasoning badly.
 
-An earlier version used *starts with "the"* instead of *contains a comma*.
-Combined with *is a question* that forces the tag-question form — `"The X ...,
-did it not?"` — so every valid answer looked the same and "give me a different
-one" became impossible rather than hard. The agent was trapped in a template by
-the task, and its failure to escape looked like a failure to reason.
+**A rejection has to carry a direction.** The original design said only *"no"*,
+on the grounds that pure refutation was the cleaner epistemics. It made the task
+impossible to hill-climb: an agent whose first attempt satisfied two of three
+rules was told exactly what an agent satisfying none was told, so it read a near
+miss as a refutation of the whole approach and drifted away from the only pattern
+that worked. More importantly it made the *graph* pointless — a route is built
+out of partial progress, and with all-or-nothing feedback there is none to
+record. The count is now reported; which rules held is still never revealed.
 
-The colour and time vocabularies were also too narrow. `"crimson"` and
-`"Tuesday"` were rejected because neither was on a twelve-word list, so the only
-valid sentences were near-copies of the example. Both lists are now wide enough
-that many genuinely different answers exist — verified before running anything:
-four distinct valid answers are reachable where previously there were zero.
+**Four rules at once was too many.** With four conjoined predicates the agent
+landed one or two novel answers in a full run and essentially never reached the
+three needed to finish, so no arm could be distinguished from any other.
+
+**"Different" has to be explained.** Told only that an answer shared too many
+words with a previous one, agents abandoned the question form and the colour —
+the very features that made it acceptable — because "vary your words" is
+indistinguishable from "your rule is wrong". The keeper now says to keep whatever
+it thinks is working and vary the subject matter instead, which gives nothing
+away.
+
+**The vocabularies were too narrow.** `"crimson"` and `"Tuesday"` were rejected
+because neither was on a twelve-word list, so the only valid sentences were
+near-copies of the example. Both lists are now wide enough that many genuinely
+different answers exist.
 
 Two properties make this the first task where the graph is *necessary*, and
 neither held in the designs that came before it.
 
-**There is more to remember than fits in the window.** Five constraints must be
-discovered from yes/no answers alone. By the time the fifth is found, the
-evidence for the first is long out of a four-message window.
+**There is more to remember than fits in the window.** Three constraints must be
+discovered from graded answers alone, and each discovery takes several probes. By
+the time the third is pinned down, the evidence for the first is long out of a
+four-message window.
 
 **Copying is ruled out.** Accepted sentences must differ from the worked example
 and from each other by word overlap below 0.6. Swapping a noun in the example
@@ -229,6 +243,15 @@ Four columns carry most of the meaning:
 
 ## The result
 
+> **These numbers are stale and are being re-measured.** They were produced
+> under three faults corrected since: `NoGo` fired ungated so aims were abandoned
+> before they could progress, the keeper could refute an aim but never confirm
+> one, and the `accepted` counter matched the substring `- yes`, which also
+> appears in the keeper's *refusal* to count a near-duplicate. The
+> `accepted answers` column is inflated by that last one; `completed` was always
+> sound, since it reads the keeper's own count. The task has also moved from five
+> constraints to three. Do not cite this table.
+
 Five replications per arm. Same agent, same task, same four-message window; the
 only difference is what it is told about aims already ruled out.
 
@@ -333,72 +356,104 @@ cannot re-derive them.
 
 ## What the graph actually looks like
 
-Rendered by the app's own Graph tab, from a `constraints` run:
+Two runs of the same task, rendered by the app's own Graph tab. The only
+difference between them is whether the agent could remember what it had already
+ruled out.
 
-![Decision graph from a constraints run](../screenshots/ui_graph_constraints.png)
+**With the graph.** A route: `start`, then two green `Progress` hops, then a blue
+`Go` at completion — with the refuted hypotheses hanging off each stage as
+orange spokes.
+
+![A run that built a route](../screenshots/ui_graph_route.png)
 
 ```
-nodes 13   edges 12   depth 1
-labels  {'NoGo': 12}
+nodes 13   depth 3
+labels  {'Progress': 2, 'Go': 1, 'NoGo': 9}
 sources {'evidence': 12}
 ```
 
-Twelve refutations, **every one settled by the keeper rather than judged** — the
-agent stated a checkable belief, an observation contradicted it, and the edge
-carries confidence `1.0`. This is the memory the `graph` arm gets handed back
-four aims at a time, and the `none` arm does not.
+**Without it.** Twenty-five refutations around a single node, and nothing else.
+No green, no blue, no second hop.
 
-**The star shape is correct here, and that is worth saying plainly**, because
-elsewhere in this project a star was the symptom of a broken task. When the
-agent is *routing* — the transformation task — a hub of dead ends means no route
-was built, and that was a real failure. When the agent is *eliminating*, as it is
-here, a hub is exactly what accumulating knowledge looks like: each spoke is a
-belief ruled out, hanging off the position it was ruled out from. Shape follows
-task; the mistake would be expecting the same shape from both.
+![A run that built nothing](../screenshots/ui_graph_star.png)
+
+```
+nodes 26   depth 1
+labels  {'NoGo': 25}
+sources {'evidence': 25}
+```
+
+**A star is a failure.** It means the run never advanced — either because there
+was nothing to advance through, or because the agent could not hold on to what it
+had learned long enough to build on it. Here it is the second: the no-memory arm
+re-derives the same dead ends until its turns run out. That is the whole result
+in one picture, and it is why the shape is worth looking at before the numbers.
+
+Note also that *both* graphs are entirely evidence-sourced. Every edge in each,
+positive and negative, was settled by the keeper in code rather than rated by the
+judge — which is what makes the contrast between them a measurement rather than
+two opinions.
+
+**An earlier version of this document argued that the star shape was correct —
+that a hub is simply what elimination looks like, and that shape follows task.
+That was wrong, and it is worth recording why, because the error is more
+interesting than the figure.**
+
+The star was a regression. Depth in a decision graph only ever grows on a `Go`
+or a `Progress`, and at the time nothing could produce one: the keeper could
+prove an aim *wrong* but had no way to prove the run had *advanced*, so the only
+thing that could move the cursor was the judge volunteering a high rating. It
+rarely did. Every aim therefore hung off the same node and the graph came out
+flat — on every task, not just this one.
+
+Faced with a flat graph, the write-up reached for a reason the flatness was
+appropriate rather than asking whether the software was broken. The check that
+would have settled it took a few seconds: the graphs from this project's own
+earlier negotiation runs reach depth 19 with 96 `Go` edges. Progression worked;
+it had been removed. "It ran" had been mistaken for "it worked".
+
+That is what [validate_paradigm.py](../studies/validate_paradigm.py) now exists
+to prevent — it fails on a star, on fake progress, and on a run that solves
+nothing, so the same rationalisation cannot be written a second time.
 
 ### Proof and opinion are drawn differently
 
-A longer run from the same task, where the agent got far enough to hold beliefs
-of both kinds:
+Every edge is drawn to show how much its verdict is worth. Width is
+`1 + 4 × confidence`, and a **dashed** line means the verdict was a judge's
+opinion rather than something checked, so a hunch cannot be mistaken for a proof
+at a glance.
 
-![Go and NoGo, proof and opinion](../screenshots/ui_graph_mixed.png)
+On the runs above, nothing is dashed. That is not a missing feature — it is what
+having a keeper buys. Both the twelve refutations and the three advances were
+settled in code at confidence `1.0`, so the whole picture is fact. Dashes appear
+on runs where nothing *can* check the verdict: an ordinary conversation, a
+negotiation, anywhere the judge's reading is the only signal available. There the
+edges are thin and broken, and they should be.
 
-```
-nodes 16   edges 15   depth 2
-labels  {'NoGo': 13, 'Go': 2}
-sources {'evidence': 13, 'judge': 2}
-```
-
-The two edge styles are the paradigm made visible. The thirteen **solid, full-width
-orange** edges are refutations the keeper settled from evidence at confidence
-`1.0` — facts, not readings. The two **dashed, thin blue** edges are `Go`
-verdicts the LLM judge offered at `0.525`; the agent believes it is making
-progress along them, but nothing has checked that belief. Width is
-`1 + 4 × confidence` and dashes mark opinion, so a hunch cannot be mistaken for a
-proof at a glance.
-
-This asymmetry is not a rendering choice, it is the task's logic showing through.
-A rejection is decidable — the keeper ran the predicate and it returned false —
-whereas "this line of attack is working" is never decidable from inside the run.
-The graph declines to promote the second to the status of the first.
+This matters because the two are not symmetrically available. A refutation is
+decidable — the keeper ran the predicate and it returned false. "This line of
+attack is working" is not decidable from inside a conversation. The graph will
+promote a positive to the status of a proof only where something outside the
+agent's own judgement has confirmed it, which on this task means a genuinely new
+answer the keeper accepted.
 
 ### Hiding ruled-out aims leaves the route
 
-The same graph with **Hide ruled-out aims** ticked in the Graph tab:
+The same run with **Hide ruled-out aims** ticked in the Graph tab:
 
-![The surviving route](../screenshots/ui_graph_clean.png)
+![The surviving route](../screenshots/ui_graph_route_clean.png)
 
-Sixteen nodes become three. What is left is the entire route the agent thought it
-was on: `start` → test whether acceptance depends on the exact noun class → refine
-that hypothesis against the keeper's reply. Both surviving edges are dashed,
-which is the honest picture — the agent's *positive* knowledge at this moment is
-two unverified judge opinions, while everything it knows for certain is negative.
+Thirteen nodes become four, and what is left is the whole solution:
+`start` → test a minimal hypothesis about surface form → isolate whether the
+adjective slot matters → the accepted sentence pattern, reached. Two green
+`Progress` hops and a blue `Go`, all solid.
 
-That is the filter earning its place in the UI rather than decorating it. On this
-run refutations are **13 of 15 edges**, and they will be the majority on any
-elimination task, so without the toggle the route is not merely cluttered but
-invisible. It is also the clearest statement of what the `graph` arm is actually
-carrying: not a plan, but a large and growing record of what will not work.
+That is the filter earning its place rather than decorating the UI. Refutations
+are **9 of the 12 edges** even on a successful run, and on a failed one they are
+all of them — so without the toggle the route is not merely cluttered but
+invisible. It is also the clearest statement of what the graph is carrying: a
+short spine of things that worked, buried in a much larger record of things that
+did not.
 
 Turn on **Hide ruled-out aims** in the Graph tab to see what is left once the
 eliminations are folded away — on a run like this, almost nothing, which is an

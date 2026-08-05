@@ -398,17 +398,46 @@ class Keeper:
                 known = [CR.opening_example(self.rule_name)] + \
                     self.distinct_accepted(self._history or [])
                 if not CR.is_novel(move, known):
-                    return (f'"{move[:60]}" - yes, but too close to one I already '
-                            f'have. I need sentences that share few words with the '
-                            f'ones you have given. Still {max(0, CR_TARGET - got)} '
-                            f'to go.', move, True)
+                    # Say what "different" means, or the requirement backfires.
+                    # Told only to share few words, agents abandon the very
+                    # features that made the sentence acceptable - the question
+                    # form, the colour - and drift away from the one pattern
+                    # known to work, because "vary your words" is
+                    # indistinguishable from "your rule is wrong". Naming the
+                    # distinction gives nothing away: the rules are unchanged
+                    # and still unstated.
+                    return (f'"{move[:60]}" - yes, that satisfies the rules, but it '
+                            f'is too close to one I already have. Keep whatever you '
+                            f'think makes it acceptable - I am not asking you to '
+                            f'change that. Vary the subject matter and wording '
+                            f'instead. Still {max(0, CR_TARGET - got)} to go.',
+                            move, True)
                 left = max(0, CR_TARGET - (got + 1))
                 if left == 0:
                     return (f'"{move[:60]}" - yes. That is {CR_TARGET}; you are done.',
                             move, True)
                 return (f'"{move[:60]}" - yes, and different enough. {left} more '
                         f'to go.', move, True)
-            return (f'"{move[:60]}" - no.', move, False)
+            # How many rules held, but never which. This is the difference
+            # between a task with a gradient and one without, and it is the
+            # reason every graph in this project came out as a star.
+            #
+            # A bare "no" on a conjunction of hidden rules carries no
+            # information about *direction*. An agent whose first attempt
+            # satisfied two of three was told exactly what an agent satisfying
+            # none was told, so it read a near miss as a refutation of the whole
+            # frame and drifted away from the only pattern that worked. Nothing
+            # could accumulate, so nothing could be routed through: a route is
+            # made of partial progress, and there was none to record.
+            #
+            # The count keeps the induction problem intact - which rules are
+            # still unstated, and there are many ways to satisfy any given
+            # number of them - while making the search a hill to climb rather
+            # than a cliff to fall off.
+            n_ok = CR.satisfied_count(self.rule_name, move)
+            n_all = len(CR.active(self.rule_name))
+            return (f'"{move[:60]}" - no. That satisfies {n_ok} of my {n_all} '
+                    f'rules.', move, False)
 
         if self.run_type == TRANSFORMATION:
             task = self.task()

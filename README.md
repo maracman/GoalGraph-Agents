@@ -32,31 +32,31 @@ produced it.
 
 ![Decision Graph settings](screenshots/decision_graph_panel.png)
 
-### A Decision Graph, With and Without Ruled-Out Aims
-The same `constraints` run, drawn twice by the Graph tab. On the left everything
-the agent knows: thirteen refuted aims (solid orange) around the hub, and two
-`Go` steps (dashed blue). On the right, **Hide ruled-out aims** — sixteen nodes
-become three, leaving the route the agent thought it was on.
+### The Same Task, With and Without Memory
+Two `constraints` runs drawn by the Graph tab. The only difference is whether the
+agent could remember what it had already ruled out.
 
-| everything | ruled-out aims hidden |
+| with the graph — a route | without it — a star |
 |---|---|
-| ![Full graph](screenshots/ui_graph_mixed.png) | ![Route only](screenshots/ui_graph_clean.png) |
+| ![A run that built a route](screenshots/ui_graph_route.png) | ![A run that built nothing](screenshots/ui_graph_star.png) |
+| 13 nodes, depth 3 | 26 nodes, depth 1 |
+| `Progress` ×2, `Go` ×1, `NoGo` ×9 | `NoGo` ×25 |
 
-Refuted aims are **13 of the 15 edges** here, and they will be the majority on
-any task about elimination, so the toggle is often the only way to see the route
-at all. Note that both surviving edges are dashed: everything this agent knows
-for certain is negative, and its positive beliefs are still unverified opinion.
+**A star is a failure.** It means the run never advanced — the agent re-derived
+the same dead ends until its turns ran out. Depth only grows on a `Go` or a
+`Progress`, so a graph with neither is telling you nothing was ever reached.
+That is the result in one picture: green hops are progress the keeper *proved*,
+orange spokes are hypotheses it *refuted*, and the arm without memory produces
+only the second kind.
 
-### What the Agent Has Ruled Out
-From a `constraints` run, rendered by the Graph tab: twelve refutations, every
-one settled by the keeper in code rather than judged, each carrying confidence
-`1.0`. This is the memory the graph arm is handed back four aims at a time and
-the no-memory arm never sees.
+### Hiding Ruled-Out Aims Leaves the Route
+The same successful run with **Hide ruled-out aims** ticked: thirteen nodes become
+four, and what is left is the whole solution.
 
-![Constraints run graph](screenshots/ui_graph_constraints.png)
+![The surviving route](screenshots/ui_graph_route_clean.png)
 
-A hub is the right shape for a task about *elimination*. On a task about
-*routing* it would mean no route had been built — shape follows task.
+Refutations are 9 of 12 edges even on a run that succeeds, and *all* of them on a
+run that fails — so the toggle is often the only way to see the route at all.
 
 ### Confidence Is Visible in the Graph
 A `transformation` run, with line weight showing how much each verdict is worth

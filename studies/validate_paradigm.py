@@ -94,6 +94,32 @@ def quick():
     check("a contradicted rule is refuted from evidence",
           chk.get("checkable") and chk.get("consistent") is False)
 
+    print("\nthe novelty requirement does not fight the constraints")
+    # Told only "share few words with the ones you have given", agents dropped
+    # the question form and the colour - the very things that made the sentence
+    # acceptable - and drifted away from the only working pattern, because
+    # "vary your words" is indistinguishable from "your rule is wrong".
+    k2 = K.make_keeper({"run_type": "constraints",
+                        "keeper_rule": "three_constraints", "seed": 0})
+    near = k2.reply('"Is the blue schedule finished?"')[0]
+    far = k2.reply('"Did the crimson envelope arrive?"')[0]
+    check("a near-duplicate is refused without telling the agent to change what works",
+          "too close" in near and "not asking you to change" in near)
+    check("a genuinely different answer still counts",
+          "different enough" in far)
+
+    print("\nrejection carries a direction, not just a refusal")
+    # Without this the task has no gradient, and a task with no gradient has no
+    # routes - only dead ends hanging off a hub. It is the single biggest cause
+    # of the star shape this project kept producing.
+    near = k2.reply('"Did the silver engine stall?"')[0]      # 2 of 3
+    far = k2.reply('"Silver comets drift above marshes."')[0]  # 1 of 3
+    check("a near miss is distinguishable from a wild miss",
+          "2 of my 3" in near and "1 of my 3" in far,
+          "near=2/3, wild=1/3")
+    check("but which rules held is still not revealed",
+          "colour" not in near.lower() and "question" not in near.lower())
+
     print("\nreading the agent's proposal")
     # A fifth of every run's turns went on "give me a sentence in double
     # quotes". Rescuing the bare-sentence case is worth real turns, but only
@@ -137,13 +163,16 @@ def full(reps, level, window, max_calls):
     depths, positives, proven_pos, accepted = [], [], [], []
     for rep in range(reps):
         r = run_one("graph", window, level, max_calls, f"validate-r{rep}")
+        # Use the graph the run itself saved. Asking the server for the agent
+        # list here would open a *new* HTTP session with no cookie, find no
+        # agents, and silently measure an empty graph - which reads as a
+        # depth-0 failure no matter how well the run went.
         path = None
-        agents = requests.get(f"{BASE}/get_agent_graphs", timeout=60).json()
-        agents = agents if isinstance(agents, list) else agents.get("agents", [])
-        if agents:
-            aid = agents[0].get("id") or agents[0].get("agent_id")
+        if r.get("graph_id"):
+            # graph_id already carries its "graph_" prefix
             path = os.path.join(os.path.dirname(__file__), "..", "src",
-                                "chat_cache", "graphs", f"{aid}_graph.graphml")
+                                "chat_cache", "saved_graphs",
+                                f"{r['graph_id']}.graphml")
         d = pos = prov = 0
         if path and os.path.exists(path):
             G = nx.read_graphml(path)
@@ -192,9 +221,15 @@ if __name__ == "__main__":
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--quick", action="store_true", help="logic only, no LLM calls")
     ap.add_argument("--reps", type=int, default=1)
-    ap.add_argument("--level", default="four_constraints")
+    # three, not four: with four constraints and no signal about which one
+    # failed, the agent lands one or two novel answers in a full run and
+    # essentially never reaches the three needed to finish, so the run has
+    # nothing to show either way.
+    ap.add_argument("--level", default="three_constraints")
     ap.add_argument("--window", type=int, default=4)
-    ap.add_argument("--max-calls", type=int, default=18)
+    # matches the study's own default; a shorter budget cuts runs off before
+    # they can finish and makes the task look harder than it is
+    ap.add_argument("--max-calls", type=int, default=26)
     a = ap.parse_args()
 
     quick()

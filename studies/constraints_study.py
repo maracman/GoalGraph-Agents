@@ -124,7 +124,11 @@ def run_one(mode, window, level, max_calls, label, prior_graph=None, verbose=Fal
             msg = str(hist[-1][1])
             if "already tried" in msg:
                 repeats += 1
-            if "- yes" in msg:
+            # Count only answers the keeper counts. "- yes, but too close to one
+            # I already have" is a refusal to count it, and it also contains
+            # "- yes" - so the obvious substring inflated this figure with
+            # near-duplicates the task explicitly does not accept.
+            if "different enough" in msg or "you are done" in msg:
                 accepted += 1
         if any("Task complete" in str(l) for l in d.get("logs", [])):
             completed_at = calls
