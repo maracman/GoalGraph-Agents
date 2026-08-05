@@ -913,24 +913,30 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
             after_history = history + [(agent_name, response_text)]
             try:
                 advanced = keeper.progress_made(history, after_history)
+                finished = keeper.is_complete(after_history)
             except Exception as e:                                 # noqa: BLE001
                 logger.warning(f"keeper progress check failed: {e}")
-                advanced = False
-            if advanced:
-                if keeper.is_complete(after_history):
-                    aim_status, rating, verdict_src = 'achieved', 7, PROOF
-                    justification = "Task completed, confirmed by the keeper."
-                    logs.append("ACHIEVED, confirmed by evidence")
-                else:
-                    # rating stays below the Go threshold so this records as a
-                    # step taken rather than an aim finished
-                    aim_status, rating, verdict_src = 'progress', 5, PROOF
-                    justification = "Advanced, confirmed by the keeper: " + \
-                        keeper.progress_note(after_history)
-                    # Progress needs somewhere to go, or the branch cannot fire
-                    if not next_aim or next_aim == current_aim:
-                        next_aim = keeper.progress_note(after_history)
-                    logs.append("PROGRESS, confirmed by evidence")
+                advanced = finished = False
+            # Completion is checked on its own rather than nested inside
+            # advancement, because the winning move often does not advance by
+            # the run's own measure. On a troubleshooting task the repair that
+            # fixes the fault eliminates nothing - the candidate set is already
+            # as small as it will get - so gating the Go behind "did this
+            # narrow anything" meant a solved run recorded no Go at all.
+            if finished:
+                aim_status, rating, verdict_src = 'achieved', 7, PROOF
+                justification = "Task completed, confirmed by the keeper."
+                logs.append("ACHIEVED, confirmed by evidence")
+            elif advanced:
+                # rating stays below the Go threshold so this records as a
+                # step taken rather than an aim finished
+                aim_status, rating, verdict_src = 'progress', 5, PROOF
+                justification = "Advanced, confirmed by the keeper: " + \
+                    keeper.progress_note(after_history)
+                # Progress needs somewhere to go, or the branch cannot fire
+                if not next_aim or next_aim == current_aim:
+                    next_aim = keeper.progress_note(after_history)
+                logs.append("PROGRESS, confirmed by evidence")
             elif rating >= 6 or aim_status == 'achieved':
                 # Evidence outranks the judge in *both* directions, not just
                 # when it refutes. Where the keeper can measure success, a judge

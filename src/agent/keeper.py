@@ -26,6 +26,7 @@ from . import word_rules as W
 from . import sentence_rules as SR
 from . import transform_rules as TR
 from . import constraint_rules as CR
+from . import troubleshoot_rules as TS
 from .induction import compile_predicate, UnsafePredicate
 
 # How many distinct accepted sentences finish a constraints run. More than
@@ -38,13 +39,20 @@ WORD_INDUCTION = 'word_induction'
 SENTENCE_INDUCTION = 'sentence_induction'
 TRANSFORMATION = 'transformation'
 CONSTRAINTS = 'constraints'
+TROUBLESHOOT = 'troubleshoot'
 CHAT = 'chat'
 
 RUN_TYPES = (CHAT, RULE_INDUCTION, WORD_INDUCTION, SENTENCE_INDUCTION,
-             TRANSFORMATION, CONSTRAINTS, HIDDEN_NORM)
+             TRANSFORMATION, CONSTRAINTS, TROUBLESHOOT, HIDDEN_NORM)
 
 
 def available_rules(run_type):
+    if run_type == TROUBLESHOOT:
+        # The "rule" is which fault the customer actually has. Naming the
+        # optimal step count lets a researcher pick an easy or a hard one.
+        return [{'id': k, 'name': f'{TS.FAULT_TEXT[k]} '
+                                  f'({TS.optimal_steps(k)} steps if solved cleanly)'}
+                for k in TS.FAULTS]
     if run_type == CONSTRAINTS:
         return [{'id': k, 'name': CR.describe(k)} for k in CR.LEVELS]
     if run_type == TRANSFORMATION:
@@ -81,6 +89,8 @@ class Keeper:
             return R.DEFAULT_RULES[0]
         if run_type == CONSTRAINTS:
             return CR.DEFAULT_LEVELS[-1]
+        if run_type == TROUBLESHOOT:
+            return TS.DEFAULT_FAULTS[0]
         if run_type == TRANSFORMATION:
             return TR.DEFAULT_INVARIANTS[0]
         if run_type == SENTENCE_INDUCTION:
@@ -94,6 +104,8 @@ class Keeper:
     # -- the hidden rule ---------------------------------------------------
 
     def describe(self):
+        if self.run_type == TROUBLESHOOT:
+            return TS.describe()
         if self.run_type == CONSTRAINTS:
             return CR.describe(self.rule_name)
         if self.run_type == TRANSFORMATION:
@@ -160,8 +172,38 @@ class Keeper:
                 out.append(a)
         return out[1:]
 
+    def scored_moves(self, history):
+        """Every move in the transcript, scored directly.
+
+        `observations_from` only counts a move once a keeper reply follows it,
+        which is right when reading settled history but wrong when judging the
+        turn that has just been taken - that one has not been answered yet. A
+        verdict depends only on the move and the hidden rule, so scoring it
+        directly is sound, and it is what lets the decision see the move it is
+        actually being asked about.
+        """
+        out = []
+        for speaker, message in history:
+            if speaker == 'keeper':
+                continue
+            move = self.extract_move(message)
+            if move is not None:
+                out.append((move, self.verdict(move)))
+        return out
+
+    def live_faults(self, history):
+        """Which faults are still possible - the agent's actual position.
+
+        This is what makes a troubleshooting state a place rather than a tally:
+        it is a *set*, it shrinks as evidence arrives, and two different routes
+        can arrive at the same one.
+        """
+        return TS.candidates(self.scored_moves(history))
+
     def is_complete(self, history):
         """Has the task been finished? Only meaningful where there is a target."""
+        if self.run_type == TROUBLESHOOT:
+            return TS.solved(self.scored_moves(history))
         if self.run_type == CONSTRAINTS:
             return len(self.distinct_accepted(history)) >= CR_TARGET
         task = self.task()
@@ -179,6 +221,17 @@ class Keeper:
         it forward - and a graph whose only proven verdicts are refutations
         collapses to a hub of dead ends with no route through it.
         """
+        if self.run_type == TROUBLESHOOT:
+            # Eliminating a possibility is progress, decided by counting the
+            # set rather than by asking anyone's opinion of the move.
+            #
+            # The new move has to be scored directly. `observations_from` only
+            # counts a move once a keeper reply follows it in the transcript,
+            # and the turn being judged here has not been answered yet - so
+            # reading both sides through it makes every turn look identical,
+            # no verdict ever fires, and the run ends with an empty graph.
+            return (len(TS.candidates(self.scored_moves(after)))
+                    < len(TS.candidates(self.scored_moves(before))))
         if self.run_type == CONSTRAINTS:
             return len(self.distinct_accepted(after)) > len(self.distinct_accepted(before))
         task = self.task()
@@ -193,6 +246,15 @@ class Keeper:
 
     def progress_note(self, history):
         """What advancing looks like from here, so an evolved aim has somewhere to go."""
+        if self.run_type == TROUBLESHOOT:
+            live = sorted(self.live_faults(history))
+            if len(live) == 1:
+                return f'Only {live[0]} remains. Apply the repair that fixes it.'
+            if len(live) <= 3:
+                return ('Still possible: ' + ', '.join(live) +
+                        '. Choose a check that separates them.')
+            return (f'{len(live)} faults still possible. Choose the check that '
+                    f'eliminates the most, not the one that confirms a hunch.')
         if self.run_type == CONSTRAINTS:
             got = len(self.distinct_accepted(history))
             left = max(0, CR_TARGET - got)
@@ -213,6 +275,13 @@ class Keeper:
         and the agent argues about a subscription while the keeper answers
         questions about integers.
         """
+        if self.run_type == TROUBLESHOOT:
+            return ('A customer cannot play anything. Find out which single fault '
+                    'is responsible and fix it, using one action per turn. Prefer '
+                    'the check that eliminates the most possibilities over the one '
+                    'that confirms what you already suspect - and do not run a '
+                    'repair until the evidence points at one fault, because a '
+                    'repair that does not match tells you almost nothing.')
         if self.run_type == RULE_INDUCTION:
             return ("Work out the hidden rule that decides which triples of whole "
                     "numbers are accepted. Propose one triple at a time, say what "
@@ -261,6 +330,8 @@ class Keeper:
 
     def opening(self):
         """The first thing the agent sees — one confirmed positive example."""
+        if self.run_type == TROUBLESHOOT:
+            return TS.brief()
         if self.run_type == CONSTRAINTS:
             return (f'I accept sentences that satisfy several rules at once. '
                     f'"{CR.opening_example(self.rule_name)}" is one I accept. '
@@ -308,6 +379,9 @@ class Keeper:
         elif message is not None and not isinstance(message, str):
             message = str(message)
 
+        if self.run_type == TROUBLESHOOT:
+            return TS.resolve_action(message)
+
         if self.run_type in (SENTENCE_INDUCTION, TRANSFORMATION, CONSTRAINTS):
             quoted = self.SENTENCE_RE.findall(message or '')
             if quoted:
@@ -352,6 +426,14 @@ class Keeper:
         """Does this move satisfy the hidden rule? Decided in code."""
         if move is None:
             return None
+        if self.run_type == TROUBLESHOOT:
+            # For a diagnostic, the verdict is the answer to its question. For a
+            # repair, whether it fixed the fault.
+            if TS.is_diagnostic(move):
+                return bool(TS.DIAGNOSTICS[move]['test'](self.rule_name))
+            if TS.is_repair(move):
+                return TS.FAULTS[self.rule_name]['repair'] == move
+            return None
         if self.run_type == RULE_INDUCTION:
             return R.label(self.rule_name, move)
         if self.run_type == CONSTRAINTS:
@@ -374,6 +456,30 @@ class Keeper:
         """The keeper's turn. Returns (text, move, verdict)."""
         move = self.extract_move(message)
         verdict = self.verdict(move)
+
+        if self.run_type == TROUBLESHOOT:
+            if move is None:
+                return ('I did not catch an action. Use one of these exact '
+                        'names - ' + TS.action_menu(), None, None)
+            obs = self.observations_from(self._history or [])
+            before = TS.candidates(obs)
+            after = TS.candidates(obs + [(move, verdict)])
+            if TS.is_repair(move):
+                if verdict:
+                    return (f'{move} - that fixed it. The fault was '
+                            f'{TS.FAULT_TEXT[self.rule_name]}.', move, True)
+                return (f'{move} - no change; that was not the fault. '
+                        f'{len(after)} possible causes remain.', move, False)
+            answer = 'yes' if verdict else 'no'
+            detail = TS.DIAGNOSTICS[move]['yes' if verdict else 'no']
+            if len(after) == len(before):
+                # A check that eliminates nothing has told the agent something it
+                # already knew. Saying so is what makes a wasted turn legible as
+                # a wasted turn rather than as bad luck.
+                return (f'{move} - {answer}, {detail}. You already knew that; '
+                        f'still {len(after)} possible causes.', move, verdict)
+            return (f'{move} - {answer}, {detail}. That leaves {len(after)} '
+                    f'possible cause{"" if len(after) == 1 else "s"}.', move, verdict)
 
         if self.run_type == RULE_INDUCTION:
             if move is None:
@@ -514,6 +620,11 @@ class Keeper:
                     "For example 'a < b < c'. Use only arithmetic, comparisons and "
                     "and/or/not. This is how your guess gets checked, so it must mean "
                     "exactly what you believe.")
+        if self.run_type == TROUBLESHOOT:
+            return ('- "rule": the single fault you currently believe is responsible, '
+                    'named exactly as one of: ' + ', '.join(sorted(TS.FAULTS)) +
+                    '. This is checked against what you have already been told, so '
+                    'naming a fault your own evidence has ruled out will be caught.')
         if self.run_type in (SENTENCE_INDUCTION, TRANSFORMATION, CONSTRAINTS):
             return ("- \"rule\": your current best guess at the hidden rule that decides "
                     "which sentences are allowed, as a boolean expression over the "
@@ -540,6 +651,31 @@ class Keeper:
         result = {'checkable': False, 'consistent': None,
                   'contradicted_by': None, 'holdout_accuracy': None}
         if not predicate or self.run_type == CHAT:
+            return result
+
+        if self.run_type == TROUBLESHOOT:
+            # No predicate to compile: the claim is simply "the fault is X", and
+            # the evidence either still permits X or has already excluded it.
+            # Naming an excluded fault is a refutation the agent could have
+            # derived itself from what it was told, which is exactly the kind of
+            # mistake a decision graph is supposed to stop it repeating.
+            claim = str(predicate).strip().lower()
+            claim = next((f for f in TS.FAULTS if f in claim), None)
+            if claim is None:
+                return result
+            result['checkable'] = True
+            live = TS.candidates(observations)
+            if claim in live:
+                result['consistent'] = True
+                # how much of the space this belief has narrowed to, in [0, 1]
+                result['holdout_accuracy'] = round(
+                    1.0 - (len(live) - 1) / max(len(TS.FAULTS) - 1, 1), 3)
+                return result
+            result['consistent'] = False
+            for move, verdict in observations:
+                if claim not in TS.candidates([(move, verdict)]):
+                    result['contradicted_by'] = {'move': move, 'keeper': verdict}
+                    break
             return result
 
         try:
