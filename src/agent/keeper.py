@@ -297,13 +297,14 @@ class Keeper:
                 raised |= DG.mentions(message)
             if not raised:
                 return False   # no symptom discussed; not a wasted question
-            known = {s for s, _ in DG.disclosures_from(before, self.rule_name)}
-            # Wasted means every topic raised this turn had already been
-            # answered. Judging it by "did the candidate set shrink" instead
-            # would condemn every fresh question, because a disclosure only
-            # registers once the other agent has replied to it - so the turn
-            # that asks a good question always looks like it achieved nothing.
-            return bool(raised) and raised <= known
+            # Ground already covered *before* the question now being answered.
+            # Measuring against everything said so far would mark every reply
+            # as wasted: the asker raises a topic, that topic counts at once,
+            # and the answer then looks like repetition. Replying to the
+            # question in front of you is not a wasted turn - re-treading
+            # something settled earlier is.
+            settled = {s for s, _ in DG.disclosures_from(before[:-1], self.rule_name)}
+            return bool(raised) and raised <= settled
         if self.run_type != TROUBLESHOOT:
             return False
         if self.is_complete(after):
