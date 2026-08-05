@@ -43,6 +43,31 @@ def post(s, path, **form):
     return r.json() if ct.startswith("application/json") else {}
 
 
+def ensure_single_solver(s):
+    """Leave exactly one agent working the task.
+
+    A default session carries two agents, and they alternate turns. On a
+    conversation that is the point, but `constraints` is solitaire: one agent
+    induces a rule against a keeper. Two agents split the turns *and* the
+    memory, because each keeps its own decision graph and recalls only from
+    that one. So the graph arm was really two half-graphs, each holding half of
+    what had been ruled out, which understates exactly the effect this study is
+    trying to measure.
+    """
+    try:
+        agents = s.get(f"{BASE}/get_agent_graphs", timeout=60).json()
+        agents = agents if isinstance(agents, list) else agents.get("agents", [])
+        for extra in agents[1:]:
+            aid = extra.get("id") or extra.get("agent_id")
+            if aid:
+                s.post(f"{BASE}/delete_agent", data={"agent_id": aid}, timeout=60)
+        if len(agents) > 1:
+            print(f"  (single-solver: removed {len(agents) - 1} extra agent)",
+                  flush=True)
+    except Exception as e:                                         # noqa: BLE001
+        print(f"  could not reduce to one agent: {e}", file=sys.stderr)
+
+
 def run_one(mode, window, level, max_calls, label, prior_graph=None, verbose=False):
     """One arm. Returns a dict of what happened."""
     s = requests.Session()
@@ -51,8 +76,9 @@ def run_one(mode, window, level, max_calls, label, prior_graph=None, verbose=Fal
          run_type="constraints", keeper_rule=level,
          graph_memory_mode=mode, context_window=str(window),
          graph_recall_k="4", graph_recall_chars="600",
-         nogo_ungated="true", run_label=label)
+         nogo_ungated="false", run_label=label)
     post(s, "/reset_run_trail", run_label=label)
+    ensure_single_solver(s)
 
     if prior_graph:
         # Hand this agent the earlier run's graph before it starts, so any

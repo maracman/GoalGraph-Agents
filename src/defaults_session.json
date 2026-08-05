@@ -15,7 +15,7 @@
     "graph_memory_mode": "description",
     "graph_recall_k": 4,
     "graph_recall_chars": 600,
-    "nogo_ungated": true,
+    "nogo_ungated": false,
     "go_corroborate": false,
     "context_window": 0,
     "run_type": "chat",

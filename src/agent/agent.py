@@ -898,6 +898,55 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                 logs.append(f"Rule holds so far; {check['holdout_accuracy']:.0%} "
                             f"on unseen items.")
 
+        # Advancement is a fact too, and the keeper can settle it. This is the
+        # other half of the refutation check above, and leaving it out is what
+        # made every graph a depth-1 star: the keeper could prove an aim wrong
+        # but never prove the run had moved, so the only thing that could
+        # advance the cursor was a judge volunteering a high rating. It rarely
+        # did, so aims accumulated as spokes and no route was ever built.
+        #
+        # It outranks the refutation above deliberately. A turn that produced a
+        # genuinely new accepted answer advanced the run whatever the agent
+        # believed about why, and a mistaken hypothesis will still be refuted on
+        # a later turn if it is really wrong.
+        if keeper:
+            after_history = history + [(agent_name, response_text)]
+            try:
+                advanced = keeper.progress_made(history, after_history)
+            except Exception as e:                                 # noqa: BLE001
+                logger.warning(f"keeper progress check failed: {e}")
+                advanced = False
+            if advanced:
+                if keeper.is_complete(after_history):
+                    aim_status, rating, verdict_src = 'achieved', 7, PROOF
+                    justification = "Task completed, confirmed by the keeper."
+                    logs.append("ACHIEVED, confirmed by evidence")
+                else:
+                    # rating stays below the Go threshold so this records as a
+                    # step taken rather than an aim finished
+                    aim_status, rating, verdict_src = 'progress', 5, PROOF
+                    justification = "Advanced, confirmed by the keeper: " + \
+                        keeper.progress_note(after_history)
+                    # Progress needs somewhere to go, or the branch cannot fire
+                    if not next_aim or next_aim == current_aim:
+                        next_aim = keeper.progress_note(after_history)
+                    logs.append("PROGRESS, confirmed by evidence")
+            elif rating >= 6 or aim_status == 'achieved':
+                # Evidence outranks the judge in *both* directions, not just
+                # when it refutes. Where the keeper can measure success, a judge
+                # calling an aim achieved while nothing measurable happened is a
+                # false positive, and letting it advance the cursor built graphs
+                # seven hops deep on runs that never got a single answer
+                # accepted. Fake progress is worse than a visible dead end: the
+                # dead end is at least true.
+                rating = min(rating, 5)
+                aim_status = 'continue'
+                justification = (
+                    "The judge rated this achieved, but the keeper recorded no "
+                    "advance, so it is held open rather than marked reached. "
+                    + (justification or ''))
+                logs.append("Judge said achieved; keeper saw no advance, so not a Go")
+
         if trail is not None:
             # The agent row comes from a DataFrame and the graph from networkx,
             # so several of these arrive as numpy scalars. They must be plain
@@ -946,8 +995,8 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                 logger.info(f"GO: {agent_name} achieved aim '{current_aim}' (rating={rating})")
                 new_node = current_aim
                 G = update_graph(G, current_node, new_node, "Go",
-                                 verdict_confidence(OPINION, rating))
-                G[current_node][new_node]['verdict_source'] = OPINION
+                                 verdict_confidence(verdict_src, rating))
+                G[current_node][new_node]['verdict_source'] = verdict_src
                 annotate_aim(G, new_node, 'Go', reason=justification, rating=rating,
                              turn=turn_index, ruleset=agent.get('goal'),
                              enabled=generation_vars.get('graph_memory_mode') == 'graph')
@@ -973,8 +1022,8 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                 )
                 new_node = current_aim
                 G = update_graph(G, current_node, new_node, "Progress",
-                                 verdict_confidence(OPINION, rating))
-                G[current_node][new_node]['verdict_source'] = OPINION
+                                 verdict_confidence(verdict_src, rating))
+                G[current_node][new_node]['verdict_source'] = verdict_src
                 annotate_aim(G, new_node, 'Progress', reason=justification, rating=rating,
                              turn=turn_index, ruleset=agent.get('goal'),
                              enabled=generation_vars.get('graph_memory_mode') == 'graph')
@@ -990,24 +1039,40 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                 if aim_source == 'graph_path':
                     logs.append(f"Graph supplied the next aim: {current_aim}")
 
-            # NOGO checks. Refutation is not gated on persistence: patience
-            # exists to protect an aim that is merely struggling, not one the
-            # judge has flatly rejected. Gating those behind patience_min lost
-            # every NoGo whenever aims moved faster than the gate, because
-            # persistence_count resets on each aim change. The weaker signals -
-            # regression and impatience - still wait for a fair run.
+            # NOGO checks. Only a *proof* skips the patience gate.
+            #
+            # Patience is the mechanism the whole paradigm runs on: an aim needs
+            # a few turns to develop before it can be judged, and abandoning it
+            # on the first bad rating means it can never mature into a Go. With
+            # every NoGo ungated, aims died on turn one, a fresh aim was chosen
+            # from the same node, and the graph came out as a depth-1 star with
+            # no Go edges at all - which is what a run looks like when nothing
+            # is allowed to progress.
+            #
+            # The bug that prompted the ungating was real (persistence_count
+            # resets on each aim change, so aims moving faster than the gate
+            # were never refuted), but it only ever needed to apply to verdicts
+            # the keeper settled from evidence. A fact does not need a waiting
+            # period; a judge's opinion does. So a keeper proof refutes at once
+            # and everything else - abandon, strong failure, regression,
+            # impatience - waits for a fair run.
             else:
                 nogo = False
-                ungated = generation_vars.get('nogo_ungated', True)
+                proven = verdict_src == PROOF
                 past_gate = persistence_count >= patience_min
+                # Escape hatch, off by default, so the old ungated behaviour is
+                # still reachable for comparison in a study.
+                if generation_vars.get('nogo_ungated', False):
+                    past_gate = True
 
-                # Explicit abandon from the judge
-                if aim_status == 'abandon' and (ungated or past_gate):
+                # Refuted by evidence, or explicitly abandoned by the judge
+                if aim_status == 'abandon' and (proven or past_gate):
                     nogo = True
-                    logs.append("NOGO: aim abandoned by judge")
+                    logs.append("NOGO: aim abandoned by "
+                                f"{'evidence' if proven else 'judge'}")
 
                 # Strong failure
-                elif rating <= 2 and (ungated or past_gate):
+                elif rating <= 2 and (proven or past_gate):
                     nogo = True
                     logs.append(f"NOGO: strong failure (rating={rating})")
 

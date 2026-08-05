@@ -169,6 +169,43 @@ class Keeper:
             return False
         return self.state_from(history) == task['target']
 
+    def progress_made(self, before, after):
+        """Did this turn advance the run, as a matter of record rather than opinion?
+
+        The keeper can already prove a hypothesis *wrong*. It can equally prove
+        the run has moved: a newly accepted answer, or a step closer to the
+        target, is a fact settled in code. Without this the agent could only
+        ever be told it was mistaken, so nothing but a judge's hunch could move
+        it forward - and a graph whose only proven verdicts are refutations
+        collapses to a hub of dead ends with no route through it.
+        """
+        if self.run_type == CONSTRAINTS:
+            return len(self.distinct_accepted(after)) > len(self.distinct_accepted(before))
+        task = self.task()
+        if not task:
+            return False
+        old, new = self.state_from(before), self.state_from(after)
+        if old is None or new is None or old == new:
+            return False
+        # closer to the target than it was
+        return (TR.word_distance(new, task['target'])
+                < TR.word_distance(old, task['target']))
+
+    def progress_note(self, history):
+        """What advancing looks like from here, so an evolved aim has somewhere to go."""
+        if self.run_type == CONSTRAINTS:
+            got = len(self.distinct_accepted(history))
+            left = max(0, CR_TARGET - got)
+            if left <= 0:
+                return 'Confirm the rule that explains every accepted answer.'
+            return (f'{got} accepted so far. Find {left} more that satisfy the same '
+                    f'hidden rules while sharing as few words as possible with the '
+                    f'ones already accepted.')
+        task = self.task()
+        if not task:
+            return ''
+        return f"Move the sentence closer to: {task['target']}"
+
     def agent_goal(self):
         """What the agent is actually trying to do in this run.
 
@@ -273,7 +310,25 @@ class Keeper:
 
         if self.run_type in (SENTENCE_INDUCTION, TRANSFORMATION, CONSTRAINTS):
             quoted = self.SENTENCE_RE.findall(message or '')
-            return quoted[-1].strip() if quoted else None
+            if quoted:
+                return quoted[-1].strip()
+            # Models drop the quotes and reply with the bare sentence, which
+            # cost about a fifth of every run's turns to "give me a sentence in
+            # double quotes" - turns spent on protocol rather than on the task.
+            # Only the unambiguous case is rescued: the whole reply is one
+            # sentence. Guessing inside a longer message would put a candidate
+            # the agent never proposed into the evidence record, and every
+            # verdict downstream is only as good as that record.
+            bare = (message or '').strip()
+            if (bare.count('\n') == 0 and bare[-1:] in '.?!'
+                    and 4 <= len(bare.split()) <= 25
+                    # exactly one sentence: "I think it is colour. Let me try
+                    # this." is commentary, not a candidate, and recording it
+                    # as one would put words the agent never proposed into the
+                    # evidence the keeper reasons from
+                    and not re.search(r'[.?!]\s', bare)):
+                return bare
+            return None
 
         if self.run_type == WORD_INDUCTION:
             quoted = self.WORD_RE.findall(message or '')

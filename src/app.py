@@ -852,13 +852,33 @@ def initialize_session():
     return session_state
 
 def _sanitize_for_json(obj):
-    """Replace NaN/Infinity values with None for valid JSON serialization."""
+    """Make a session state safe to serialise.
+
+    Three things leak in from pandas and numpy and each one breaks JSON:
+
+      numpy scalars   np.int64 is not an int subclass, so json.dump raises
+                      TypeError on it. Because that happens *part way through*
+                      the write, it also truncated the session file on disk -
+                      which is why sessions came back as "Expecting value:
+                      line 1 column 10838". One cause, two symptoms.
+      NaN             pandas uses it for an empty cell, and it is not a JSON
+                      value.
+      tuples          conversation history is a list of tuples, and the old
+                      version recursed into lists and dicts but not tuples, so
+                      anything unclean inside one survived untouched.
+    """
     import math
     if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
         return None
+    # numpy scalars expose .item(); recurse so a numpy NaN is caught as a float
+    if hasattr(obj, 'item') and not isinstance(obj, (str, bytes, dict, list, tuple)):
+        try:
+            return _sanitize_for_json(obj.item())
+        except Exception:                                          # noqa: BLE001
+            return str(obj)
     if isinstance(obj, dict):
         return {k: _sanitize_for_json(v) for k, v in obj.items()}
-    if isinstance(obj, list):
+    if isinstance(obj, (list, tuple)):
         return [_sanitize_for_json(v) for v in obj]
     return obj
 
@@ -866,8 +886,13 @@ def save_current_session(session_state):
     session_id = session_state['session_id']
     filename = f"{session_id}_state.json"
     filepath = os.path.join(cache_dir, filename)
-    with open(filepath, 'w') as f:
-        json.dump(_sanitize_for_json(session_state), f)
+    # Write to a temporary file and rename, so a serialisation failure leaves
+    # the previous good session intact rather than a half-written one. The
+    # numpy leak above destroyed four saved sessions this way.
+    tmp = f"{filepath}.tmp"
+    with open(tmp, 'w') as f:
+        json.dump(_sanitize_for_json(session_state), f, allow_nan=False)
+    os.replace(tmp, filepath)
     flask_logger.info(f"Session state saved: {session_id}")
 
 def load_state(session_id):

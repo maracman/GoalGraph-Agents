@@ -49,7 +49,7 @@ const GraphSettings = () => {
     graph_memory_mode: 'description',
     graph_recall_k: 4,
     graph_recall_chars: 600,
-    nogo_ungated: true,
+    nogo_ungated: false,
     go_corroborate: false,
   });
   const [saving, setSaving] = useState(false);
@@ -262,13 +262,15 @@ const GraphSettings = () => {
             checked={!!settings.nogo_ungated}
             onChange={(e) => change('nogo_ungated', e.target.checked)}
           />
-          <span>Abandon a refuted aim immediately</span>
+          <span>Let the judge abandon an aim before it matures</span>
         </label>
         <small className="setting-help">
-          On, an aim the judge flatly rejects is abandoned straight away. Off, it must
-          first be held for the agent&apos;s minimum persistence — which means an aim
-          that is rewritten every turn can never be abandoned at all. Weaker signals,
-          regression and impatience, always wait regardless of this setting.
+          Off (recommended), only a refutation the keeper settles from evidence skips
+          the minimum persistence — a fact needs no waiting period, an opinion does.
+          On, the judge can also abandon an aim on its first bad rating, which
+          usually collapses the graph into a hub of dead ends with no Go edges,
+          because no aim survives long enough to progress. Regression and impatience
+          always wait regardless.
         </small>
       </div>
 
