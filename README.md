@@ -281,51 +281,47 @@ a model, so the agent's claims can be *checked* rather than judged.
 | **`constraints`** | **code holding several hidden rules that must all hold** | **a belief about one of the rules** |
 | `hidden_norm` | code deciding warm or flat replies from a hidden property of your message | a hypothesis, tested through dialogue |
 
-**`constraints` is the one to start with**, because it is the only task where
-the decision graph has been shown to be *necessary* rather than merely present.
-Five hidden rules must all hold at once and a rejection says only "no", so the
-agent must accumulate more constraints than a short context window can hold.
+**`constraints` is the one to start with.** Three hidden rules must all hold at
+once, and a rejection says only how many held, never which — so the agent has to
+accumulate evidence across more attempts than a short context window can hold.
 
 With a four-message window, over five replications per arm:
 
-| arm | accepted answers | completed | turns | input tokens |
+| arm | accepted answers (95% CI) | completed | turns | input tokens |
 |---|---|---|---|---|
-| no memory | 1.2 ±0.4 | 0/5 | 23.0 | 33,899 |
-| stated once, in conversation | 0.8 ±0.4 | 1/5 | 22.4 | 34,387 |
-| **decision graph** | **5.0 ±0.6** | **3/5** | **18.2** | **31,915** |
+| no memory | 0.6 [0.0, 1.4] | 0/5 | 25.0 | 39,538 |
+| stated once, in conversation | 1.2 [0.1, 2.3] | 1/5 | 22.4 | **33,494** |
+| decision graph | 1.8 [0.7, 2.9] | 2/5 | 23.0 | 38,966 |
 
-The intervals do not overlap. The graph arm is the only one that reliably
-finishes, and it does so in fewer turns and for **fewer tokens** — recall costs
-a few hundred characters a prompt, but not remembering costs whole turns.
+**Read this as a null result.** The ordering favours the graph on every measure,
+but the intervals overlap and the completion difference is not significant
+(Fisher exact p = 0.44 against no memory). It is also not cheaper. Five
+replications cannot separate 2/5 from 0/5.
 
-The middle row is the fairness check: stating each refutation once in the
-conversation and letting it scroll away performs no better than no memory at
-all. Storing and retrieving is what does the work.
+What the runs *do* establish is that the machinery is correct: verdicts are
+settled from evidence rather than opinion, progression is recorded as a route,
+and the no-memory arm visibly builds nothing at all — see the two graphs above.
+Whether the graph is *useful* is a different claim and this task cannot answer
+it, because its state is a counter to three: there is nothing to route through,
+so the pathfinding the software exists to do is never exercised.
 
-And the graph transfers. A fresh agent in a new session, started from a
-predecessor's graph:
+See **[docs/TOY_RESEARCH_PROJECT.md](docs/TOY_RESEARCH_PROJECT.md)** for the full
+account, including the five earlier task designs that failed to show anything and
+the troubleshooting task that would actually test the routing claim — which is
+the more useful half of the write-up.
 
-| arm | completed | turns | input tokens |
-|---|---|---|---|
-| builds its own | 2/3 | 17.7 | 29,104 |
-| **inherits a graph** | **3/3** | **6.7** | **10,757** |
-| no graph | 0/3 | 23.0 | 33,848 |
+Check the paradigm still holds before trusting any of it:
 
-**Finished every run, in 38% of the turns, for 32% of the tokens.** Not smarter
-— it reaches the same number of answers — it just does not re-derive what has
-already been ruled out. That is the case for treating a decision graph as
-transferable knowledge rather than a log.
+```bash
+python3 studies/validate_paradigm.py --quick
+```
 
-See **[docs/TOY_RESEARCH_PROJECT.md](docs/TOY_RESEARCH_PROJECT.md)** for the
-worked example, its data, and an account of the four earlier task designs that
-failed to show anything — which is the more useful half of the write-up.
-
-Everything in it can be run by hand from the Decision Graph panel. To run it
+Everything can be run by hand from the Decision Graph panel. To run the study
 unattended instead:
 
 ```bash
-python3 studies/constraints_study.py --level four_constraints \
-        --reps 5 --windows 4 --modes none inline graph --max-calls 24
+python3 studies/constraints_study.py --level three_constraints \
+        --reps 5 --windows 4 --modes none inline graph --max-calls 26
 ```
 
 That script is the UI scripted, not a separate harness: it sets the same

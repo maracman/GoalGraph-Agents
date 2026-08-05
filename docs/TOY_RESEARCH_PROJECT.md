@@ -19,11 +19,21 @@ That raises a question you can actually test:
 > scrolled out of view — and does that let a short-context agent behave like a
 > long-context one?
 
-**Short answer, from the run below: yes, on a task where forgetting actually
-costs you.** An agent with a four-message window and a decision graph produced
-**four times** as many valid answers as the same agent with no memory, for about
-13% more tokens, with no overlap between the two distributions across three
-replications.
+**Short answer, from the runs below: not established.** An agent with a
+four-message window and a decision graph did better than the same agent with no
+memory on every measure — more valid answers, more completions, fewer wasted
+turns — but at five replications per arm the difference is well inside noise
+(Fisher exact p = 0.44 on completion), and it is no cheaper in tokens.
+
+What *is* established is that the machinery works: verdicts are settled from
+evidence rather than opinion, progression is recorded as a route, and an agent
+with no memory visibly builds nothing. Those are separate claims from "the graph
+helps", and only the first is supported here.
+
+The likely reason for the second is not subtle, and it is a criticism of the
+task rather than of the software: this task has no state space to route through.
+That diagnosis, and the task shape that would fix it, are in
+[The result](#the-result) and [The task this project still needs](#the-task-this-project-still-needs).
 
 This is not an artificial concern. It is the shape of any agent working against
 an API with undocumented constraints, a negotiation with unstated limits, or a
@@ -243,43 +253,54 @@ Four columns carry most of the meaning:
 
 ## The result
 
-> **These numbers are stale and are being re-measured.** They were produced
-> under three faults corrected since: `NoGo` fired ungated so aims were abandoned
-> before they could progress, the keeper could refute an aim but never confirm
-> one, and the `accepted` counter matched the substring `- yes`, which also
-> appears in the keeper's *refusal* to count a near-duplicate. The
-> `accepted answers` column is inflated by that last one; `completed` was always
-> sound, since it reads the keeper's own count. The task has also moved from five
-> constraints to three. Do not cite this table.
-
 Five replications per arm. Same agent, same task, same four-message window; the
 only difference is what it is told about aims already ruled out.
 
-| arm | n | accepted answers | completed | turns | input tokens |
+| arm | n | accepted answers (95% CI) | completed | turns | input tokens |
 |---|---|---|---|---|---|
-| `none` | 5 | 1.2 ±0.4 | 0/5 | 23.0 ±0.0 | 33,899 |
-| `inline` | 5 | 0.8 ±0.4 | 1/5 | 22.4 ±1.2 | 34,387 |
-| **`graph`** | 5 | **5.0 ±0.6** | **3/5** | **18.2 ±4.2** | **31,915** |
+| `none` | 5 | 0.6 [0.0, 1.4] | 0/5 | 25.0 | 39,538 |
+| `inline` | 5 | 1.2 [0.1, 2.3] | 1/5 | 22.4 | **33,494** |
+| `graph` | 5 | 1.8 [0.7, 2.9] | 2/5 | 23.0 | 38,966 |
 
-**The intervals do not overlap.** The graph arm's lower bound (4.4) is nearly
-three times the no-memory arm's upper bound (1.6). It is the only arm that
-reliably finishes — three runs in five against none — and it does so in fewer
-turns and for **fewer tokens**, because a run that solves the task stops early.
+**This is a null result, and it should be read as one.** The ordering is
+consistent — `graph` ahead of `inline` ahead of `none`, on both measures — but
+every interval overlaps, and the completion difference is not significant:
+Fisher exact gives **p = 0.44** for `graph` against `none` and **p = 1.0**
+against `inline`. Five replications cannot separate 2/5 from 0/5. The graph arm
+is also **not cheaper**: 38,966 tokens against 39,538 for no memory at all, with
+`inline` the cheapest of the three.
 
-That last point is worth pausing on. Recall is not free: it adds a few hundred
-characters to every prompt. It still comes out cheapest, because the cost of
-*not* remembering is more turns.
+An earlier version of this table reported non-overlapping intervals and a
+threefold effect, with the graph arm cheapest. Those numbers came from a counter
+that matched the substring `- yes`, which also appears in the keeper's *refusal*
+to count a near-duplicate — so near-copies the task explicitly rejects were being
+scored as successes, and the arm that produced the most near-copies looked the
+strongest. The effect did not survive correct measurement.
 
-**`inline` is the fairness check, and it fails to help.** That arm states each
-refutation once, in the conversation, and then lets it scroll out of the window
-— which is what you would do if you thought a decision graph were overkill. It
-performs no better than no memory at all (0.8 against 1.2). Storing and
-retrieving is doing the work; merely mentioning is not.
+**Why the effect is small here, and it is not mysterious.** The task has no state
+space. "Where the agent is" is a count of how many distinct answers it has banked,
+so the `Progress` edges are a tally rendered as a chain rather than places that
+can be returned to, branched from, or routed around. A decision graph earns its
+keep by being *reasoned over* — by [`find_path_to_goal`](../src/agent/graph_intelligence.py)
+choosing among routes by confidence — and a counter to three never invokes that
+machinery at all. What is left for the graph to contribute is recall of refuted
+hypotheses, which is real but is also most of what `inline` provides for less.
+
+So the honest summary: **the machinery is verified correct, and its usefulness is
+not demonstrated by this task.** Those are different claims and only the first is
+supported here. See [Extending it](#extending-it) for the task shape that would
+test the second.
 
 ### Does the graph transfer to a new agent?
 
 The point of writing knowledge down is that someone else can use it. A fresh
-agent, in a new session, started from the graph a previous agent built:
+agent, in a new session, started from the graph a previous agent built.
+
+> **Being re-measured.** The table below was produced under the same faults that
+> inflated the headline — in particular the `accepted` counter that scored
+> near-duplicates as successes — and at five constraints rather than three. Given
+> that the headline effect did not survive correct measurement, this one should
+> not be assumed to either. Do not cite these figures.
 
 | arm | n | accepted | completed | turns | input tokens |
 |---|---|---|---|---|---|
@@ -287,14 +308,11 @@ agent, in a new session, started from the graph a previous agent built:
 | **inherited graph** | 3 | 3.3 ±0.7 | **3/3** | **6.7 ±5.2** | **10,757** |
 | no graph | 3 | 1.7 ±0.7 | 0/3 | 23.0 ±0.0 | 33,848 |
 
-**An agent handed a predecessor's graph finished every run, in 38% of the turns,
-for 32% of the tokens.** It is not smarter — it reaches the same number of
-accepted answers as the first-pass agent — it simply does not have to re-derive
-what has already been ruled out.
-
-This is the clearest statement of what the software is for. A decision graph is
-not a log of what happened; it is transferable knowledge about an environment,
-and handing it to a new agent is worth roughly two thirds of the work.
+The claim being tested is that an agent handed a predecessor's graph does not
+have to re-derive what has already been ruled out, and so should finish in fewer
+turns for fewer tokens without being any smarter — reaching the same number of
+accepted answers as the first-pass agent, just sooner. Note that at n=3 this is
+even less able to separate arms than the headline was at n=5.
 
 The transfer used `trust: true`, because both agents faced an identical setup. A
 graph carried into a *changed* setup should be loaded without it, so carried
@@ -532,3 +550,32 @@ discarded and no claim could ever be refuted. It produced a clean, plausible,
 entirely empty result. Add all six branches, then check
 `verdict_source == 'evidence'` appears in your CSV before trusting a single
 number.
+
+### The task this project still needs
+
+The `constraints` task can show the graph is *recorded* correctly. It cannot show
+the graph is *useful*, because it has no state space to route through — see
+[The result](#the-result). The obvious next task does, and it is a familiar one:
+**troubleshooting**.
+
+A fault is diagnosed by working through a sequence of checks to a fix. That gives
+what every task here has lacked:
+
+- **Places.** An intermediate state is somewhere you can be, return to, and route
+  through — so `find_path_to_goal` is finally exercised rather than merely present.
+- **Several routes to the same fix**, some faster than others, so "better route"
+  is meaningful and measurable.
+- **A reason to reuse a graph.** A second agent facing a similar fault should
+  start from the first agent's route rather than rediscovering it, which is what
+  makes the graph an asset rather than a log.
+
+It also needs one change to the paradigm, and it is worth stating plainly because
+it alters what a weight *means*. Today `update_graph` **overwrites** an edge's
+weight on every visit, so confidence is a snapshot of the moment a verdict was
+issued. For reuse it has to accumulate: an agent that inherits a route, follows a
+`Go` edge and hits a dead end should not flip the label but *lower the
+confidence*, leaving the route intact and slightly more expensive. The router
+already reads confidence as cost — `1.1 − c` for a route, `1 + 10c` for a dead
+end — so a decayed edge automatically loses to a fresher alternative without
+anything being deleted. A graph that gets better with use, rather than only
+bigger.
