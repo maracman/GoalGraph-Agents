@@ -296,23 +296,36 @@ test the second.
 The point of writing knowledge down is that someone else can use it. A fresh
 agent, in a new session, started from the graph a previous agent built.
 
-> **Being re-measured.** The table below was produced under the same faults that
-> inflated the headline — in particular the `accepted` counter that scored
-> near-duplicates as successes — and at five constraints rather than three. Given
-> that the headline effect did not survive correct measurement, this one should
-> not be assumed to either. Do not cite these figures.
-
-| arm | n | accepted | completed | turns | input tokens |
-|---|---|---|---|---|---|
-| first pass (builds its own) | 3 | 3.3 ±0.7 | 2/3 | 17.7 ±6.9 | 29,104 |
-| **inherited graph** | 3 | 3.3 ±0.7 | **3/3** | **6.7 ±5.2** | **10,757** |
-| no graph | 3 | 1.7 ±0.7 | 0/3 | 23.0 ±0.0 | 33,848 |
-
 The claim being tested is that an agent handed a predecessor's graph does not
-have to re-derive what has already been ruled out, and so should finish in fewer
-turns for fewer tokens without being any smarter — reaching the same number of
-accepted answers as the first-pass agent, just sooner. Note that at n=3 this is
-even less able to separate arms than the headline was at n=5.
+have to re-derive what has already been ruled out, and so should finish sooner
+and for fewer tokens without being any smarter.
+
+| arm | n | accepted (95% CI) | completed | turns | input tokens |
+|---|---|---|---|---|---|
+| first pass (builds its own) | 3 | 1.7 [0.4, 3.0] | 1/3 | 19.3 | 33,662 |
+| inherited graph | 3 | **0.7 [0.0, 2.0]** | **0/3** | **25.0** | **38,930** |
+| no graph | 3 | 1.7 [0.0, 3.4] | 1/3 | 20.3 | **30,615** |
+
+**The result goes the other way.** The agent that inherited a predecessor's graph
+was the worst arm on every measure: fewest accepted answers, no completions, the
+turn cap hit on all three runs, and the highest token cost. At n=3 with intervals
+this wide nothing is significant — but an earlier version of this table claimed
+the inheriting agent "finished every run, in 38% of the turns, for 32% of the
+tokens", and that is not what happens when the run is measured correctly.
+
+The mechanism is worth stating because it is a genuine cost, not a bug. Recall
+inserts the nearest few ruled-out aims into every prompt. An agent inheriting 26
+nodes therefore spends prompt budget, every turn, on another agent's dead ends —
+and on a task with three rules there is little to transfer that could not be
+rediscovered in a few probes. The carrying cost is real and constant; the saving
+is small because the task is small. That is the same limitation as the headline
+seen from another angle: **transfer is only worth its price when what is
+transferred is expensive to rediscover**, and nothing in this task is.
+
+It is also why this arm, not the headline, is the one most worth re-running on a
+task with real structure. Inheriting a fault-diagnosis route that took twenty
+turns to establish is a different proposition from inheriting a list of sentences
+that did not parse.
 
 The transfer used `trust: true`, because both agents faced an identical setup. A
 graph carried into a *changed* setup should be loaded without it, so carried
@@ -326,9 +339,14 @@ experiment.
 
 The no-memory agent does not fail by being stupid. It rediscovers a constraint,
 satisfies it, and then breaks it again a few turns later once the evidence has
-scrolled out of view — so it circles a solution it has already partly found. The
-graph arm is handed back what was ruled out and why, so it keeps constraints it
-has already paid for.
+scrolled out of view — so it circles a solution it has already partly found. In
+the graph arm that specific failure is visible in the figures above: its runs
+build a route, while the no-memory runs build a hub of dead ends and nothing
+else.
+
+What the numbers say is that this observable difference in *shape* did not
+translate into a reliable difference in *outcome* at this sample size. Both
+things are true and it would be dishonest to report only the first.
 
 ---
 
