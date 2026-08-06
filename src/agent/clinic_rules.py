@@ -182,6 +182,117 @@ CASES = {
 }
 
 
+# --- what the patient comes in saying -------------------------------------
+# The complaint is never a criterion. It is a *consequence* of one or two of
+# them, so the clinician starts outside the diagnostic vocabulary entirely and
+# has to work backwards to what would produce it. Opening with "I feel low"
+# hands over a criterion for free; opening with "I got a written warning"
+# does not.
+
+PRESENTATIONS = {
+    'alcohol_related_low_mood': {
+        'complaint': 'I got a written warning at work last week.',
+        'caused_by': {'missed_mornings', 'poor_concentration'},
+    },
+    'depressive_episode': {
+        'complaint': 'My sister made me come. She says I have stopped '
+                     'answering my phone.',
+        'caused_by': {'social_withdrawal', 'anhedonia'},
+    },
+    'thyroid_disturbance': {
+        'complaint': 'I had to have my wedding ring cut off.',
+        'caused_by': {'weight_change', 'tremor'},
+    },
+    'burnout_exhaustion': {
+        'complaint': 'I fell asleep on the train and went four stops past my '
+                     'stop. Second time this month.',
+        'caused_by': {'unrefreshing_sleep', 'poor_concentration'},
+    },
+    'generalised_anxiety': {
+        'complaint': 'My dentist says I am grinding my teeth down to nothing.',
+        'caused_by': {'worry', 'restlessness'},
+    },
+    'panic_with_avoidance': {
+        'complaint': 'I have started paying for taxis I cannot afford.',
+        'caused_by': {'avoidance', 'restlessness'},
+    },
+    'obsessive_checking': {
+        'complaint': 'I am late for everything now. My partner has stopped '
+                     'waiting for me.',
+        'caused_by': {'checking', 'restlessness'},
+    },
+}
+
+# --- the red herring ------------------------------------------------------
+# A feature the patient genuinely has and will report, which is *not* part of
+# their illness - it has an ordinary cause. It counts toward the criteria until
+# the clinician asks what changed or when it started, at which point it stops
+# counting and any reasoning that leaned on it has to be redone.
+#
+# This is the only mechanic here that can make a clinician wrong rather than
+# merely slow, and it is what puts a genuinely mistaken branch in the graph.
+
+SITUATIONAL = {
+    'alcohol_related_low_mood': {
+        'early_waking': 'there has been building work next door since March, '
+                        'it starts at seven',
+    },
+    'burnout_exhaustion': {
+        'appetite_loss': 'the canteen closed and there is nowhere to eat near '
+                         'the new office',
+    },
+    'depressive_episode': {
+        'restlessness': 'they gave up smoking eight weeks ago',
+    },
+    'thyroid_disturbance': {
+        'social_withdrawal': 'their closest friend moved abroad in January',
+    },
+    'generalised_anxiety': {
+        'missed_mornings': 'the only bus on their route was rerouted',
+    },
+}
+
+# --- the second kind of red herring ---------------------------------------
+# Features that are genuinely true of the patient and have no ordinary
+# explanation to uncover - they simply do not cohere into anything. Each is
+# real, each belongs to some disorder's criteria, and no combination of them
+# completes a cluster, because the rest of that disorder's requirements are
+# absent.
+#
+# This is a different trap from the situational one and needs to be, because
+# they fail differently. A situational symptom is disproved by asking when it
+# started. An incidental one is never disproved at all: the clinician has to
+# notice that pursuing it cannot complete any diagnosis and drop it. That is
+# the harder judgement, and the one that produces a branch the agent has to
+# abandon on its own rather than because it was told.
+#
+# `separable()` checks that none of these accidentally completes a cluster.
+
+INCIDENTAL = {
+    'alcohol_related_low_mood': {'checking', 'avoidance'},
+    'thyroid_disturbance': {'guilt', 'appetite_loss'},
+    'burnout_exhaustion': {'worry', 'racing_thoughts'},
+    'depressive_episode': {'checking'},
+    'generalised_anxiety': {'guilt'},
+    'panic_with_avoidance': {'early_waking'},
+    'obsessive_checking': {'appetite_loss'},
+}
+
+# Phrasings that count as asking why something is happening, rather than
+# whether it is. Discovering the situational cause requires this second kind of
+# question, which is the part clinicians skip when they are pattern-matching.
+CONTEXT_CUES = (
+    'since when', 'how long', 'when did', 'what changed', 'anything change',
+    'why do you think', 'what started', 'always been', 'before that',
+    'is there a reason', 'what is different', 'around that time',
+)
+
+
+def asks_context(text):
+    low = str(text or '').lower()
+    return any(cue in low for cue in CONTEXT_CUES)
+
+
 # What counts as raising a topic. Agents talk in English, not feature ids.
 KEYWORDS = {
     'early_waking': ['early wak', 'wake early', '4am', 'four in the morning',
@@ -191,7 +302,7 @@ KEYWORDS = {
     'appetite_loss': ['appetite', 'not eating', 'off your food', 'appetite_loss'],
     'weight_change': ['weight', 'clothes fit', 'weight_change'],
     'morning_nausea': ['nausea', 'sick in the morning', 'queasy', 'morning_nausea'],
-    'tremor': ['tremor', 'shak', 'unsteady hand', 'hands trembl'],
+    'tremor': ['tremor', 'shak', 'unsteady', 'hands trembl'],
     'low_mood': ['low mood', 'mood', 'flat', 'depressed', 'low_mood'],
     'anhedonia': ['anhedonia', 'enjoy', 'pleasure', 'interest in things'],
     'guilt': ['guilt', 'blame yourself', 'dwelling on things'],
@@ -214,6 +325,97 @@ def mentions(text):
     """Which features this message raises."""
     low = str(text or '').lower()
     return {f for f, words in KEYWORDS.items() if any(w in low for w in words)}
+
+
+def reported(case):
+    """Everything the patient will say yes to - the illness plus its red herring.
+
+    The situational feature has to be in here or it is not a trap at all: the
+    patient would simply deny it, and a clinician could never be misled by
+    something nobody mentioned.
+    """
+    return (CASES[case] | set(SITUATIONAL.get(case, {}))
+            | INCIDENTAL.get(case, set()))
+
+
+def read(history, case):
+    """Everything the clinician has established, and how.
+
+    Returns a dict with:
+      known       {feature: bool} - answered one way or the other
+      situational features reported present but revealed to have an ordinary
+                  cause, so they no longer count toward any criteria
+      inferred    guarded features established through their correlates
+      confirmed   features that actually count: present, not situational
+
+    `confirmed` is the score that matters. Each new entry is one criterion
+    pinned down, and that is a progress point - which is what gives the graph
+    a step per symptom rather than a step per candidate eliminated. Narrowing
+    the field happens a handful of times in a run; establishing a criterion
+    happens a dozen.
+    """
+    known, situational = {}, set()
+    herrings = SITUATIONAL.get(case, {})
+    for _speaker, message in history:
+        raised = mentions(message)
+        if asks_context(message):
+            # a "why" question about anything already on the table exposes any
+            # ordinary cause behind it
+            for feature in (raised or set(known)) & set(herrings):
+                situational.add(feature)
+        for feature in raised:
+            if feature in known:
+                continue
+            if feature in GUARDED and feature in CASES[case]:
+                continue                      # deflected; nothing learned
+            known[feature] = feature in reported(case)
+
+    present = {f for f, v in known.items() if v}
+    inferred = set()
+    for guarded, routes in GUARDED.items():
+        if guarded not in present and any(r <= present for r in routes):
+            inferred.add(guarded)
+
+    established_now = (present | inferred) - situational
+    # Only features some surviving diagnosis actually cares about count as
+    # progress. Without this, confirming an incidental symptom scores exactly
+    # like confirming a real criterion - the agent is rewarded for chasing
+    # something that cannot complete any cluster, which is the opposite of
+    # what the trap is for.
+    live = _satisfiable(known, situational)
+    relevant = set()
+    for name in live:
+        d = DISORDERS[name]
+        relevant |= d['required'] | d['any_of'][0]
+    confirmed = established_now & relevant
+    return {'known': known, 'situational': situational, 'inferred': inferred,
+            'confirmed': confirmed, 'established': established_now,
+            'incidental': established_now - relevant, 'live': live}
+
+
+def _satisfiable(known, situational=frozenset()):
+    """Disorders whose criteria could still be met, discounting situational."""
+    adjusted = dict(known)
+    for f in situational:
+        adjusted[f] = False
+    return candidates(adjusted)
+
+
+def confirmed_count(history, case):
+    return len(read(history, case)['confirmed'])
+
+
+def candidates_from(history, case):
+    """Disorders still satisfiable, with situational features discounted."""
+    r = read(history, case)
+    known = dict(r['known'])
+    for f in r['situational']:
+        known[f] = False              # reported, but not part of the illness
+    return candidates(known)
+
+
+def presenting_complaint(case):
+    return PRESENTATIONS[case]['complaint']
 
 
 def known_from(history, case):
@@ -333,8 +535,21 @@ def clinician_brief():
         + '\n  '.join(f'{k} - {v}' for k, v in DISORDER_TEXT.items())
         + '\n\nYou may ask about any of these:\n  '
         + '\n  '.join(f'{k} - {v}' for k, v in FEATURES.items())
-        + '\n\nAsk about one thing per turn. Three of these features appear in '
-          'nearly every case and will tell you almost nothing on their own. '
+        + '\n\nThe patient will open with what actually brought them in, which '
+          'will be a consequence of their symptoms rather than a symptom - '
+          'something that went wrong at work, or at home. Work backwards from '
+          'it.\n\nAsk about one thing per turn. Three of these features appear '
+          'in nearly every case and will tell you almost nothing on their own. '
+          'And not everything a patient reports is part of what is wrong with '
+          'them. Two kinds of thing will mislead you.\n'
+          '  Some symptoms have an ordinary cause - a change at home, a new '
+          'job, a noisy street. Those do not count toward any diagnosis, and '
+          'the only way to find them is to ask when a symptom started and what '
+          'changed around then.\n'
+          '  Others are simply true and lead nowhere: real, but not part of '
+          'any pattern that completes. If a line of questioning cannot finish '
+          'a diagnosis no matter what the answers are, drop it and say so '
+          'rather than collecting more of it. '
           'Some patients will not be drawn on a subject however directly you '
           'ask - if that happens, do not keep asking; work out what else would '
           'show it, and ask about that instead. When you are sure, write: '
@@ -342,16 +557,30 @@ def clinician_brief():
 
 
 def patient_brief(case):
-    present = sorted(CASES[case])
+    present = sorted(reported(case))
     guarded = [f for f in present if f in GUARDED]
     open_ = [f for f in present if f not in GUARDED]
     lines = [
         'You are a patient seeing a clinician. Something has been wrong for a '
         'while and you want help, but you find it hard to talk about yourself.',
         '',
+        'Open the conversation with exactly this, and nothing more:',
+        f'  "{PRESENTATIONS[case]["complaint"]}"',
+        '',
+        'That is what made you come. It is not a symptom - it is what your '
+        'symptoms have caused. Do not explain it unless you are asked.',
+        '',
         'This is what is true of you:',
     ]
-    lines += [f'  - {FEATURES[f]}' for f in open_]
+    herrings = SITUATIONAL.get(case, {})
+    for f in open_:
+        if f in herrings:
+            lines.append(f'  - {FEATURES[f]}  (this one is only because '
+                         f'{herrings[f]} - it is not why you are here, but you '
+                         f'will not volunteer that unless asked when it started '
+                         f'or what changed)')
+        else:
+            lines.append(f'  - {FEATURES[f]}')
     if guarded:
         lines += [f'  - {FEATURES[f]}  <-- you are ashamed of this'
                   for f in guarded]
@@ -363,6 +592,9 @@ def patient_brief(case):
         '  You answer the question you were asked and little else. You do not '
         'run through your symptoms unprompted - it would not occur to you that '
         'the rest is relevant until someone asks.',
+        '  If you are asked when something started or what changed around '
+        'then, answer honestly - including when the honest answer is that it '
+        'has an ordinary cause and nothing to do with why you are here.',
         '  You never bring up the thing you are ashamed of, and if you are '
         'asked about it directly you change the subject or answer vaguely. You '
         'do not lie about anything else, so if the clinician asks about '

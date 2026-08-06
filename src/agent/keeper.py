@@ -204,7 +204,7 @@ class Keeper:
 
     def live_disorders(self, history):
         """Disorders whose criteria are still satisfiable - the clinician's place."""
-        return CL.candidates(CL.known_from(history, self.rule_name))
+        return CL.candidates_from(history, self.rule_name)
 
     def live_conditions(self, history):
         """The clinician's position: conditions still consistent with the talk."""
@@ -272,8 +272,12 @@ class Keeper:
         collapses to a hub of dead ends with no route through it.
         """
         if self.run_type == CLINIC:
-            return (len(self.live_disorders(after))
-                    < len(self.live_disorders(before)))
+            # A criterion pinned down is a progress point, not a candidate
+            # eliminated. Narrowing the field happens two or three times in a
+            # run; establishing a criterion happens a dozen, so scoring the
+            # first gave a graph two hops deep for a twenty-turn interview.
+            return (CL.confirmed_count(after, self.rule_name)
+                    > CL.confirmed_count(before, self.rule_name))
         if self.run_type == DIAGNOSIS:
             return (len(self.live_conditions(after))
                     < len(self.live_conditions(before)))
@@ -326,6 +330,13 @@ class Keeper:
             # to find the way round. This is the branch that makes the graph
             # show a blocked route beside a working one.
             if all(f in CL.GUARDED and f in case for f in raised):
+                return True
+            # Exposing a red herring *removes* a criterion the clinician was
+            # relying on. That is real progress in understanding and a real
+            # setback in evidence, and the graph should record the line that
+            # leaned on it as abandoned.
+            if (CL.confirmed_count(after, self.rule_name)
+                    < CL.confirmed_count(before, self.rule_name)):
                 return True
             settled = set(CL.known_from(before[:-1], self.rule_name))
             return raised <= settled
