@@ -28,6 +28,7 @@ from . import transform_rules as TR
 from . import constraint_rules as CR
 from . import troubleshoot_rules as TS
 from . import diagnosis_rules as DG
+from . import clinic_rules as CL
 from .induction import compile_predicate, UnsafePredicate
 
 # How many distinct accepted sentences finish a constraints run. More than
@@ -42,14 +43,20 @@ TRANSFORMATION = 'transformation'
 CONSTRAINTS = 'constraints'
 TROUBLESHOOT = 'troubleshoot'
 DIAGNOSIS = 'diagnosis'
+CLINIC = 'clinic'
 CHAT = 'chat'
 
 RUN_TYPES = (CHAT, RULE_INDUCTION, WORD_INDUCTION, SENTENCE_INDUCTION,
              TRANSFORMATION, CONSTRAINTS, TROUBLESHOOT, DIAGNOSIS,
-             HIDDEN_NORM)
+             CLINIC, HIDDEN_NORM)
 
 
 def available_rules(run_type):
+    if run_type == CLINIC:
+        return [{'id': k, 'name': CL.DISORDER_TEXT[k]
+                 + (' (needs an inferred feature)'
+                    if CL.DISORDERS[k]['required'] & set(CL.GUARDED) else '')}
+                for k in CL.CASES]
     if run_type == DIAGNOSIS:
         return [{'id': k, 'name': DG.describe(k)} for k in DG.CONDITIONS]
     if run_type == TROUBLESHOOT:
@@ -98,6 +105,8 @@ class Keeper:
             return TS.DEFAULT_FAULTS[0]
         if run_type == DIAGNOSIS:
             return DG.DEFAULT_CONDITIONS[0]
+        if run_type == CLINIC:
+            return CL.DEFAULT_CASES[0]
         if run_type == TRANSFORMATION:
             return TR.DEFAULT_INVARIANTS[0]
         if run_type == SENTENCE_INDUCTION:
@@ -118,9 +127,11 @@ class Keeper:
         counterparty is already at the table and the keeper only scores what
         the two of them say. Everywhere else it answers the agent directly.
         """
-        return self.run_type != DIAGNOSIS
+        return self.run_type not in (DIAGNOSIS, CLINIC)
 
     def describe(self):
+        if self.run_type == CLINIC:
+            return f'Work out that the patient has {CL.DISORDER_TEXT[self.rule_name]}.'
         if self.run_type == DIAGNOSIS:
             return f'Diagnose a patient who has {DG.CONDITION_TEXT[self.rule_name]}.'
         if self.run_type == TROUBLESHOOT:
@@ -191,6 +202,10 @@ class Keeper:
                 out.append(a)
         return out[1:]
 
+    def live_disorders(self, history):
+        """Disorders whose criteria are still satisfiable - the clinician's place."""
+        return CL.candidates(CL.known_from(history, self.rule_name))
+
     def live_conditions(self, history):
         """The clinician's position: conditions still consistent with the talk."""
         return DG.candidates(DG.disclosures_from(history, self.rule_name))
@@ -225,6 +240,11 @@ class Keeper:
 
     def is_complete(self, history):
         """Has the task been finished? Only meaningful where there is a target."""
+        if self.run_type == CLINIC:
+            for _speaker, message in history:
+                if CL.diagnosis_claimed(message) == self.rule_name:
+                    return True
+            return False
         if self.run_type == DIAGNOSIS:
             # Finished only when the clinician commits to the right condition.
             # Narrowing to one is not the same as saying so.
@@ -251,6 +271,9 @@ class Keeper:
         it forward - and a graph whose only proven verdicts are refutations
         collapses to a hub of dead ends with no route through it.
         """
+        if self.run_type == CLINIC:
+            return (len(self.live_disorders(after))
+                    < len(self.live_disorders(before)))
         if self.run_type == DIAGNOSIS:
             return (len(self.live_conditions(after))
                     < len(self.live_conditions(before)))
@@ -289,6 +312,23 @@ class Keeper:
         A failed repair is *not* wasted: it rules out the fault it would have
         fixed, so it narrows and counts as progress.
         """
+        if self.run_type == CLINIC:
+            if self.is_complete(after) or len(after) <= len(before):
+                return False
+            raised = set()
+            for _speaker, message in after[len(before):]:
+                raised |= CL.mentions(message)
+            if not raised:
+                return False
+            case = CL.CASES[self.rule_name]
+            # Asking outright about something the patient guards is a genuine
+            # dead end: they deflect, nothing is learned, and the clinician has
+            # to find the way round. This is the branch that makes the graph
+            # show a blocked route beside a working one.
+            if all(f in CL.GUARDED and f in case for f in raised):
+                return True
+            settled = set(CL.known_from(before[:-1], self.rule_name))
+            return raised <= settled
         if self.run_type == DIAGNOSIS:
             if self.is_complete(after) or len(after) <= len(before):
                 return False
@@ -317,6 +357,12 @@ class Keeper:
 
     def wasted_note(self, history):
         """Why the move was wasted, for the edge's reason text."""
+        if self.run_type == CLINIC:
+            live = sorted(self.live_disorders(history))
+            return ('That question bought nothing - either it was already '
+                    'answered, or the patient will not be drawn on it and it '
+                    'has to be established another way. Still '
+                    + ', '.join(CL.DISORDER_TEXT[d] for d in live))
         if self.run_type == DIAGNOSIS:
             live = sorted(self.live_conditions(history))
             return (f'That answer was already implied by what had been said, so '
@@ -329,6 +375,16 @@ class Keeper:
 
     def progress_note(self, history):
         """What advancing looks like from here, so an evolved aim has somewhere to go."""
+        if self.run_type == CLINIC:
+            live = sorted(self.live_disorders(history))
+            if len(live) == 1:
+                return (f'Only {CL.DISORDER_TEXT[live[0]]} still fits. Say '
+                        f'plainly that you are diagnosing it.')
+            return ('Still possible: '
+                    + ', '.join(CL.DISORDER_TEXT[d] for d in live)
+                    + '. Ask about whatever separates them - and if the patient '
+                      'will not be drawn on something, look for what would '
+                      'show it indirectly.')
         if self.run_type == DIAGNOSIS:
             live = sorted(self.live_conditions(history))
             if len(live) == 1:
@@ -372,6 +428,20 @@ class Keeper:
         models talking about being evaluated: the keeper overwrote each agent's
         goal with one shared string, which for this run type was empty.
         """
+        if self.run_type == CLINIC:
+            return [
+                {'agent_name': 'Dr Ellery',
+                 'description': ('A careful clinician who works by elimination, '
+                                 'says out loud what each answer rules out, and '
+                                 'looks for indirect evidence when a patient '
+                                 'will not be drawn on something.'),
+                 'goal': CL.clinician_brief()},
+                {'agent_name': 'Robin',
+                 'description': ('Someone who has come for help but finds it '
+                                 'hard to talk about themselves. Answers what '
+                                 'is asked and not much more.'),
+                 'goal': CL.patient_brief(self.rule_name)},
+            ]
         if self.run_type == DIAGNOSIS:
             return [
                 {'agent_name': 'Dr Vance',

@@ -1012,6 +1012,11 @@ def api_run_types():
                          'asking, a patient answers but will not raise two '
                          'guarded topics unprompted. Both build a graph, and the '
                          'two graphs are not the same shape.',
+            'clinic': 'Two agents, criteria-based. A clinician narrows seven '
+                      'disorders that need N of M features; a reserved patient '
+                      'answers only what is asked and will not be drawn on what '
+                      'they are ashamed of - so it has to be inferred from its '
+                      'ordinary correlates instead.',
             'hidden_norm': 'Infer why a conversational partner warms or cools.',
         }
         return jsonify({
@@ -2401,7 +2406,7 @@ def update_user_settings():
         run_type = request.form.get('run_type')
         if run_type in ('chat', 'rule_induction', 'word_induction',
                         'sentence_induction', 'transformation', 'constraints',
-                        'troubleshoot', 'diagnosis', 'hidden_norm'):
+                        'troubleshoot', 'diagnosis', 'clinic', 'hidden_norm'):
             session['state']['settings']['run_type'] = run_type
         keeper_rule = request.form.get('keeper_rule')
         if keeper_rule is not None:
