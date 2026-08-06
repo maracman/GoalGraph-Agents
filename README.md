@@ -111,7 +111,7 @@ Each generation cycle follows this flow:
    - Score regression > 1 point *and* rating <= 4 → **NoGo**: Progress is going backwards.
    - Exceeded patience limit → **NoGo**: Agent has been stuck too long; forced abandonment.
 
-4. **Graph Update** — Go/Progress/NoGo decisions create weighted, directed edges in the agent's decision graph. The edge weight equals `persistence_count` (the number of turns the agent spent on that aim), which also determines visual distance in the graph rendering.
+4. **Graph Update** — Go/Progress/NoGo decisions create weighted, directed edges in the agent's decision graph. The edge weight is a **confidence in [0,1]** that accumulates across visits: agreement moves it toward 1 and contradiction toward 0 at rate `1/visits`, so a route confirmed four times dents to `0.80` on one contradiction while a route seen once drops to `0.50`. A contradicted edge keeps its label and records `contested`, so a reused graph shows routes that have become doubtful rather than ones that silently changed their mind. The pathfinder costs routes at `1.1 − confidence`, so a decayed route loses to a fresher alternative without being deleted.
 
 ```
                         ┌──────────────┐
@@ -278,25 +278,41 @@ a model, so the agent's claims can be *checked* rather than judged.
 | `word_induction` | code holding a hidden rule about single words | a hypothesis about spelling and letters |
 | `sentence_induction` | code holding a hidden rule about whole sentences | a hypothesis over a much larger feature space |
 | `transformation` | code holding a hidden constraint on legal states | an intermediate state on the way to a goal |
-| **`constraints`** | **code holding several hidden rules that must all hold** | **a belief about one of the rules** |
+| `constraints` | code holding several hidden rules that must all hold | a belief about one of the rules |
+| `troubleshoot` | code holding a hidden fault | a belief about where the fault is |
+| `diagnosis` | **another agent** — a patient with a hidden condition | a belief about which condition |
+| **`clinic`** | **another agent** — a reserved patient, criteria-based | **a criterion, pinned down or ruled out** |
 | `hidden_norm` | code deciding warm or flat replies from a hidden property of your message | a hypothesis, tested through dialogue |
 
-**`constraints` is the one to start with.** Three hidden rules must all hold at
-once, and a rejection says only how many held, never which — so the agent has to
-accumulate evidence across more attempts than a short context window can hold.
+**`clinic` is the one to start with.** Two agents: a clinician narrows seven
+disorders that each need N of M features; a patient answers only what is asked,
+opens with a *consequence* of their symptoms rather than a symptom, and will not
+be drawn on what they are ashamed of — so it has to be inferred from ordinary
+correlates instead. Two kinds of red herring mislead: symptoms with an everyday
+cause, and symptoms that cohere into nothing.
 
-With a four-message window, over five replications per arm:
+**Sixteen patients seen by one clinician, the graph carried between them.**
+13 of 16 diagnosed. Measured within a disorder — the same answer, a different
+patient, later in the sequence:
 
-| arm | accepted answers (95% CI) | completed | turns | input tokens |
-|---|---|---|---|---|
-| no memory | 0.6 [0.0, 1.4] | 0/5 | 25.0 | 39,538 |
-| stated once, in conversation | 1.2 [0.1, 2.3] | 1/5 | 22.4 | **33,494** |
-| decision graph | 1.8 [0.7, 2.9] | 2/5 | 23.0 | 38,966 |
+| disorder | turns, first → later presentation |
+|---|---|
+| generalised anxiety | 57 → **7** |
+| panic with avoidance | 23 → **9** |
+| obsessive checking | 17 → **9** |
+| burnout exhaustion | failed → **35** |
+| depressive episode | 25 → 21 → 27 |
+| thyroid disturbance | 9 → 25 |
+| alcohol-related low mood | 39 → failed → failed |
 
-**Read this as a null result.** The ordering favours the graph on every measure,
-but the intervals overlap and the completion difference is not significant
-(Fisher exact p = 0.44 against no memory). It is also not cheaper. Five
-replications cannot separate 2/5 from 0/5.
+Four improved, one flat, two got worse. Aggregated: patients 1–8 solved 6/8 at
+28.3 turns, patients 9–16 solved 7/8 at 19.0. A real effect, not a uniform one,
+and n=1 per patient.
+
+The first task tried, `constraints`, produced a **null result** — the graph
+ahead on every measure but well inside noise (Fisher exact p = 0.44) and no
+cheaper. That is kept in the write-up along with the reason, which is that the
+task has no state space to route through.
 
 What the runs *do* establish is that the machinery is correct: verdicts are
 settled from evidence rather than opinion, progression is recorded as a route,

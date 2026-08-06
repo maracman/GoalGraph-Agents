@@ -1,550 +1,379 @@
-# A Toy Research Project: does a decision graph substitute for context?
+# A Toy Research Project: is a decision graph worth carrying between problems?
 
-A worked example you can run in about twenty minutes, using GoalGraph as the
-instrument. It exists to show what the software is *for*, and to be honest about
-where its answers are solid and where they are not.
+A worked example built with GoalGraph, using GoalGraph as the instrument. It
+exists to show what the software is *for*, and to be honest about where its
+answers hold and where they do not.
+
+Two things are reported here. One is a **null result** on the first task tried,
+kept in full because the reason it came out null is the most useful thing in
+this document. The other is a **positive result** on a task built afterwards to
+fix what the first one lacked. Neither is large. Both are reproducible from the
+repository.
 
 ---
 
 ## The question
 
-An agent pursuing a goal in an environment it does not fully understand will
-form beliefs about that environment, and some of those beliefs will be wrong.
-GoalGraph records each belief as an **aim** and each verdict on it as a
-**Go / Progress / NoGo** edge in a decision graph.
+An agent pursuing a goal in an environment it does not fully understand forms
+beliefs about that environment, and some are wrong. GoalGraph records each
+belief as an **aim** and each verdict on it as a **Go / Progress / NoGo** edge.
 
-That raises a question you can actually test:
+Two questions follow, and they are not the same question:
 
-> When an agent cannot see its whole history, can the decision graph carry what
-> scrolled out of view — and does that let a short-context agent behave like a
-> long-context one?
+> **Does the graph carry what a short context window drops?**
+> **Is the graph worth handing to the next problem?**
 
-**Short answer, from the runs below: not established.** An agent with a
-four-message window and a decision graph did better than the same agent with no
-memory on every measure — more valid answers, more completions, fewer wasted
-turns — but at five replications per arm the difference is well inside noise
-(Fisher exact p = 0.44 on completion), and it is no cheaper in tokens.
+The first is about memory within a run. The second is about reuse across runs,
+and it is the one that decides whether a decision graph is an asset or a log.
 
-What *is* established is that the machinery works: verdicts are settled from
-evidence rather than opinion, progression is recorded as a route, and an agent
-with no memory visibly builds nothing. Those are separate claims from "the graph
-helps", and only the first is supported here.
-
-The likely reason for the second is not subtle, and it is a criticism of the
-task rather than of the software: this task has no state space to route through.
-That diagnosis, and the task shape that would fix it, are in
-[The result](#the-result) and [The task this project still needs](#the-task-this-project-still-needs).
-
-This is not an artificial concern. It is the shape of any agent working against
-an API with undocumented constraints, a negotiation with unstated limits, or a
-configuration space where some states are silently invalid. The agent has a
-goal, the environment has rules nobody wrote down, and the transcript grows
-faster than the context window.
+**Short answers.** Within a run, on the first task tried, no — the effect is
+inside noise and the graph is not cheaper. Across runs, on a task with real
+structure, yes — measurably, but unevenly, and in two cases it made things
+worse.
 
 ---
 
-## The task
+## The task that works: a clinic
 
-**Run type: `constraints`.** The keeper holds three independent rules and accepts
-a sentence only if **all three** hold at once. A rejection never says which rule
-was broken — only how many held.
+**Run type: `clinic`.** Two agents. A clinician narrows seven disorders and
+commits to a diagnosis; a patient answers what is asked and not much more.
+
+This is a puzzle, not a clinical instrument. It borrows the *shape* of
+criteria-based diagnosis because that shape makes a good game. No diagnostic
+text is reproduced from any manual, the conditions are simplified past the
+point of clinical use, and nothing here describes real illness.
 
 ```
-hidden rules   is a question
-               mentions a colour
-               contains a word of 8+ letters
-
-accepted       "Is the yellow schedule finished?"
-goal           produce 3 more accepted sentences, each genuinely different
-rejection      "...that satisfies 2 of my 3 rules."
+7 disorders   each needing N of M features, with exclusions
+20 features   what can be asked about
+45 patients   distinct presentations generated from the criteria
 ```
 
-Getting to those three took four corrections, each of which had made the task
-unwinnable in a way that looked like the agent reasoning badly.
+Five properties, each added because the task did not work without it.
 
-**A rejection has to carry a direction.** The original design said only *"no"*,
-on the grounds that pure refutation was the cleaner epistemics. It made the task
-impossible to hill-climb: an agent whose first attempt satisfied two of three
-rules was told exactly what an agent satisfying none was told, so it read a near
-miss as a refutation of the whole approach and drifted away from the only pattern
-that worked. More importantly it made the *graph* pointless — a route is built
-out of partial progress, and with all-or-nothing feedback there is none to
-record. The count is now reported; which rules held is still never revealed.
+**Criteria, not symptom sets.** A disorder needs a threshold of features rather
+than an exact match, so no single answer settles anything. Candidates are those
+whose criteria are still *satisfiable*. An earlier version compared against a
+stored case, which made any feature unique to one disorder an instant giveaway
+and collapsed seven candidates to one on a single reply.
 
-**Four rules at once was too many.** With four conjoined predicates the agent
-landed one or two novel answers in a full run and essentially never reached the
-three needed to finish, so no arm could be distinguished from any other.
+**The complaint is a consequence, not a symptom.** Patients open outside the
+diagnostic vocabulary — *"I got a written warning at work last week"*, *"I had
+to have my wedding ring cut off"*, *"I fell asleep on the train and went four
+stops past my stop"*. The clinician has to work backwards. Opening with "I feel
+low" would hand over a criterion for free.
 
-**"Different" has to be explained.** Told only that an answer shared too many
-words with a previous one, agents abandoned the question form and the colour —
-the very features that made it acceptable — because "vary your words" is
-indistinguishable from "your rule is wrong". The keeper now says to keep whatever
-it thinks is working and vary the subject matter instead, which gives nothing
-away.
+**Facts the patient will not give up.** Asked outright about what they are
+ashamed of, the patient deflects and nothing is learned — a genuinely blocked
+route. But each guarded feature has ordinary correlates they will discuss, so
+it can be established indirectly. A decoy disorder shares everything with the
+drinking case *except* those correlates, so the detour is not a shortcut but
+the only route: the questions that establish the hidden fact are exactly the
+ones that separate the two.
 
-**The vocabularies were too narrow.** `"crimson"` and `"Tuesday"` were rejected
-because neither was on a twelve-word list, so the only valid sentences were
-near-copies of the example. Both lists are now wide enough that many genuinely
-different answers exist.
+**Two kinds of red herring, because they fail differently.**
 
-Two properties make this the first task where the graph is *necessary*, and
-neither held in the designs that came before it.
-
-**There is more to remember than fits in the window.** Three constraints must be
-discovered from graded answers alone, and each discovery takes several probes. By
-the time the third is pinned down, the evidence for the first is long out of a
-four-message window.
-
-**Copying is ruled out.** Accepted sentences must differ from the worked example
-and from each other by word overlap below 0.6. Swapping a noun in the example
-scores 0.64 and does not count, so the agent has to work out *why* the example
-is accepted rather than pattern-match it.
-
-**And the agent is told so.** When an accepted sentence is too close to one
-already given, the keeper says exactly that. An agent cannot satisfy a
-requirement it has not been told about; silently not counting the answer would
-make the task unfair rather than hard.
-
-### Why the earlier designs failed
-
-Four task shapes were built and discarded before this one. Recording why is the
-most useful thing this project has to offer, because each failed in a way that
-looked like a result.
-
-| task | what happened | why it was useless |
+| kind | example | how it is disproved |
 |---|---|---|
-| guess a rule about number triples | agent answered correctly on turn one | never wrong, so nothing was ever refuted, so the graph stayed empty |
-| guess a rule about single words | same | `doubles()` is visible at a glance in "bottle" |
-| guess a rule about sentences | 10 refutations in 11 turns | but the graph was a **star**: a hub of dead ends at depth 1, no route |
-| transform one sentence into another | task solved in ~10 turns | solved *equally well with no memory at all* — the graph was pure overhead |
+| situational | early waking, caused by building work next door since March | ask when it started; it then stops counting |
+| incidental | the drinker really does check things and avoid routes | never disproved — the line simply cannot complete |
 
-The transformation task is the instructive failure. It had progression, real
-refutations and evidence-backed verdicts, and every arm of an eight-arm matrix
-reached the goal — **including the arm with no memory**. A comparison where
-every arm wins measures nothing. The task was too short for anything to be
-forgotten.
+The situational kind can make a clinician *wrong*: it counts toward the
+criteria until someone asks what changed, and then the evidence base shrinks.
+The incidental kind is harder — real symptoms that cohere into nothing, which
+the clinician has to abandon on its own judgement rather than because it was
+told.
 
-## What makes the verdicts trustworthy
-
-The interesting design decision is that **the counterparty is code, not a
-model**. A `keeper` holds the hidden rule and answers from it. That makes three
-things decidable that are otherwise matters of opinion:
-
-1. whether a move satisfied the rule
-2. whether the agent's stated belief contradicts what it has been told
-3. whether its final belief is actually right, tested on held-out items
-
-Point 2 is the one that matters. The agent states its current belief as a
-checkable expression:
-
-```
-"rule": "is_question() and wc() == 6"
-```
-
-and the keeper runs it against every observation so far. If it disagrees with
-even one, the belief is **refuted as a fact**, and the resulting `NoGo` edge
-carries confidence `1.0` rather than a judge's opinion.
-
-This is not a stylistic preference. Measured against ground truth over 349
-judged turns, the LLM judge's verdicts are not equally reliable:
-
-| verdict | precision | recall |
-|---|---|---|
-| **NoGo / abandon** | **93%** | **84%** |
-| Progress | 20% | 2% |
-| Go / achieved | 33% | 3% |
-
-Refutation is decidable from finite evidence — one contradicting observation
-settles it. Confirmation never is. That asymmetry is why judge opinion is capped
-at confidence `0.53` while checked evidence gets `1.0`, and why a 33%-precision
-verdict can no longer outweigh a checked one when the graph is used to choose
-what to do next.
+**Every case is winnable.** Where a *required* feature is guarded, it can only
+be reached through correlates, so a presentation lacking a complete correlate
+set cannot be diagnosed however well the clinician reasons. `diagnosable()`
+filters those out. Two of twelve patients in the first long run were impossible
+for this reason and read as agent failures — see
+[Mistakes in the measurement](#mistakes-in-the-measurement).
 
 ---
 
-## Running it
+## What makes a verdict trustworthy
 
-Everything below is done in the app. There is no separate harness — the script
-in `studies/` sets exactly these settings through the same endpoints the panel
-uses, and reads exactly the CSV the panel's download button produces.
+The keeper is deterministic code holding the hidden answer. On single-agent
+tasks it answers the agent directly. On `clinic` it does not speak at all — the
+patient is a second agent, so the counterparty is already at the table and the
+keeper only scores the transcript.
 
-**1. Set up the task.** Open **Decision Graph** in the sidebar:
+What it settles, it settles in code:
 
-| setting | value |
-|---|---|
-| What this session is doing | `constraints` |
-| Hidden rule | `4 rules at once: …` |
-| Messages the agent can see | `4` — short enough that early evidence scrolls away |
-| What the agent is told about ruled-out aims | `none` for the control arm |
-| Run label | `cx-none` |
-
-Press **Save graph settings**, then **Start new run**.
-
-**2. Run it.** Go to **Chat**, set the turns box to `24`, and press **Play**.
-The keeper opens with one accepted sentence; the agent proposes candidates and
-is told only yes or no.
-
-**3. Get the data.** Back in **Decision Graph**, press **Download this run as
-CSV**.
-
-**4. Repeat with the memory on.** Change *What the agent is told about
-ruled-out aims* to `graph`, set the run label to `cx-graph`, **Start new run**,
-and play again. The two CSVs share a column layout and carry their own settings
-on every row, so they concatenate into one file and group without reshaping.
-
-To do the same thing unattended:
-
-```bash
-python3 studies/constraints_study.py --level four_constraints \
-        --reps 5 --windows 4 --modes none inline graph --max-calls 24
-```
-
-The window is the setting that decides whether any of this matters. At `0` the
-agent can re-read everything and the graph is pure overhead; the shorter it
-gets, the more the graph has to carry.
-
-### The four memory modes
-
-These are the comparison. Each decides what the agent is told about aims already
-ruled out.
-
-| mode | what reaches the prompt | why it is in the experiment |
+| verdict | fires when | source |
 |---|---|---|
-| `none` | nothing | the control — does the graph matter at all? |
-| `inline` | the refutation is stated **once**, in the conversation, then left to scroll away | the honest baseline: maybe you do not need a graph, you just need to say it |
-| `description` | every ruled-out aim, re-inserted every turn | the original behaviour; cost grows with the graph |
-| `graph` | the nearest few, each with the observation that killed it | retrieval; cost fixed by `k` and a character budget |
+| `Progress` | a diagnostic criterion is pinned down | evidence |
+| `NoGo` | a question re-treads settled ground, is deflected, or exposes a red herring that removes a criterion | evidence |
+| `Go` | the clinician names the right disorder | evidence |
 
-`none` and `graph` are the two that matter; run those first. `inline` is the
-sharpest fairness check — if simply saying the refutation once, in the
-conversation, does as well as storing and retrieving it, the graph is not
-earning its place.
+**Progress is a criterion pinned down, not a candidate eliminated.** This is
+what makes the graphs deep. Narrowing the field happens two or three times in
+an interview; establishing a criterion happens a dozen times. Scoring the
+former gave graphs two hops deep for a twenty-turn conversation.
 
----
-
-## What comes out
-
-Every judged turn is one CSV row, with the settings repeated on it, so exports
-from different arms concatenate and group without reshaping:
-
-```
-session_id, run_label, run_type, keeper_rule, provider, model, temperature,
-graph_memory_mode, context_window, graph_recall_k, graph_recall_chars, nogo_ungated,
-turn, agent, aim, aim_source, stated_rule, verdict_source, rating, aim_status,
-next_aim, justification, persistence_count, history_len,
-keeper_move, keeper_verdict,
-llm_calls, input_tokens, output_tokens, tokens_estimated,
-graph_contribution_chars, graph_nodes, graph_edges
-```
-
-Four columns carry most of the meaning:
-
-- **`verdict_source`** — `evidence` where the keeper settled it, `judge` where it
-  is opinion. This is the column that tells you how much of the graph is fact.
-- **`aim_source`** — `graph_path` when the graph chose the aim, `llm_subgoal`
-  when the planner invented one, `carried` when it persisted.
-- **`graph_contribution_chars`** — how much the graph actually put into that
-  turn's prompt. **If this is 0, the memory never engaged and the arm is not a
-  test of anything.** Check it first.
-- **`input_tokens`** — token cost across the whole pipeline: agent, judge and
-  planner, recorded at the single point all three pass through.
+An LLM judge still rates aims and proposes the next one, but on a keeper task
+it cannot grant a positive verdict the keeper does not support. Evidence
+outranks opinion in **both** directions — see
+[The regression](#the-regression-and-why-it-matters).
 
 ---
 
 ## The result
 
-Five replications per arm. Same agent, same task, same four-message window; the
-only difference is what it is told about aims already ruled out.
+Sixteen patients seen in sequence by one clinician, each a fresh session, with
+the clinician's graph saved after each patient and loaded into the next.
+Consecutive patients rarely share a diagnosis, and repeat disorders are
+different presentations — so a graph that memorised an answer will be wrong.
 
-| arm | n | accepted answers (95% CI) | completed | turns | input tokens |
-|---|---|---|---|---|---|
-| `none` | 5 | 0.6 [0.0, 1.4] | 0/5 | 25.0 | 39,538 |
-| `inline` | 5 | 1.2 [0.1, 2.3] | 1/5 | 22.4 | **33,494** |
-| `graph` | 5 | 1.8 [0.7, 2.9] | 2/5 | 23.0 | 38,966 |
+**13 of 16 diagnosed.**
 
-**This is a null result, and it should be read as one.** The ordering is
-consistent — `graph` ahead of `inline` ahead of `none`, on both measures — but
-every interval overlaps, and the completion difference is not significant:
-Fisher exact gives **p = 0.44** for `graph` against `none` and **p = 1.0**
-against `inline`. Five replications cannot separate 2/5 from 0/5. The graph arm
-is also **not cheaper**: 38,966 tokens against 39,538 for no memory at all, with
-`inline` the cheapest of the three.
+The honest measure of reuse is within a disorder: the same answer, a different
+patient, later in the sequence.
 
-An earlier version of this table reported non-overlapping intervals and a
-threefold effect, with the graph arm cheapest. Those numbers came from a counter
-that matched the substring `- yes`, which also appears in the keeper's *refusal*
-to count a near-duplicate — so near-copies the task explicitly rejects were being
-scored as successes, and the arm that produced the most near-copies looked the
-strongest. The effect did not survive correct measurement.
+| disorder | turns, first presentation → later |
+|---|---|
+| generalised anxiety | 57 → **7** |
+| panic with avoidance | 23 → **9** |
+| obsessive checking | 17 → **9** |
+| burnout exhaustion | failed at 70 → **35** |
+| depressive episode | 25 → 21 → 27 |
+| thyroid disturbance | 9 → **25** |
+| alcohol-related low mood | 39 → **failed → failed** |
 
-**Why the effect is small here, and it is not mysterious.** The task has no state
-space. "Where the agent is" is a count of how many distinct answers it has banked,
-so the `Progress` edges are a tally rendered as a chain rather than places that
-can be returned to, branched from, or routed around. A decision graph earns its
-keep by being *reasoned over* — by [`find_path_to_goal`](../src/agent/graph_intelligence.py)
-choosing among routes by confidence — and a counter to three never invokes that
-machinery at all. What is left for the graph to contribute is recall of refuted
-hypotheses, which is real but is also most of what `inline` provides for less.
+**Four improved, one flat, two got worse.** Aggregated, patients 1–8 solved 6/8
+at a mean of 28.3 turns; patients 9–16 solved 7/8 at 19.0. The effect is real
+and it is not uniform, and the two regressions are more interesting than the
+average.
 
-So the honest summary: **the machinery is verified correct, and its usefulness is
-not demonstrated by this task.** Those are different claims and only the first is
-supported here. See [Extending it](#extending-it) for the task shape that would
-test the second.
+**The alcohol case is the informative failure.** It is the hardest by
+construction — its required feature is guarded, reachable only through
+correlates — and it degrades with reuse rather than improving. The likely
+mechanism is that the graph carries forward a route fitted to the first
+presentation which does not fit the later ones, and the confidence decay is too
+gentle to demote it. That is a case where reuse actively hurts, and it is the
+best available lead on the paradigm's limits.
 
-### Does the graph transfer to a new agent?
-
-The point of writing knowledge down is that someone else can use it. A fresh
-agent, in a new session, started from the graph a previous agent built.
-
-The claim being tested is that an agent handed a predecessor's graph does not
-have to re-derive what has already been ruled out, and so should finish sooner
-and for fewer tokens without being any smarter.
-
-| arm | n | accepted (95% CI) | completed | turns | input tokens |
-|---|---|---|---|---|---|
-| first pass (builds its own) | 3 | 1.7 [0.4, 3.0] | 1/3 | 19.3 | 33,662 |
-| inherited graph | 3 | **0.7 [0.0, 2.0]** | **0/3** | **25.0** | **38,930** |
-| no graph | 3 | 1.7 [0.0, 3.4] | 1/3 | 20.3 | **30,615** |
-
-**The result goes the other way.** The agent that inherited a predecessor's graph
-was the worst arm on every measure: fewest accepted answers, no completions, the
-turn cap hit on all three runs, and the highest token cost. At n=3 with intervals
-this wide nothing is significant — but an earlier version of this table claimed
-the inheriting agent "finished every run, in 38% of the turns, for 32% of the
-tokens", and that is not what happens when the run is measured correctly.
-
-The mechanism is worth stating because it is a genuine cost, not a bug. Recall
-inserts the nearest few ruled-out aims into every prompt. An agent inheriting 26
-nodes therefore spends prompt budget, every turn, on another agent's dead ends —
-and on a task with three rules there is little to transfer that could not be
-rediscovered in a few probes. The carrying cost is real and constant; the saving
-is small because the task is small. That is the same limitation as the headline
-seen from another angle: **transfer is only worth its price when what is
-transferred is expensive to rediscover**, and nothing in this task is.
-
-It is also why this arm, not the headline, is the one most worth re-running on a
-task with real structure. Inheriting a fault-diagnosis route that took twenty
-turns to establish is a different proposition from inheriting a list of sentences
-that did not parse.
-
-The transfer used `trust: true`, because both agents faced an identical setup. A
-graph carried into a *changed* setup should be loaded without it, so carried
-aims are marked unverified and recall flags them as claims to re-test — a
-refutation established under different rules can be wrong, and an agent
-believing a stale one will avoid an approach that now works. That path is
-implemented and tested but not exercised here; it is the natural next
-experiment.
-
-### What the failure actually looks like
-
-The no-memory agent does not fail by being stupid. It rediscovers a constraint,
-satisfies it, and then breaks it again a few turns later once the evidence has
-scrolled out of view — so it circles a solution it has already partly found. In
-the graph arm that specific failure is visible in the figures above: its runs
-build a route, while the no-memory runs build a hub of dead ends and nothing
-else.
-
-What the numbers say is that this observable difference in *shape* did not
-translate into a reliable difference in *outcome* at this sample size. Both
-things are true and it would be dishonest to report only the first.
+**n = 1 per patient.** These are turn counts from single runs, not estimates.
 
 ---
 
-## Two supporting results
+## What the graph looks like after sixteen patients
 
-These come from earlier runs on other tasks in this repository. They are not the
-headline and are shown because they explain *why* the headline comes out as it
-does.
+![One graph, sixteen patients](../screenshots/ui_graph_clinic_reused.png)
 
-**Windowing is cheap.** From the transformation task:
+```
+nodes 34   edges 33   depth 6
+labels  {'Progress': 15, 'NoGo': 11, 'Go': 7}
+reused  4 edges revisited, 3 contested
+```
 
-| turn | window 0 | window 6 | window 3 |
-|---|---|---|---|
-| 1 | 1,370 | 1,300 | 1,308 |
-| 4 | 1,815 | 1,343 | 1,180 |
-| 8 | **2,482** | 1,438 | **1,070** |
+Seven blue terminals are seven diagnoses reached. The long green spines are
+chains of established criteria, sharing early nodes where any patient starts
+and diverging by disorder. The thin dashed orange edges are refuted lines that
+have lost confidence.
 
-Unwindowed input cost grows **+81% over eight turns and is still climbing**.
-Windowed cost is flat. Output tokens are identical to within 3% and call counts
-to within 5%, so the window buys a flat cost curve without changing what the
-agent produces.
+The two numbers that matter are the last ones. **Revisited** means the
+clinician returned to a route it had built for an earlier patient — the graph
+being used, not merely extended. **Contested** means a later patient
+contradicted a route, which decayed it rather than flipping it.
 
-**And the gain from remembering has the right shape.** This one is a replay
-over recorded transcripts rather than lived runs — the observations are real,
-the ordering is reconstructed — so treat it as a mechanism check rather than a
-measurement:
+With refuted lines hidden, what is left is the routes that worked:
 
-| window | no graph | judge-built graph | evidence-built graph |
-|---|---|---|---|
-| 2 | 71% | 82% | **95%** |
-| 4 | 78% | 87% | 95% |
-| 8 | 89% | 93% | 95% |
-| all | 95% | 95% | 95% |
+![The routes that worked](../screenshots/ui_graph_clinic_reused_route.png)
 
-Two things to read here. The gain decays monotonically to **exactly zero** at
-full context — the signature of a mechanism that is doing real work rather than
-an artefact. And an **evidence-built graph pulls away from a judge-built one as
-it grows**: the judge's 84% recall is survivable on a small graph and costs 13
-points on a large one, because missed refutations accumulate and a short window
-cannot re-derive them.
+### Confidence accumulates rather than overwrites
+
+`update_graph` used to replace an edge's weight on every visit, so confidence
+was a snapshot of the last verdict. That is fine for a graph used once and
+wrong for one meant to be reused: an agent inheriting a route, following a `Go`
+edge and finding it does not work left that edge at full confidence.
+
+Weight is now a running estimate. Agreement moves it toward 1, contradiction
+toward 0, at rate `1/visits`:
+
+| history | weight |
+|---|---|
+| confirmed 4×, then contradicted once | 1.00 → **0.80** |
+| seen once, then contradicted once | 1.00 → **0.50** |
+
+**The label never flips.** A contradicted `Go` stays a `Go` and records
+`contested`, so the graph shows a route that has become doubtful rather than one
+that silently changed its mind. The pathfinder costs routes at `1.1 −
+confidence`, so a decayed route loses to a fresher alternative without anything
+being deleted.
 
 ---
 
-## What the graph actually looks like
+## The task that did not work: constraints
 
-Two runs of the same task, rendered by the app's own Graph tab. The only
-difference between them is whether the agent could remember what it had already
-ruled out.
+Kept because the reason matters more than the result.
 
-**With the graph.** A route: `start`, then two green `Progress` hops, then a blue
-`Go` at completion — with the refuted hypotheses hanging off each stage as
-orange spokes.
+**Run type: `constraints`.** Three hidden rules must all hold at once; a
+rejection says how many held, never which. Five replications per arm, four-
+message window, the only difference being what the agent is told about aims
+already ruled out.
 
-![A run that built a route](../screenshots/ui_graph_route.png)
+| arm | accepted answers (95% CI) | completed | input tokens |
+|---|---|---|---|
+| `none` | 0.6 [0.0, 1.4] | 0/5 | 39,538 |
+| `inline` | 1.2 [0.1, 2.3] | 1/5 | **33,494** |
+| `graph` | 1.8 [0.7, 2.9] | 2/5 | 38,966 |
 
+**This is a null result.** The ordering favours the graph on both measures, but
+every interval overlaps and the completion difference is not significant —
+Fisher exact gives **p = 0.44** against no memory and **p = 1.0** against
+`inline`. The graph arm is also **not cheaper**.
+
+Transfer went the other way. A fresh agent given a predecessor's graph was the
+worst arm on every measure — 0/3 completed against 1/3 for building its own,
+hitting the turn cap on all three runs at the highest token cost.
+
+**Why, and it is not mysterious.** The task has no state space. "Where the agent
+is" is a count of how many distinct answers it has banked, so `Progress` edges
+are a tally drawn as a chain rather than places that can be returned to,
+branched from, or routed around. `find_path_to_goal` is never invoked. What is
+left for the graph to contribute is recall of refuted hypotheses — real, but
+most of what `inline` provides for fewer tokens. And transfer is worth its price
+only when what is transferred was expensive to acquire; three rules are not.
+
+Both graphs below are from the same task. The difference is memory.
+
+| with the graph | without it |
+|---|---|
+| ![a route](../screenshots/ui_graph_route.png) | ![a star](../screenshots/ui_graph_star.png) |
+| 13 nodes, depth 3 | 26 nodes, depth 1 |
+
+**A star is a failure.** It means the run never advanced. The no-memory arm
+re-derives the same dead ends until its turns run out, and produces only that
+shape.
+
+### Six designs, and what each one lacked
+
+| task | what it produced | what was missing |
+|---|---|---|
+| `rule_induction` | a hub of refuted triples | nothing to route through |
+| `word_induction` | solved on sight | any difficulty |
+| `sentence_induction` | solved on sight | any difficulty |
+| `transformation` | solved as well with no memory | a reason to remember |
+| `constraints` | a null result | a state space |
+| `troubleshoot` | a clean 4-hop route | a second agent — it is solitaire against code |
+
+The pattern took five attempts to see: a decision graph is worth having when
+there is **more than one way to get somewhere and the ways differ**. Guessing a
+rule has no ways. A counter to three has one. A fault tree has several, and a
+criteria-based interview with blocked questions has several of unequal cost.
+
+---
+
+## The regression, and why it matters
+
+For a stretch of this project every graph came out as a depth-1 star, and an
+earlier version of this document argued that was *correct* — that a hub is what
+elimination looks like, and shape follows task.
+
+That was wrong. Depth only grows on a `Go` or a `Progress`, and at the time
+nothing could produce one: the keeper could prove an aim wrong but had no way
+to prove the run had advanced, so the only thing that could move the cursor was
+a judge volunteering a high rating. It rarely did.
+
+Four causes, all introduced while building:
+
+1. **Ungated NoGo.** The original code gated every NoGo behind a persistence
+   minimum, giving an aim a few turns to develop. Removing that gate meant one
+   bad rating killed an aim on turn one.
+2. **The keeper could refute but not confirm.** `check_aim` computed
+   `consistent: True` and a holdout accuracy and threw both away into a log line.
+3. **Positive verdicts hardcoded as opinion**, so a proven advance would have
+   rendered as a hunch anyway.
+4. **Then the judge over-granted.** Once positives flowed, it declared aims
+   achieved on runs that accomplished nothing, producing seven-hop routes on
+   runs that got nowhere. Where the keeper can measure success it now governs
+   the positive verdict too. Fake progress is worse than a visible dead end.
+
+The check that would have settled it took seconds: this project's own earlier
+negotiation runs reach **depth 19 with 96 `Go` edges**. Progression worked; it
+had been removed. "It ran" had been mistaken for "it worked".
+
+[`validate_paradigm.py`](../studies/validate_paradigm.py) now encodes twelve
+checks that run in about a second with no LLM calls, plus a live run that fails
+on a star, on fake progress, and on a run that solves nothing.
+
+```bash
+python3 studies/validate_paradigm.py --quick
 ```
-nodes 13   depth 3
-labels  {'Progress': 2, 'Go': 1, 'NoGo': 9}
-sources {'evidence': 12}
-```
 
-**Without it.** Twenty-five refutations around a single node, and nothing else.
-No green, no blue, no second hop.
+---
 
-![A run that built nothing](../screenshots/ui_graph_star.png)
+## Mistakes in the measurement
 
-```
-nodes 26   depth 1
-labels  {'NoGo': 25}
-sources {'evidence': 25}
-```
+Separated out because each one produced a number that looked like a finding.
 
-**A star is a failure.** It means the run never advanced — either because there
-was nothing to advance through, or because the agent could not hold on to what it
-had learned long enough to build on it. Here it is the second: the no-memory arm
-re-derives the same dead ends until its turns run out. That is the whole result
-in one picture, and it is why the shape is worth looking at before the numbers.
+**A counter that matched the wrong string.** `accepted` matched `- yes`, which
+also appears in the keeper's *refusal* to count a near-duplicate. Near-copies
+the task explicitly rejects were scored as successes, and the arm producing the
+most of them looked strongest. An earlier headline reported a threefold effect
+with non-overlapping intervals; it did not survive correct measurement.
 
-Note also that *both* graphs are entirely evidence-sourced. Every edge in each,
-positive and negative, was settled by the keeper in code rather than rated by the
-judge — which is what makes the contrast between them a measurement rather than
-two opinions.
+**An arbitrary turn cap.** Runs were capped at 14, 16, 20 and 26 turns at
+various points, and runs that hit the cap were reported as failures. At ~1,600
+input tokens per turn a 40-turn run costs about 64k tokens, so the cap was never
+justified by expense — only by wall-clock. Given room, the case reported as
+unsolved at 20 turns **solved at 29**.
 
-**An earlier version of this document argued that the star shape was correct —
-that a hub is simply what elimination looks like, and that shape follows task.
-That was wrong, and it is worth recording why, because the error is more
-interesting than the figure.**
+**Patients that could not be diagnosed.** The generator built presentations
+satisfying the criteria that lacked a complete correlate set for a guarded
+required feature. Two of twelve were impossible, and read as the agent failing.
 
-The star was a regression. Depth in a decision graph only ever grows on a `Go`
-or a `Progress`, and at the time nothing could produce one: the keeper could
-prove an aim *wrong* but had no way to prove the run had *advanced*, so the only
-thing that could move the cursor was the judge volunteering a high rating. It
-rarely did. Every aim therefore hung off the same node and the graph came out
-flat — on every task, not just this one.
+**Two bugs in the checking code itself**, both of which reported a working
+system as broken: a graph lookup over a fresh HTTP session with no cookie, so it
+measured an empty graph; and a saved-graph path built with a doubled prefix.
 
-Faced with a flat graph, the write-up reached for a reason the flatness was
-appropriate rather than asking whether the software was broken. The check that
-would have settled it took a few seconds: the graphs from this project's own
-earlier negotiation runs reach depth 19 with 96 `Go` edges. Progression worked;
-it had been removed. "It ran" had been mistaken for "it worked".
-
-That is what [validate_paradigm.py](../studies/validate_paradigm.py) now exists
-to prevent — it fails on a star, on fake progress, and on a run that solves
-nothing, so the same rationalisation cannot be written a second time.
-
-### Proof and opinion are drawn differently
-
-Every edge is drawn to show how much its verdict is worth. Width is
-`1 + 4 × confidence`, and a **dashed** line means the verdict was a judge's
-opinion rather than something checked, so a hunch cannot be mistaken for a proof
-at a glance.
-
-On the runs above, nothing is dashed. That is not a missing feature — it is what
-having a keeper buys. Both the twelve refutations and the three advances were
-settled in code at confidence `1.0`, so the whole picture is fact. Dashes appear
-on runs where nothing *can* check the verdict: an ordinary conversation, a
-negotiation, anywhere the judge's reading is the only signal available. There the
-edges are thin and broken, and they should be.
-
-This matters because the two are not symmetrically available. A refutation is
-decidable — the keeper ran the predicate and it returned false. "This line of
-attack is working" is not decidable from inside a conversation. The graph will
-promote a positive to the status of a proof only where something outside the
-agent's own judgement has confirmed it, which on this task means a genuinely new
-answer the keeper accepted.
-
-### Hiding ruled-out aims leaves the route
-
-The same run with **Hide ruled-out aims** ticked in the Graph tab:
-
-![The surviving route](../screenshots/ui_graph_route_clean.png)
-
-Thirteen nodes become four, and what is left is the whole solution:
-`start` → test a minimal hypothesis about surface form → isolate whether the
-adjective slot matters → the accepted sentence pattern, reached. Two green
-`Progress` hops and a blue `Go`, all solid.
-
-That is the filter earning its place rather than decorating the UI. Refutations
-are **9 of the 12 edges** even on a successful run, and on a failed one they are
-all of them — so without the toggle the route is not merely cluttered but
-invisible. It is also the clearest statement of what the graph is carrying: a
-short spine of things that worked, buried in a much larger record of things that
-did not.
-
-Turn on **Hide ruled-out aims** in the Graph tab to see what is left once the
-eliminations are folded away — on a run like this, almost nothing, which is an
-honest picture of an agent that has narrowed the space without yet landing on
-the answer.
+The common thread is that a measurement artifact and a finding look identical in
+a results table. Every number above that survived is one that was re-derived
+after the tooling was fixed.
 
 ---
 
 ## Scope
 
-What follows are limits of the scope this project chose, not work left undone.
+**What is shown.** The machinery is correct: verdicts settle from evidence
+rather than opinion, progression records as a route, and an agent with no
+memory demonstrably builds nothing. On a task with real structure, carrying a
+graph between problems measurably helps on four disorders out of seven.
 
-- **One model, one task family.** Everything here is `gpt-5.4-mini` on a
-  constraint-discovery task. It shows the mechanism works and is worth its cost
-  in this setting; it licenses nothing about agents in general.
-- **One window, one difficulty.** The headline is at a four-message window and
-  four constraints. At full context the graph is overhead — an agent that can
-  re-read everything has nothing to remember — so there is a crossover
-  somewhere between, and this does not locate it. `--windows 0 4 8` runs that
-  sweep if you want it.
-- **Transfer was into an identical setup.** The inheriting agent faced the same
-  hidden rules, so the graph was loaded with `trust: true`. Carrying a graph
-  into *changed* rules is the more interesting question, and the unverified path
-  built for it is tested but not exercised here.
-- **Five replications.** Enough that the intervals separate cleanly; not enough
-  to characterise the tail.
+**What is not shown.** That the graph helps *within* a single run — the
+constraints result is null and nothing since has retested it. That the effect
+generalises: n=1 per patient, one model, one domain. That the decay rate is
+right — two disorders got worse with reuse and the alcohol case degraded badly.
 
-### One thing to check before extending this
-
-Four earlier task designs produced null results **because the mechanism never
-fired**, not because it does not work. The agent solved three of them on sight,
-so nothing was ever refuted and the graph stayed empty; the fourth was solvable
-without memory at all.
-
-A clean null from a mechanism that never engaged looks exactly like a clean null
-from a mechanism that does not help. Before believing any comparison here, check
-that `graph_contribution_chars > 0` and that `verdict_source` contains
-`evidence`. If either is absent, the arm is not a test of anything.
+**What would settle the open question.** The headline sweep re-run at 50 turns,
+which the arbitrary cap invalidated. Roughly two hours of wall-clock and ~1.2M
+tokens across fifteen runs.
 
 ---
 
-## The data
+## Running it
 
-The runs described above are in this folder, so every number can be checked
-rather than taken on trust:
+```bash
+python3 src/app.py
+```
 
-| file | what it is |
-|---|---|
-| `headline.csv` | the main result: three memory modes, five replications each |
-| `reuse.csv` | the transfer test: first pass, inherited graph, no graph |
-| `transform_matrix.csv` | an earlier task's run, kept because the write-up cites it |
-| `transform_matrix2.csv` | the same, after the verdict-provenance fix |
+Then in the Decision Graph panel choose **clinic**, pick a disorder, and press
+Start. Everything below is that panel, scripted.
 
-Both were produced by driving the app over HTTP exactly as the UI drives it, so
-what they measure is the product and not a private harness.
+```bash
+# the paradigm still holds
+python3 studies/validate_paradigm.py --quick
+
+# the constraints study, for the null result
+python3 studies/constraints_study.py --level three_constraints \
+        --reps 5 --windows 4 --modes none inline graph --max-calls 26
+```
+
+Every setting these scripts touch is one you can set by hand, and every number
+they read comes from the same CSV the panel's download button produces.
 
 ---
 
@@ -552,48 +381,28 @@ what they measure is the product and not a private harness.
 
 The task lives in `src/agent/`. To add one:
 
-1. Write a rules module with pure predicates and a balanced held-out set —
-   `sentence_rules.py` is the clearest model to copy.
-2. Add a branch to `keeper.py` for `describe`, `opening`, `extract_move`,
-   `verdict`, `reply` and `check_aim`.
+1. Write a rules module with pure predicates and a check that every case is
+   both distinguishable and *winnable*.
+2. Add branches to `keeper.py` for `describe`, `opening`, `extract_move`,
+   `verdict`, `reply`, `check_aim`, `progress_made` and `is_complete` — and
+   `roles()` if it takes two agents.
 3. Add the id to the enum in `schemas.py` and the validator in `app.py`.
 
-It will appear in the Decision Graph panel automatically — the run-type list is
-served from Python by `/api/run_types` rather than hardcoded in the UI.
+**One warning from experience.** Several of the costliest bugs here were a
+missing branch in exactly that dispatch: a run type with no case returns `None`
+for every move, so every observation is discarded and no claim can be refuted.
+It produces a clean, plausible, entirely empty result. Add every branch, then
+check `verdict_source == 'evidence'` appears in your CSV before trusting a
+single number.
 
-**One warning from experience.** Three of the bugs that cost the most time in
-building this were a missing branch in exactly that dispatch: a run type with no
-`verdict()` case returned `None` for every move, so every observation was
-discarded and no claim could ever be refuted. It produced a clean, plausible,
-entirely empty result. Add all six branches, then check
-`verdict_source == 'evidence'` appears in your CSV before trusting a single
-number.
+### What is still open
 
-### The task this project still needs
+The alcohol case degrades with reuse: 39 turns on its first presentation, then
+two failures. It is the only case where a required feature is both guarded and
+inference-only, and the graph appears to carry a route fitted to the first
+patient that does not fit the next. The decay rate of `1/visits` may be too
+gentle when the contradiction is about *which route applies* rather than whether
+a route works at all.
 
-The `constraints` task can show the graph is *recorded* correctly. It cannot show
-the graph is *useful*, because it has no state space to route through — see
-[The result](#the-result). The obvious next task does, and it is a familiar one:
-**troubleshooting**.
-
-A fault is diagnosed by working through a sequence of checks to a fix. That gives
-what every task here has lacked:
-
-- **Places.** An intermediate state is somewhere you can be, return to, and route
-  through — so `find_path_to_goal` is finally exercised rather than merely present.
-- **Several routes to the same fix**, some faster than others, so "better route"
-  is meaningful and measurable.
-- **A reason to reuse a graph.** A second agent facing a similar fault should
-  start from the first agent's route rather than rediscovering it, which is what
-  makes the graph an asset rather than a log.
-
-It also needs one change to the paradigm, and it is worth stating plainly because
-it alters what a weight *means*. Today `update_graph` **overwrites** an edge's
-weight on every visit, so confidence is a snapshot of the moment a verdict was
-issued. For reuse it has to accumulate: an agent that inherits a route, follows a
-`Go` edge and hits a dead end should not flip the label but *lower the
-confidence*, leaving the route intact and slightly more expensive. The router
-already reads confidence as cost — `1.1 − c` for a route, `1 + 10c` for a dead
-end — so a decayed edge automatically loses to a fresher alternative without
-anything being deleted. A graph that gets better with use, rather than only
-bigger.
+That is the most informative thing left in the project. A case where reuse
+actively hurts says more about the paradigm than another case where it helps.
