@@ -76,7 +76,8 @@ keeper settled from evidence at `1.0`.
   - [Graph Intelligence](#graph-intelligence)
   - [Persistence & Patience](#persistence--patience)
   - [Research Mode: Keepers, Memory Modes and Run Data](#research-mode-keepers-memory-modes-and-run-data)
-- [A Toy Research Project](docs/TOY_RESEARCH_PROJECT.md) — a worked example, runnable in twenty minutes
+- [A Worked Example](docs/TOY_RESEARCH_PROJECT.md) — an agent that interviews and remembers what it ruled out
+- [Development Notes](docs/DEVELOPMENT_NOTES.md) — the designs that failed and why
 - [Features](#features)
   - [Conversation Modes](#conversation-modes)
   - [Rapid Adversarial Graph Runs](#rapid-adversarial-graph-runs)

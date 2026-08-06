@@ -1,408 +1,246 @@
-# A Toy Research Project: is a decision graph worth carrying between problems?
+# A Worked Example: an agent that interviews, and remembers what it ruled out
 
-A worked example built with GoalGraph, using GoalGraph as the instrument. It
-exists to show what the software is *for*, and to be honest about where its
-answers hold and where they do not.
+A twenty-minute walkthrough of GoalGraph doing one job: **conducting an
+interview with a person, and keeping track of what it has established and what
+it has eliminated.**
 
-Two things are reported here. One is a **null result** on the first task tried,
-kept in full because the reason it came out null is the most useful thing in
-this document. The other is a **positive result** on a task built afterwards to
-fix what the first one lacked. Neither is large. Both are reproducible from the
-repository.
+The setting is a clinical intake — an agent working out which of several
+conditions fits the person in front of it. That shape is common: a support
+agent narrowing a fault, an onboarding agent working out what a customer
+actually needs, a research assistant eliminating explanations. What they share
+is that the agent must ask, listen, and *not ask the same thing twice*.
 
----
-
-## The question
-
-An agent pursuing a goal in an environment it does not fully understand forms
-beliefs about that environment, and some are wrong. GoalGraph records each
-belief as an **aim** and each verdict on it as a **Go / Progress / NoGo** edge.
-
-Two questions follow, and they are not the same question:
-
-> **Does the graph carry what a short context window drops?**
-> **Is the graph worth handing to the next problem?**
-
-The first is about memory within a run. The second is about reuse across runs,
-and it is the one that decides whether a decision graph is an asset or a log.
-
-**Short answers.** Within a run, on the first task tried, no — the effect is
-inside noise and the graph is not cheaper. Across runs, on a task with real
-structure, yes — measurably, but unevenly, and in two cases it made things
-worse.
+This is a puzzle rather than a clinical instrument. The conditions are
+simplified past the point of clinical use and nothing here describes real
+illness.
 
 ---
 
-## The task that works: a clinic
+## The interaction
 
-**Run type: `clinic`.** Two agents. A clinician narrows seven disorders and
-commits to a diagnosis; a patient answers what is asked and not much more.
+You talk to the agent. It opens, you answer, and it reasons out loud about what
+your answer removed.
 
-This is a puzzle, not a clinical instrument. It borrows the *shape* of
-criteria-based diagnosis because that shape makes a good game. No diagnostic
-text is reproduced from any manual, the conditions are simplified past the
-point of clinical use, and nothing here describes real illness.
+> **Dr Ellery** — Hello. Let's start with the practical problem that brought
+> you in.
+>
+> **You** — My sister made me come. She says I have stopped answering my phone.
+>
+> **Dr Ellery** — That helps. Stopping answering the phone could go with
+> several patterns, but on its own it rules out very little. Have you been
+> turning down invitations and seeing people less?
+>
+> **You** — Yes.
+>
+> **Dr Ellery** — That suggests some withdrawal, which can happen in low mood,
+> anxiety, or exhaustion, so it still doesn't settle it. Are you worrying about
+> lots of different things on most days?
+>
+> **You** — No.
+>
+> **Dr Ellery** — That is useful. Broad day-to-day worry being absent makes
+> generalised anxiety less likely, so I should look more at low mood or
+> exhaustion patterns. Have you been feeling flat most of the day?
+>
+> **You** — Yes.
+>
+> **Dr Ellery** — That points more toward a depressive pattern than simple
+> burnout, though I still want one feature that separates them cleanly. Are you
+> sleeping a full night but waking exhausted anyway?
+>
+> **You** — No.
+>
+> **Dr Ellery** — That makes burnout-exhaustion less likely, because its sleep
+> pattern is often a full night that still feels unrefreshing. Have you lost
+> interest in things that normally still feel enjoyable?
+
+Verbatim from a run. Three things in it are worth naming.
+
+**The opening is a consequence, not a symptom.** "My sister made me come" is
+not on any diagnostic list — it is what the symptoms *caused*. The agent has to
+work backwards, which is how these conversations actually start.
+
+**Each answer is scored by what it eliminated**, not by whether it was
+interesting. "No" to broad worry removed generalised anxiety. "No" to
+unrefreshing sleep removed burnout. That is the agent's own reasoning, and it
+is also exactly what the graph records.
+
+**The person answers what they are asked and nothing more.** No one volunteers
+a structured symptom list. The agent's job is to choose the next question well,
+because it only gets one per turn.
+
+---
+
+## What the graph recorded
+
+While that conversation ran, the agent built this:
+
+![The graph from one interview](../screenshots/ui_graph_clinic.png)
 
 ```
-7 disorders   each needing N of M features, with exclusions
-20 features   what can be asked about
-45 patients   distinct presentations generated from the criteria
+nodes 7   depth 3
+Progress 2   NoGo 3   Go 1
+every edge settled from evidence, none from opinion
 ```
 
-Five properties, each added because the task did not work without it.
+Reading it against the transcript:
 
-**Criteria, not symptom sets.** A disorder needs a threshold of features rather
-than an exact match, so no single answer settles anything. Candidates are those
-whose criteria are still *satisfiable*. An earlier version compared against a
-stored case, which made any feature unique to one disorder an instant giveaway
-and collapsed seven candidates to one on a single reply.
+| in the graph | in the conversation |
+|---|---|
+| green `Progress` hops | a feature pinned down — the field genuinely narrowed |
+| orange `NoGo` branches | a question that bought nothing, or a line abandoned |
+| the blue `Go` | the diagnosis, once one candidate was left |
+| the hub's label | the live candidate set at that moment |
 
-**The complaint is a consequence, not a symptom.** Patients open outside the
-diagnostic vocabulary — *"I got a written warning at work last week"*, *"I had
-to have my wedding ring cut off"*, *"I fell asleep on the train and went four
-stops past my stop"*. The clinician has to work backwards. Opening with "I feel
-low" would hand over a criterion for free.
+The hub node is worth looking at: its label is *"Still possible: …"*, listing
+what remains. That is the agent's position, written down. Everything hanging
+off it is something tried from there.
 
-**Facts the patient will not give up.** Asked outright about what they are
-ashamed of, the patient deflects and nothing is learned — a genuinely blocked
-route. But each guarded feature has ordinary correlates they will discuss, so
-it can be established indirectly. A decoy disorder shares everything with the
-drinking case *except* those correlates, so the detour is not a shortcut but
-the only route: the questions that establish the hidden fact are exactly the
-ones that separate the two.
-
-**Two kinds of red herring, because they fail differently.**
-
-| kind | example | how it is disproved |
-|---|---|---|
-| situational | early waking, caused by building work next door since March | ask when it started; it then stops counting |
-| incidental | the drinker really does check things and avoid routes | never disproved — the line simply cannot complete |
-
-The situational kind can make a clinician *wrong*: it counts toward the
-criteria until someone asks what changed, and then the evidence base shrinks.
-The incidental kind is harder — real symptoms that cohere into nothing, which
-the clinician has to abandon on its own judgement rather than because it was
-told.
-
-**Every case is winnable.** Where a *required* feature is guarded, it can only
-be reached through correlates, so a presentation lacking a complete correlate
-set cannot be diagnosed however well the clinician reasons. `diagnosable()`
-filters those out. Two of twelve patients in the first long run were impossible
-for this reason and read as agent failures — see
-[Mistakes in the measurement](#mistakes-in-the-measurement).
+**Verdicts are settled in code, not by a model rating itself.** A `Progress`
+fires when a criterion is actually established; a `NoGo` when a question
+re-treads settled ground or is deflected. That is why every edge above reads
+`evidence` — the agent cannot award itself progress it did not make.
 
 ---
 
-## What makes a verdict trustworthy
+## Why a graph rather than the transcript
 
-The keeper is deterministic code holding the hidden answer. On single-agent
-tasks it answers the agent directly. On `clinic` it does not speak at all — the
-patient is a second agent, so the counterparty is already at the table and the
-keeper only scores the transcript.
+Because the transcript scrolls away, and because the next person is not this
+person.
 
-What it settles, it settles in code:
+The agent above ran with an **eight-message window**. By the time it reached
+the tenth question, the answer that removed generalised anxiety was long out of
+view. Without somewhere to put it, the agent re-asks — and re-asking is the
+failure mode people notice and resent.
 
-| verdict | fires when | source |
-|---|---|---|
-| `Progress` | a diagnostic criterion is pinned down | evidence |
-| `NoGo` | a question re-treads settled ground, is deflected, or exposes a red herring that removes a criterion | evidence |
-| `Go` | the clinician names the right disorder | evidence |
+Two things the graph does that a longer context does not:
 
-**Progress is a criterion pinned down, not a candidate eliminated.** This is
-what makes the graphs deep. Narrowing the field happens two or three times in
-an interview; establishing a criterion happens a dozen times. Scoring the
-former gave graphs two hops deep for a twenty-turn conversation.
+**It keeps only what was settled.** A transcript is every word. The graph is
+the handful of things established and the handful ruled out, which is a few
+hundred characters rather than a few thousand.
 
-An LLM judge still rates aims and proposes the next one, but on a keeper task
-it cannot grant a positive verdict the keeper does not support. Evidence
-outranks opinion in **both** directions — see
-[The regression](#the-regression-and-why-it-matters).
+**It survives the conversation.** The next person walks in and the agent
+already knows which question separates burnout from a depressive pattern. That
+is the part a bigger context window cannot give you.
 
 ---
 
-## The result
+## The next person, and the one after
 
-Sixteen patients seen in sequence by one clinician, each a fresh session, with
-the clinician's graph saved after each patient and loaded into the next.
-Consecutive patients rarely share a diagnosis, and repeat disorders are
-different presentations — so a graph that memorised an answer will be wrong.
+Sixteen people seen in sequence by the same agent, its graph carried between
+them. Each is a different presentation, and consecutive people rarely share an
+answer, so a graph that memorised a conclusion would be wrong.
 
-**13 of 16 diagnosed.**
+**13 of 16 correctly identified.**
 
-The honest measure of reuse is within a disorder: the same answer, a different
-patient, later in the sequence.
+The honest measure is within a condition — the same answer, a different person,
+later in the run:
 
-| disorder | turns, first presentation → later |
+| condition | turns, first → later |
 |---|---|
 | generalised anxiety | 57 → **7** |
 | panic with avoidance | 23 → **9** |
 | obsessive checking | 17 → **9** |
-| burnout exhaustion | failed at 70 → **35** |
+| burnout exhaustion | ran out of turns → **35** |
 | depressive episode | 25 → 21 → 27 |
-| thyroid disturbance | 9 → **25** |
-| alcohol-related low mood | 39 → **failed → failed** |
+| thyroid disturbance | 9 → 25 |
+| alcohol-related low mood | 39 → ran out → ran out |
 
-**Four improved, one flat, two got worse.** Aggregated, patients 1–8 solved 6/8
-at a mean of 28.3 turns; patients 9–16 solved 7/8 at 19.0. The effect is real
-and it is not uniform, and the two regressions are more interesting than the
-average.
+Four improved, one was flat, **two got worse**. Aggregated: the first eight
+people took a mean of 28.3 turns, the last eight 19.0. The effect is real and
+it is not uniform, and the two that degraded are shown because averaging them
+away would misrepresent it.
 
-**The alcohol case is the informative failure.** It is the hardest by
-construction — its required feature is guarded, reachable only through
-correlates — and it degrades with reuse rather than improving. The likely
-mechanism is that the graph carries forward a route fitted to the first
-presentation which does not fit the later ones, and the confidence decay is too
-gentle to demote it. That is a case where reuse actively hurts, and it is the
-best available lead on the paradigm's limits.
+After sixteen interviews the agent's graph looks like this:
 
-**n = 1 per patient.** These are turn counts from single runs, not estimates.
-
----
-
-## What the graph looks like after sixteen patients
-
-![One graph, sixteen patients](../screenshots/ui_graph_clinic_reused.png)
+![One graph, sixteen interviews](../screenshots/ui_graph_clinic_reused.png)
 
 ```
 nodes 34   edges 33   depth 6
-labels  {'Progress': 15, 'NoGo': 11, 'Go': 7}
-reused  4 edges revisited, 3 contested
+Progress 15   NoGo 11   Go 7
+4 edges revisited   3 contested
 ```
 
-Seven blue terminals are seven diagnoses reached. The long green spines are
-chains of established criteria, sharing early nodes where any patient starts
-and diverging by disorder. The thin dashed orange edges are refuted lines that
-have lost confidence.
+Seven blue terminals are seven conclusions reached. The spines share their
+early nodes — where every interview starts — and diverge by condition.
 
-The two numbers that matter are the last ones. **Revisited** means the
-clinician returned to a route it had built for an earlier patient — the graph
-being used, not merely extended. **Contested** means a later patient
-contradicted a route, which decayed it rather than flipping it.
+**Revisited** and **contested** are the numbers that say reuse is happening.
+Revisited means the agent walked a route it had built for someone else.
+Contested means a later person contradicted one, and the route lost confidence
+rather than being deleted:
 
-With refuted lines hidden, what is left is the routes that worked:
-
-![The routes that worked](../screenshots/ui_graph_clinic_reused_route.png)
-
-### Confidence accumulates rather than overwrites
-
-`update_graph` used to replace an edge's weight on every visit, so confidence
-was a snapshot of the last verdict. That is fine for a graph used once and
-wrong for one meant to be reused: an agent inheriting a route, following a `Go`
-edge and finding it does not work left that edge at full confidence.
-
-Weight is now a running estimate. Agreement moves it toward 1, contradiction
-toward 0, at rate `1/visits`:
-
-| history | weight |
+| an edge's history | its weight |
 |---|---|
-| confirmed 4×, then contradicted once | 1.00 → **0.80** |
-| seen once, then contradicted once | 1.00 → **0.50** |
+| confirmed 4×, then contradicted once | 1.00 → 0.80 |
+| seen once, then contradicted once | 1.00 → 0.50 |
 
-**The label never flips.** A contradicted `Go` stays a `Go` and records
-`contested`, so the graph shows a route that has become doubtful rather than one
-that silently changed its mind. The pathfinder costs routes at `1.1 −
-confidence`, so a decayed route loses to a fresher alternative without anything
-being deleted.
-
----
-
-## The task that did not work: constraints
-
-Kept because the reason matters more than the result.
-
-**Run type: `constraints`.** Three hidden rules must all hold at once; a
-rejection says how many held, never which. Five replications per arm, four-
-message window, the only difference being what the agent is told about aims
-already ruled out.
-
-| arm | accepted answers (95% CI) | completed | input tokens |
-|---|---|---|---|
-| `none` | 0.6 [0.0, 1.4] | 0/5 | 39,538 |
-| `inline` | 1.2 [0.1, 2.3] | 1/5 | **33,494** |
-| `graph` | 1.8 [0.7, 2.9] | 2/5 | 38,966 |
-
-**This is a null result.** The ordering favours the graph on both measures, but
-every interval overlaps and the completion difference is not significant —
-Fisher exact gives **p = 0.44** against no memory and **p = 1.0** against
-`inline`. The graph arm is also **not cheaper**.
-
-Transfer went the other way. A fresh agent given a predecessor's graph was the
-worst arm on every measure — 0/3 completed against 1/3 for building its own,
-hitting the turn cap on all three runs at the highest token cost.
-
-**Why, and it is not mysterious.** The task has no state space. "Where the agent
-is" is a count of how many distinct answers it has banked, so `Progress` edges
-are a tally drawn as a chain rather than places that can be returned to,
-branched from, or routed around. `find_path_to_goal` is never invoked. What is
-left for the graph to contribute is recall of refuted hypotheses — real, but
-most of what `inline` provides for fewer tokens. And transfer is worth its price
-only when what is transferred was expensive to acquire; three rules are not.
-
-Both graphs below are from the same task. The difference is memory.
-
-| with the graph | without it |
-|---|---|
-| ![a route](../screenshots/ui_graph_route.png) | ![a star](../screenshots/ui_graph_star.png) |
-| 13 nodes, depth 3 | 26 nodes, depth 1 |
-
-**A star is a failure.** It means the run never advanced. The no-memory arm
-re-derives the same dead ends until its turns run out, and produces only that
-shape.
-
-### Six designs, and what each one lacked
-
-| task | what it produced | what was missing |
-|---|---|---|
-| `rule_induction` | a hub of refuted triples | nothing to route through |
-| `word_induction` | solved on sight | any difficulty |
-| `sentence_induction` | solved on sight | any difficulty |
-| `transformation` | solved as well with no memory | a reason to remember |
-| `constraints` | a null result | a state space |
-| `troubleshoot` | a clean 4-hop route | a second agent — it is solitaire against code |
-
-The pattern took five attempts to see: a decision graph is worth having when
-there is **more than one way to get somewhere and the ways differ**. Guessing a
-rule has no ways. A counter to three has one. A fault tree has several, and a
-criteria-based interview with blocked questions has several of unequal cost.
+A contradicted route keeps its label and records that something disagreed, so
+the graph shows a route that has become doubtful rather than one that silently
+changed its mind. The router costs routes at `1.1 − confidence`, so a doubtful
+route quietly loses to a better one without anything being thrown away.
 
 ---
 
-## The regression, and why it matters
-
-For a stretch of this project every graph came out as a depth-1 star, and an
-earlier version of this document argued that was *correct* — that a hub is what
-elimination looks like, and shape follows task.
-
-That was wrong. Depth only grows on a `Go` or a `Progress`, and at the time
-nothing could produce one: the keeper could prove an aim wrong but had no way
-to prove the run had advanced, so the only thing that could move the cursor was
-a judge volunteering a high rating. It rarely did.
-
-Four causes, all introduced while building:
-
-1. **Ungated NoGo.** The original code gated every NoGo behind a persistence
-   minimum, giving an aim a few turns to develop. Removing that gate meant one
-   bad rating killed an aim on turn one.
-2. **The keeper could refute but not confirm.** `check_aim` computed
-   `consistent: True` and a holdout accuracy and threw both away into a log line.
-3. **Positive verdicts hardcoded as opinion**, so a proven advance would have
-   rendered as a hunch anyway.
-4. **Then the judge over-granted.** Once positives flowed, it declared aims
-   achieved on runs that accomplished nothing, producing seven-hop routes on
-   runs that got nowhere. Where the keeper can measure success it now governs
-   the positive verdict too. Fake progress is worse than a visible dead end.
-
-The check that would have settled it took seconds: this project's own earlier
-negotiation runs reach **depth 19 with 96 `Go` edges**. Progression worked; it
-had been removed. "It ran" had been mistaken for "it worked".
-
-[`validate_paradigm.py`](../studies/validate_paradigm.py) now encodes twelve
-checks that run in about a second with no LLM calls, plus a live run that fails
-on a star, on fake progress, and on a run that solves nothing.
-
-```bash
-python3 studies/validate_paradigm.py --quick
-```
-
----
-
-## Mistakes in the measurement
-
-Separated out because each one produced a number that looked like a finding.
-
-**A counter that matched the wrong string.** `accepted` matched `- yes`, which
-also appears in the keeper's *refusal* to count a near-duplicate. Near-copies
-the task explicitly rejects were scored as successes, and the arm producing the
-most of them looked strongest. An earlier headline reported a threefold effect
-with non-overlapping intervals; it did not survive correct measurement.
-
-**An arbitrary turn cap.** Runs were capped at 14, 16, 20 and 26 turns at
-various points, and runs that hit the cap were reported as failures. At ~1,600
-input tokens per turn a 40-turn run costs about 64k tokens, so the cap was never
-justified by expense — only by wall-clock. Given room, the case reported as
-unsolved at 20 turns **solved at 29**.
-
-**Patients that could not be diagnosed.** The generator built presentations
-satisfying the criteria that lacked a complete correlate set for a guarded
-required feature. Two of twelve were impossible, and read as the agent failing.
-
-**Two bugs in the checking code itself**, both of which reported a working
-system as broken: a graph lookup over a fresh HTTP session with no cookie, so it
-measured an empty graph; and a saved-graph path built with a doubled prefix.
-
-The common thread is that a measurement artifact and a finding look identical in
-a results table. Every number above that survived is one that was re-derived
-after the tooling was fixed.
-
----
-
-## Scope
-
-**What is shown.** The machinery is correct: verdicts settle from evidence
-rather than opinion, progression records as a route, and an agent with no
-memory demonstrably builds nothing. On a task with real structure, carrying a
-graph between problems measurably helps on four disorders out of seven.
-
-**What is not shown.** That the graph helps *within* a single run — the
-constraints result is null and nothing since has retested it. That the effect
-generalises: n=1 per patient, one model, one domain. That the decay rate is
-right — two disorders got worse with reuse and the alcohol case degraded badly.
-
-**What would settle the open question.** The headline sweep re-run at 50 turns,
-which the arbitrary cap invalidated. Roughly two hours of wall-clock and ~1.2M
-tokens across fifteen runs.
-
----
-
-## Running it
+## Run it yourself
 
 ```bash
 python3 src/app.py
 ```
 
-Then in the Decision Graph panel choose **clinic**, pick a disorder, and press
-Start. Everything below is that panel, scripted.
+In the **Decision Graph** panel choose run type `clinic`, pick a condition, and
+press Start. You are talking to the agent — answer as the person would, briefly,
+and only what you are asked.
+
+Watch the **Graph** tab while you talk. Nodes appear as the agent establishes
+things, and **Hide ruled-out aims** collapses it to the route it is actually on.
+
+To make the interaction repeatable instead — for evaluation, or to run sixteen
+of them unattended — a second agent can take the person's seat:
 
 ```bash
-# the paradigm still holds
-python3 studies/validate_paradigm.py --quick
-
-# the constraints study, for the null result
-python3 studies/constraints_study.py --level three_constraints \
-        --reps 5 --windows 4 --modes none inline graph --max-calls 26
+python3 studies/validate_paradigm.py --quick   # the checks, ~1s, no LLM calls
 ```
 
-Every setting these scripts touch is one you can set by hand, and every number
-they read comes from the same CSV the panel's download button produces.
+Every setting these use is one you can set by hand in the panel, and every
+number comes from the CSV its download button produces.
+
+---
+
+## What this does and does not show
+
+**Shown.** An agent can conduct a multi-turn interview against a short context
+window, record what it establishes and eliminates as it goes, and carry that
+forward so the next interview starts better informed. Verdicts are settled from
+evidence rather than self-assessment. The improvement across people is
+measurable and it is visible in the graph.
+
+**Not shown.** That this generalises: one model, one domain, and a single run
+per person, so the turn counts are observations rather than estimates. That the
+confidence decay is tuned correctly — two conditions got *worse* with reuse,
+and the alcohol-related case degraded badly enough to be the most interesting
+open question in the project. And nothing here measures whether the graph beats
+simply giving the agent a longer context window, which is the comparison a
+sceptical reader should want.
+
+The task designs that failed on the way to this one, the regression that made
+every graph shallow, and four occasions where the measuring tools produced a
+number that looked like a result are in
+[DEVELOPMENT_NOTES.md](DEVELOPMENT_NOTES.md).
 
 ---
 
 ## Extending it
 
-The task lives in `src/agent/`. To add one:
+The task lives in `src/agent/clinic_rules.py` — conditions, features, and the
+rules for what a person will and will not say unprompted. To add a domain of
+your own:
 
-1. Write a rules module with pure predicates and a check that every case is
-   both distinguishable and *winnable*.
-2. Add branches to `keeper.py` for `describe`, `opening`, `extract_move`,
-   `verdict`, `reply`, `check_aim`, `progress_made` and `is_complete` — and
-   `roles()` if it takes two agents.
+1. Write a rules module with pure predicates, and check every case is both
+   distinguishable and *winnable*.
+2. Add branches to `keeper.py` for `describe`, `opening`, `verdict`,
+   `progress_made` and `is_complete` — and `roles()` if a second agent stands in
+   for the person.
 3. Add the id to the enum in `schemas.py` and the validator in `app.py`.
 
-**One warning from experience.** Several of the costliest bugs here were a
-missing branch in exactly that dispatch: a run type with no case returns `None`
-for every move, so every observation is discarded and no claim can be refuted.
-It produces a clean, plausible, entirely empty result. Add every branch, then
-check `verdict_source == 'evidence'` appears in your CSV before trusting a
-single number.
-
-### What is still open
-
-The alcohol case degrades with reuse: 39 turns on its first presentation, then
-two failures. It is the only case where a required feature is both guarded and
-inference-only, and the graph appears to carry a route fitted to the first
-patient that does not fit the next. The decay rate of `1/visits` may be too
-gentle when the contradiction is about *which route applies* rather than whether
-a route works at all.
-
-That is the most informative thing left in the project. A case where reuse
-actively hurts says more about the paradigm than another case where it helps.
+It appears in the Decision Graph panel automatically; the run-type list is
+served from Python rather than hardcoded in the UI.
