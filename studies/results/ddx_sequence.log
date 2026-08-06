@@ -1,0 +1,26 @@
+    Dr Nazari: Are you experiencing shortness of breath or difficulty breathing in a significant way?
+
+Dr. Naza
+    Ash: My sister made me come. She says I have not been myself for months.
+No, not really. Breathing is
+    Dr Nazari: Are you experiencing shortness of breath or difficulty breathing in a significant way?
+    Ash: My sister made me come. She says I have not been myself for months. No, not really.
+    Dr Nazari: That makes an immediate airway problem much less likely, so anaphylaxis drops down the list, and
+    Ash: Yeah. I’ve lost weight without trying.
+
+Ash avoids eye contact and answers quietly.
+    Dr Nazari: That points me further toward a chronic systemic process and away from brief illnesses like infl
+    Ash: Yeah, I haven’t felt much like eating.
+    Dr Nazari: That combination—months of change, unintentional weight loss, and reduced appetite—leans more to
+    Ash: No.
+
+They keep their eyes down and answer shortly.
+    Dr Nazari: I diagnose HIV (initial infection).
+[1/8] HIV (initial infection)      solved=True  turns=11  in=0   nodes=4 depth=3 {'Progress': 2, 'Go': 1} contested=0 revisited=0 1.7min
+[2/8] Sarcoidosis                  solved=False turns=70  in=4   nodes=23 depth=7 {'Progress': 7, 'NoGo': 14, 'Go': 1} contested=0 revisited=2 11.1min
+[3/8] Influenza                    solved=True  turns=23  in=23  nodes=24 depth=7 {'Progress': 7, 'NoGo': 15, 'Go': 1} contested=1 revisited=3 3.3min
+[4/8] Pancreatic neoplasm          solved=True  turns=19  in=24  nodes=29 depth=7 {'Progress': 10, 'NoGo': 16, 'Go': 2} contested=1 revisited=3 3.0min
+[5/8] HIV (initial infection)      solved=True  turns=29  in=29  nodes=36 depth=7 {'Progress': 12, 'NoGo': 20, 'Go': 3} contested=1 revisited=4 4.3min
+[6/8] SLE                          solved=True  turns=29  in=36  nodes=37 depth=7 {'Progress': 12, 'NoGo': 20, 'Go': 4} contested=1 revisited=4 3.9min
+[7/8] Anaphylaxis                  solved=True  turns=13  in=37  nodes=41 depth=7 {'Progress': 14, 'NoGo': 21, 'Go': 5} contested=1 revisited=4 1.7min
+[8/8] HIV (initial infection)      solved=True  turns=17  in=41  nodes=42 depth=7 {'Progress': 14, 'NoGo': 22, 'Go': 6} contested=1 revisited=5 2.0min

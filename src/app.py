@@ -1026,6 +1026,11 @@ def api_run_types():
                       'answers only what is asked and will not be drawn on what '
                       'they are ashamed of - so it has to be inferred from its '
                       'ordinary correlates instead.',
+            'ddx_clinic': 'The clinic game, built from the public DDXPlus corpus '
+                          '(CC-BY-4.0) instead of hand-authored: real conditions, '
+                          'real symptoms, and guarded facts whose indirect routes '
+                          'are measured from patient co-occurrence rather than '
+                          'chosen.',
             'hidden_norm': 'Infer why a conversational partner warms or cools.',
         }
         return jsonify({
@@ -2415,7 +2420,8 @@ def update_user_settings():
         run_type = request.form.get('run_type')
         if run_type in ('chat', 'rule_induction', 'word_induction',
                         'sentence_induction', 'transformation', 'constraints',
-                        'troubleshoot', 'diagnosis', 'clinic', 'hidden_norm'):
+                        'troubleshoot', 'diagnosis', 'clinic', 'ddx_clinic',
+                        'hidden_norm'):
             session['state']['settings']['run_type'] = run_type
         keeper_rule = request.form.get('keeper_rule')
         if keeper_rule is not None:

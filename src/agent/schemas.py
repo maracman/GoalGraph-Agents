@@ -147,7 +147,8 @@ json_schemas = {
                         "type": "string",
                         "enum": ["chat", "rule_induction", "word_induction", "sentence_induction",
                                  "transformation", "constraints", "troubleshoot",
-                                 "diagnosis", "clinic", "hidden_norm"]
+                                 "diagnosis", "clinic", "ddx_clinic",
+                                 "hidden_norm"]
                     },
                     "keeper_rule": {"type": "string"},
                     # Most recent messages an agent may see. 0 means all of

@@ -29,6 +29,7 @@ from . import constraint_rules as CR
 from . import troubleshoot_rules as TS
 from . import diagnosis_rules as DG
 from . import clinic_rules as CL
+from . import ddx_rules as DX
 from .induction import compile_predicate, UnsafePredicate
 
 # How many distinct accepted sentences finish a constraints run. More than
@@ -44,14 +45,20 @@ CONSTRAINTS = 'constraints'
 TROUBLESHOOT = 'troubleshoot'
 DIAGNOSIS = 'diagnosis'
 CLINIC = 'clinic'
+DDX_CLINIC = 'ddx_clinic'
 CHAT = 'chat'
 
 RUN_TYPES = (CHAT, RULE_INDUCTION, WORD_INDUCTION, SENTENCE_INDUCTION,
              TRANSFORMATION, CONSTRAINTS, TROUBLESHOOT, DIAGNOSIS,
-             CLINIC, HIDDEN_NORM)
+             CLINIC, DDX_CLINIC, HIDDEN_NORM)
 
 
 def available_rules(run_type):
+    if run_type == DDX_CLINIC:
+        try:
+            return [{'id': c, 'name': c} for c in DX.conditions()]
+        except Exception:                                          # noqa: BLE001
+            return []          # corpus not downloaded; the run type stays listed
     if run_type == CLINIC:
         return [{'id': k, 'name': CL.DISORDER_TEXT[k]
                  + (' (needs an inferred feature)'
@@ -107,6 +114,11 @@ class Keeper:
             return DG.DEFAULT_CONDITIONS[0]
         if run_type == CLINIC:
             return CL.DEFAULT_CASES[0]
+        if run_type == DDX_CLINIC:
+            try:
+                return DX.default_case()
+            except Exception:                                      # noqa: BLE001
+                return None
         if run_type == TRANSFORMATION:
             return TR.DEFAULT_INVARIANTS[0]
         if run_type == SENTENCE_INDUCTION:
@@ -127,9 +139,11 @@ class Keeper:
         counterparty is already at the table and the keeper only scores what
         the two of them say. Everywhere else it answers the agent directly.
         """
-        return self.run_type not in (DIAGNOSIS, CLINIC)
+        return self.run_type not in (DIAGNOSIS, CLINIC, DDX_CLINIC)
 
     def describe(self):
+        if self.run_type == DDX_CLINIC:
+            return f'Work out that the patient has {DX.base_case(self.rule_name)}.'
         if self.run_type == CLINIC:
             return ('Work out that the patient has '
                     f'{CL.DISORDER_TEXT[CL.base_case(self.rule_name)]}.')
@@ -241,6 +255,12 @@ class Keeper:
 
     def is_complete(self, history):
         """Has the task been finished? Only meaningful where there is a target."""
+        if self.run_type == DDX_CLINIC:
+            want = DX.base_case(self.rule_name)
+            for _speaker, message in history:
+                if DX.diagnosis_claimed(message) == want:
+                    return True
+            return False
         if self.run_type == CLINIC:
             # the rule name may pick a particular presentation, but the
             # clinician only ever names the disorder
@@ -275,6 +295,9 @@ class Keeper:
         it forward - and a graph whose only proven verdicts are refutations
         collapses to a hub of dead ends with no route through it.
         """
+        if self.run_type == DDX_CLINIC:
+            return (DX.confirmed_count(after, self.rule_name)
+                    > DX.confirmed_count(before, self.rule_name))
         if self.run_type == CLINIC:
             # A criterion pinned down is a progress point, not a candidate
             # eliminated. Narrowing the field happens two or three times in a
@@ -320,6 +343,20 @@ class Keeper:
         A failed repair is *not* wasted: it rules out the fault it would have
         fixed, so it narrows and counts as progress.
         """
+        if self.run_type == DDX_CLINIC:
+            if self.is_complete(after) or len(after) <= len(before):
+                return False
+            raised = set()
+            for _sp, msg in after[len(before):]:
+                raised |= DX.mentions(msg)
+            if not raised:
+                return False
+            mine = DX.features_for(self.rule_name)
+            g = DX.guarded()
+            if all(f in g and f in mine for f in raised):
+                return True     # asked outright about what they will not say
+            settled = set(DX.read(before[:-1], self.rule_name)['known'])
+            return raised <= settled
         if self.run_type == CLINIC:
             if self.is_complete(after) or len(after) <= len(before):
                 return False
@@ -372,6 +409,10 @@ class Keeper:
 
     def wasted_note(self, history):
         """Why the move was wasted, for the edge's reason text."""
+        if self.run_type == DDX_CLINIC:
+            live = sorted(DX.candidates_from(history, self.rule_name))
+            return ('That question bought nothing - already answered, or the '
+                    'patient will not be drawn on it. Still ' + ', '.join(live))
         if self.run_type == CLINIC:
             live = sorted(self.live_disorders(history))
             return ('That question bought nothing - either it was already '
@@ -390,6 +431,14 @@ class Keeper:
 
     def progress_note(self, history):
         """What advancing looks like from here, so an evolved aim has somewhere to go."""
+        if self.run_type == DDX_CLINIC:
+            live = sorted(DX.candidates_from(history, self.rule_name))
+            if len(live) == 1:
+                return f'Only {live[0]} still fits. Say that you are diagnosing it.'
+            return ('Still possible: ' + ', '.join(live) +
+                    '. Ask about whatever separates them - and if the patient '
+                    'will not be drawn on something, look for what would show '
+                    'it indirectly.')
         if self.run_type == CLINIC:
             live = sorted(self.live_disorders(history))
             if len(live) == 1:
@@ -443,6 +492,19 @@ class Keeper:
         models talking about being evaluated: the keeper overwrote each agent's
         goal with one shared string, which for this run type was empty.
         """
+        if self.run_type == DDX_CLINIC:
+            return [
+                {'agent_name': 'Dr Nazari',
+                 'description': ('A careful clinician who works by elimination, '
+                                 'says what each answer rules out, and looks '
+                                 'for indirect evidence when a patient will not '
+                                 'be drawn on something.'),
+                 'goal': DX.clinician_brief()},
+                {'agent_name': 'Ash',
+                 'description': ('Someone who has come for help but finds it '
+                                 'hard to talk about themselves.'),
+                 'goal': DX.patient_brief(self.rule_name)},
+            ]
         if self.run_type == CLINIC:
             return [
                 {'agent_name': 'Dr Ellery',
