@@ -131,7 +131,8 @@ class Keeper:
 
     def describe(self):
         if self.run_type == CLINIC:
-            return f'Work out that the patient has {CL.DISORDER_TEXT[self.rule_name]}.'
+            return ('Work out that the patient has '
+                    f'{CL.DISORDER_TEXT[CL.base_case(self.rule_name)]}.')
         if self.run_type == DIAGNOSIS:
             return f'Diagnose a patient who has {DG.CONDITION_TEXT[self.rule_name]}.'
         if self.run_type == TROUBLESHOOT:
@@ -241,8 +242,11 @@ class Keeper:
     def is_complete(self, history):
         """Has the task been finished? Only meaningful where there is a target."""
         if self.run_type == CLINIC:
+            # the rule name may pick a particular presentation, but the
+            # clinician only ever names the disorder
+            want = CL.base_case(self.rule_name)
             for _speaker, message in history:
-                if CL.diagnosis_claimed(message) == self.rule_name:
+                if CL.diagnosis_claimed(message) == want:
                     return True
             return False
         if self.run_type == DIAGNOSIS:

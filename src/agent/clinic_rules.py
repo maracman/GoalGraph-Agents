@@ -327,6 +327,36 @@ def mentions(text):
     return {f for f, words in KEYWORDS.items() if any(w in low for w in words)}
 
 
+def split_rule(rule_name):
+    """`alcohol_related_low_mood#2` -> ('alcohol_related_low_mood', 2).
+
+    A rule name can name a specific presentation of a disorder, so a long run
+    can see many different patients with the same diagnosis without any of
+    them looking alike.
+    """
+    text = str(rule_name or '')
+    if '#' in text:
+        base, k = text.split('#', 1)
+        try:
+            return base, int(k)
+        except ValueError:
+            return base, None
+    return text, None
+
+
+def base_case(rule_name):
+    return split_rule(rule_name)[0]
+
+
+def features_for(rule_name):
+    """The features true of this particular patient."""
+    base, k = split_rule(rule_name)
+    if k is None:
+        return set(CASES[base])
+    v = variants(base)
+    return set(v[k % len(v)])
+
+
 def reported(case):
     """Everything the patient will say yes to - the illness plus its red herring.
 
@@ -334,8 +364,9 @@ def reported(case):
     patient would simply deny it, and a clinician could never be misled by
     something nobody mentioned.
     """
-    return (CASES[case] | set(SITUATIONAL.get(case, {}))
-            | INCIDENTAL.get(case, set()))
+    base = base_case(case)
+    return (features_for(case) | set(SITUATIONAL.get(base, {}))
+            | INCIDENTAL.get(base, set()))
 
 
 def read(history, case):
@@ -355,7 +386,7 @@ def read(history, case):
     happens a dozen.
     """
     known, situational = {}, set()
-    herrings = SITUATIONAL.get(case, {})
+    herrings = SITUATIONAL.get(base_case(case), {})
     for _speaker, message in history:
         raised = mentions(message)
         if asks_context(message):
@@ -366,7 +397,7 @@ def read(history, case):
         for feature in raised:
             if feature in known:
                 continue
-            if feature in GUARDED and feature in CASES[case]:
+            if feature in GUARDED and feature in features_for(case):
                 continue                      # deflected; nothing learned
             known[feature] = feature in reported(case)
 
@@ -415,7 +446,7 @@ def candidates_from(history, case):
 
 
 def presenting_complaint(case):
-    return PRESENTATIONS[case]['complaint']
+    return PRESENTATIONS[base_case(case)]['complaint']
 
 
 def known_from(history, case):
@@ -430,7 +461,7 @@ def known_from(history, case):
         for feature in mentions(message):
             if feature in known:
                 continue
-            if feature in GUARDED and feature in CASES[case]:
+            if feature in GUARDED and feature in features_for(case):
                 continue        # deflected; nothing learned
             known[feature] = feature in CASES[case]
     return known
@@ -529,6 +560,70 @@ def separable():
 DEFAULT_CASES = list(CASES)
 
 
+# --- a bank of patients ---------------------------------------------------
+# Variants generated from the criteria rather than written by hand, so a long
+# reuse run sees many different presentations of the same disorders. Each
+# variant keeps enough features to satisfy its disorder and drops the rest,
+# and carries its own red herrings - so two patients with the same diagnosis
+# do not look alike, and a graph that memorised one will not fit the next.
+
+def variants(case, seed=0):
+    """Every distinct patient this disorder can present as, hardest first."""
+    import itertools
+    d = DISORDERS[case]
+    pool, n = d['any_of']
+    base = d['required']
+    have = CASES[case] & pool
+    out = []
+    for k in range(n, len(have) + 1):
+        for combo in itertools.combinations(sorted(have), k):
+            feats = base | set(combo) | (CASES[case] - pool - base)
+            if meets(case, feats) and diagnosable(case, feats):
+                out.append(frozenset(feats))
+    # fewest features first: those are the patients who give least away
+    return sorted(set(out), key=lambda f: (len(f), sorted(f)))
+
+
+def diagnosable(case, feats):
+    """Could a clinician actually establish this patient's diagnosis?
+
+    Satisfying the criteria on paper is not enough. Where a *required* feature
+    is one the patient will not confirm, it can only be established through its
+    correlates - so if this presentation happens to lack a complete correlate
+    set, the required feature can never be shown and the case is unwinnable no
+    matter how well the clinician reasons.
+
+    Two of the twelve patients in the first long run were impossible for
+    exactly this reason, and they read as the agent failing rather than as the
+    case being unfair.
+    """
+    for guarded, routes in GUARDED.items():
+        if guarded not in DISORDERS[case]['required']:
+            continue
+        if guarded not in feats:
+            continue
+        if not any(route <= feats for route in routes):
+            return False
+    return True
+
+
+def case_bank(limit_per_case=3, seed=0):
+    """A list of (case, features) patients across every disorder."""
+    bank = []
+    for case in CASES:
+        for feats in variants(case, seed)[:limit_per_case]:
+            bank.append((case, set(feats)))
+    return bank
+
+
+def bank_summary():
+    out = []
+    for case in CASES:
+        v = variants(case)
+        out.append(f'{case:<26} {len(v):>3} distinct presentations')
+    return '\n'.join(out)
+
+
 def clinician_brief():
     return (
         'A patient has come to you. Exactly one of these fits them:\n  '
@@ -565,14 +660,14 @@ def patient_brief(case):
         'while and you want help, but you find it hard to talk about yourself.',
         '',
         'Open the conversation with exactly this, and nothing more:',
-        f'  "{PRESENTATIONS[case]["complaint"]}"',
+        f'  "{PRESENTATIONS[base_case(case)]["complaint"]}"',
         '',
         'That is what made you come. It is not a symptom - it is what your '
         'symptoms have caused. Do not explain it unless you are asked.',
         '',
         'This is what is true of you:',
     ]
-    herrings = SITUATIONAL.get(case, {})
+    herrings = SITUATIONAL.get(base_case(case), {})
     for f in open_:
         if f in herrings:
             lines.append(f'  - {FEATURES[f]}  (this one is only because '

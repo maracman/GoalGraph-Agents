@@ -665,8 +665,17 @@ def visualize_graph_pyvis(graph_file_path, session_id, hide_nogo=False):
             confidence = min(max(weight, 0.0), 1.0)
             opinion = data.get('verdict_source') != 'evidence'
             width = 1 + 4 * confidence
+            visits = data.get('visits')
+            contested = int(data.get('contested') or 0)
             hover = (f"{edge_label} · confidence {confidence}"
                      f"{' · judge opinion' if opinion else ' · checked against evidence'}")
+            if visits:
+                hover += f" · seen {visits}x"
+            if contested:
+                # A route later experience disagreed with. It keeps its verdict
+                # and loses confidence, so it thins rather than disappearing.
+                hover += f" · contradicted {contested}x since"
+                colour = '#b45309'
             colour = NODE_COLOURS.get(edge_label, '#2a78d6')
             length = nogo_length if edge_label == 'NoGo' else 150
             net.add_edge(u, v, label='', fullLabel=edge_label, title=hover,

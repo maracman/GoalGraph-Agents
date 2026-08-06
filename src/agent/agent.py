@@ -183,18 +183,52 @@ def annotate_aim(graph, node, status, reason=None, rating=None, turn=None,
 
 
 def update_graph(graph, current_node, next_node, label, weight=1.0):
-    """Add or update an edge in the agent's decision graph."""
+    """Add or update an edge, accumulating confidence across visits.
+
+    The weight is a running estimate, not a snapshot of the last verdict. That
+    matters as soon as a graph outlives the run that built it: an agent that
+    inherits a route, follows a `Go` edge and then finds it does not work
+    should not have that edge still sitting at full confidence, and should not
+    have it relabelled either. The route stays on the graph and gets cheaper to
+    doubt.
+
+    Agreement moves the estimate toward 1 and contradiction toward 0, both at a
+    rate that falls as evidence accumulates, so a single bad experience dents a
+    well-established route rather than erasing it. Costs never reach zero,
+    because a free edge wins every search regardless of merit.
+    """
     if current_node not in graph:
         graph.add_node(current_node)
     if next_node not in graph:
         graph.add_node(next_node)
 
-    if graph.has_edge(current_node, next_node):
-        graph[current_node][next_node]['label'] = label
-        graph[current_node][next_node]['weight'] = weight
-    else:
-        graph.add_edge(current_node, next_node, label=label, weight=weight)
+    if not graph.has_edge(current_node, next_node):
+        graph.add_edge(current_node, next_node, label=label, weight=weight,
+                       visits=1)
+        return graph
 
+    edge = graph[current_node][next_node]
+    visits = int(edge.get('visits', 1)) + 1
+    try:
+        prior = float(edge.get('weight', weight))
+    except (TypeError, ValueError):
+        prior = weight
+    agrees = edge.get('label') == label
+    target = weight if agrees else 0.0
+    # 1/visits: the second visit moves the estimate halfway, the tenth barely
+    # at all. Long-standing routes are hard to overturn on one bad case, which
+    # is the behaviour a reusable graph needs.
+    updated = prior + (target - prior) / visits
+    edge['weight'] = round(min(max(updated, 0.05), 1.0), 4)
+    edge['visits'] = visits
+    if agrees:
+        edge['label'] = label
+    else:
+        # A contradiction does not rewrite history. The edge keeps the verdict
+        # it was built with and records that something later disagreed, so the
+        # graph shows a route that has become doubtful rather than one that
+        # silently changed its mind.
+        edge['contested'] = int(edge.get('contested', 0)) + 1
     return graph
 
 
