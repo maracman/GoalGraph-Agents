@@ -141,7 +141,8 @@ def get_go_nogo_nodes(graph):
 # with them empty. Under pandas 2.x, writing a string into such a column raises
 # rather than widening it, which breaks the write-back after an aim is set.
 _TEXT_COLUMNS = ('current_aim', 'suggestion', 'current_node_location',
-                 'last_response', 'last_narration', 'persistance_score')
+                 'last_response', 'last_narration', 'persistance_score',
+                 'current_aim_source')
 
 
 def ensure_text_columns(agent_df):
@@ -278,24 +279,50 @@ def already_ruled_out(graph, proposed, threshold=0.86):
     return None
 
 
-def choose_aim(graph, current_node, goal_text, proposed, generation_vars,
-               min_similarity=0.45):
-    """Pick the next aim, giving the graph a say rather than only the judge.
+TRUST_FLOOR = 0.15          # never quite stop listening to the graph
+TRUST_DECAY = 0.6           # a graph route that fails costs this much trust
+ROUTE_MIN_SCORE = 0.55      # similarity x trust needed to override the judge
 
-    Returns (aim, source, suggestion, rejected). The graph is consulted whenever
-    a new aim is needed - not only when the agent has none, which was the old
-    behaviour and meant the graph never chose anything once a judge started
-    supplying next_aim.
+
+def choose_aim(graph, current_node, goal_text, proposed, generation_vars,
+               min_similarity=0.45, trust=1.0):
+    """Pick the next aim, weighing the judge's proposal against the graph's route.
+
+    Returns (aim, source, suggestion, rejected).
+
+    The graph used to get a say only when the judge's proposal collided with a
+    known dead end: any proposal that was merely *new* was accepted unchecked,
+    so `find_path_to_goal` never ran and the graph chose the direction on about
+    2% of turns across four thousand. It was a veto, not a planner.
+
+    Now the route is always computed and compared. `trust` is how much the
+    graph has been worth *in this run* - it falls when a route it supplied
+    fails and recovers when one works, so a graph built for a different problem
+    is quietly stopped being followed without being deleted or distrusted for
+    the next run. Edge confidence already carries what is learned across runs;
+    this carries what is learned about the present one.
     """
     proposed = clean_text(proposed)
     if generation_vars.get('graph_memory_mode', 'description') == 'none':
         return proposed, 'carried', None, None
 
     rejected = already_ruled_out(graph, proposed)
-    if rejected is None and proposed:
-        return proposed, 'carried', None, None
 
     result = find_path_to_goal(graph, current_node, goal_text, min_similarity)
+    if rejected is None and proposed:
+        # The proposal is not a known dead end. Take the graph's route instead
+        # only when it is both a good match for the goal and has been earning
+        # its keep this run; otherwise stay responsive to what is in front of
+        # the agent rather than replaying an old one.
+        if result is not None:
+            path, target, similarity = result
+            if len(path) > 1 and similarity * trust >= ROUTE_MIN_SCORE:
+                return (path[1], 'graph_path',
+                        f"Follow known path toward '{target}' "
+                        f"(similarity={similarity:.2f}, trust={trust:.2f}). "
+                        f"Path: {' -> '.join(path)}", None)
+        return proposed, 'carried', None, None
+
     if result is not None:
         path, target, similarity = result
         if len(path) > 1:
@@ -761,6 +788,14 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
     current_aim = clean_text(agent['current_aim'])
     suggestion = clean_text(agent['suggestion'], '')
     persistence_count = agent['persistance_count']
+    # How much the graph has been worth *this run*. Falls when a route it
+    # supplied fails, recovers when one works, and never persists past the
+    # run - cross-run learning is the edge confidence, not this.
+    try:
+        graph_trust = float(agent.get('graph_trust', 1.0) or 1.0)
+    except (TypeError, ValueError):
+        graph_trust = 1.0
+    aim_came_from = clean_text(agent.get('current_aim_source'), '') or 'carried'
     persistence_score = agent['persistance_score']
     current_node = clean_text(agent['current_node_location'], 'start')
     patience_min = agent.get('persistance', 3)      # min turns before NoGo
@@ -889,6 +924,8 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
         agent_df.at[agent_idx, 'current_aim'] = current_aim
         agent_df.at[agent_idx, 'suggestion'] = suggestion
         agent_df.at[agent_idx, 'persistance_count'] = persistence_count
+        agent_df.at[agent_idx, 'graph_trust'] = round(float(graph_trust), 4)
+        agent_df.at[agent_idx, 'current_aim_source'] = str(aim_came_from)
         agent_df.at[agent_idx, 'persistance_score'] = persistence_score
         agent_df.at[agent_idx, 'current_node_location'] = current_node
         nx.write_graphml(G, graph_path)
@@ -1030,6 +1067,8 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                 'tokens_estimated': int(llm_service.usage()['estimated']),
                 'graph_contribution_chars': int(len(graph_contribution)),
                 'graph_contribution': str(graph_contribution)[:1000],
+                'graph_trust': round(float(graph_trust), 3),
+                'aim_source': str(aim_came_from),
                 'graph_nodes': int(G.number_of_nodes()),
                 'graph_edges': int(G.number_of_edges()),
             })
@@ -1037,6 +1076,20 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
         if rating is not None:
             previous_score = persistence_score if persistence_score is not None else 4
             persistence_score = rating
+
+            # The verdict just reached is a verdict on the aim the graph (or
+            # the judge) supplied last turn. If the graph chose it, that is
+            # evidence about whether this graph fits the problem in front of
+            # the agent - which is a different question from whether the route
+            # is generally sound, and belongs on a different timescale.
+            if aim_came_from == 'graph_path':
+                advanced_ok = (rating >= 6 or aim_status in ('progress', 'achieved'))
+                if advanced_ok:
+                    graph_trust = min(1.0, graph_trust / TRUST_DECAY)
+                elif aim_status == 'abandon' or rating <= 2:
+                    graph_trust = max(TRUST_FLOOR, graph_trust * TRUST_DECAY)
+                logs.append(f"graph trust now {graph_trust:.2f} "
+                            f"({'route worked' if advanced_ok else 'route did not'})")
 
             if new_suggestion:
                 suggestion = new_suggestion
@@ -1053,7 +1106,9 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                              enabled=generation_vars.get('graph_memory_mode') == 'graph')
                 current_node = new_node
                 current_aim, aim_source, graph_hint, rejected = choose_aim(
-                    G, current_node, agent['goal'], next_aim, generation_vars)
+                    G, current_node, agent['goal'], next_aim, generation_vars,
+                    trust=graph_trust)
+                aim_came_from = aim_source
                 suggestion = graph_hint or (new_suggestion if current_aim else '')
                 persistence_count = 0
                 persistence_score = None
@@ -1080,7 +1135,9 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                              enabled=generation_vars.get('graph_memory_mode') == 'graph')
                 current_node = new_node
                 current_aim, aim_source, graph_hint, rejected = choose_aim(
-                    G, current_node, agent['goal'], next_aim, generation_vars)
+                    G, current_node, agent['goal'], next_aim, generation_vars,
+                    trust=graph_trust)
+                aim_came_from = aim_source
                 suggestion = graph_hint or new_suggestion
                 persistence_count = 0
                 persistence_score = None
@@ -1172,6 +1229,8 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
     agent_df.at[agent_idx, 'current_aim'] = current_aim
     agent_df.at[agent_idx, 'suggestion'] = suggestion
     agent_df.at[agent_idx, 'persistance_count'] = persistence_count
+    agent_df.at[agent_idx, 'graph_trust'] = round(float(graph_trust), 4)
+    agent_df.at[agent_idx, 'current_aim_source'] = str(aim_came_from)
     agent_df.at[agent_idx, 'persistance_score'] = persistence_score
     agent_df.at[agent_idx, 'current_node_location'] = current_node
     agent_df.at[agent_idx, 'last_response'] = response_text
