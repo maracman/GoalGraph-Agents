@@ -134,6 +134,35 @@ def quick():
     check("a proposal is read, and commentary is not mistaken for one",
           not wrong, f"{len(wrong)} misread" if wrong else f"{len(cases)} cases")
 
+    print("\nthe aim does not give the answer away")
+    # An aim sits in the agent's *system prompt* every turn, outside the
+    # context window entirely. So anything named in it is handed to every arm
+    # for free, and a memory experiment measures nothing. A progress note once
+    # read "Still possible: Anaphylaxis, SLE, Sarcoidosis", which made a
+    # two-message window as good as a thirty-two message one and cost a full
+    # sweep before anyone noticed.
+    from agent import keeper as KP
+    leaks = []
+    for run_type, rules_mod, names in (
+            ('clinic', 'clinic_rules', None),
+            ('ddx_clinic', 'ddx_rules', None)):
+        try:
+            mod = __import__(f'agent.{rules_mod}', fromlist=['x'])
+            kp = KP.make_keeper({'run_type': run_type})
+            if kp is None or kp.rule_name is None:
+                continue
+            answers = (list(mod.DISORDER_TEXT.values()) + list(mod.DISORDER_TEXT)
+                       if hasattr(mod, 'DISORDER_TEXT') else mod.conditions())
+            for hist in ([], [('p', 'x'), ('d', 'Do you have a fever?')]):
+                note = str(kp.progress_note(hist) or '').lower()
+                for a in answers:
+                    if len(str(a)) > 4 and str(a).lower() in note:
+                        leaks.append(f'{run_type}: aim names "{a}"')
+        except Exception as e:                                     # noqa: BLE001
+            print(f'        ({run_type} not checkable: {e})')
+    check("no run type names a candidate answer in the aim text",
+          not leaks, '; '.join(leaks[:3]) if leaks else 'checked clinic + ddx_clinic')
+
     print("\nthe patience gate")
     txt = open(os.path.join(os.path.dirname(__file__), "..", "src",
                             "agent", "agent.py")).read()

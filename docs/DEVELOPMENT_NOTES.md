@@ -405,3 +405,53 @@ a route works at all.
 
 That is the most informative thing left in the project. A case where reuse
 actively hurts says more about the paradigm than another case where it helps.
+
+---
+
+## Before trusting a number
+
+Every false result in this project came from the measuring apparatus, not from
+the software. Each produced a clean, plausible figure that looked exactly like
+a finding. This list is what they had in common.
+
+**1. Did anything actually run?**
+An expired auth token produced eleven runs of seventy turns and zero output,
+all written to the results file as `solved=0`. A run that recorded no tokens is
+not a result. The sweep runner now aborts after three consecutive empty runs;
+check token counts before reading anything else.
+
+**2. Was the task winnable?**
+Generated patients satisfied their criteria but lacked a complete correlate set
+for a guarded required feature, so no line of questioning could reach the
+answer. Two of twelve were impossible and read as the agent failing.
+`diagnosable()` filters them. Any generator needs the equivalent.
+
+**3. Was the budget the constraint?**
+Turn caps of 14, 16, 20 and 26 were picked by habit and unfinished runs were
+reported as failures. Given room, a case reported unsolved at 20 turns solved
+at 29. At ~1,600 input tokens a turn a 40-turn run costs ~64k tokens, so the
+cap was never justified by expense - only by wall-clock. State the cap and
+check how many runs hit it.
+
+**4. Is the manipulation actually manipulated?**
+An aim sits in the agent's *system prompt*, outside the context window. A
+progress note reading "Still possible: Anaphylaxis, SLE, Sarcoidosis" handed
+the accumulated state to every arm for free, so a two-message window performed
+like a thirty-two message one and the sweep measured nothing. Ask what else
+reaches the prompt besides the thing being varied.
+`validate_paradigm.py --quick` now checks this specific case.
+
+**5. Does the metric measure what it is named?**
+`accepted` matched the substring `- yes`, which also appears in the keeper's
+*refusal* to count a near-duplicate. Near-copies the task rejects were scored
+as successes, and the arm producing most of them looked strongest. A published
+headline reported a threefold effect that did not survive correction.
+
+**6. Is the measuring code itself right?**
+Two bugs reported a working system as broken: a graph lookup over a fresh HTTP
+session with no cookie, so it measured an empty graph; and a saved-graph path
+built with a doubled prefix. Both produced zeros that looked like failures.
+
+**A null and a leak are indistinguishable in a results table.** Keep the
+confounded run rather than deleting it - `ddx_context_confounded.json` is kept
+for exactly this reason - so the two can be told apart later.
