@@ -432,23 +432,13 @@ class Keeper:
     def progress_note(self, history):
         """What advancing looks like from here, so an evolved aim has somewhere to go."""
         if self.run_type == DDX_CLINIC:
-            live = sorted(DX.candidates_from(history, self.rule_name))
-            if len(live) == 1:
-                return f'Only {live[0]} still fits. Say that you are diagnosing it.'
-            return ('Still possible: ' + ', '.join(live) +
-                    '. Ask about whatever separates them - and if the patient '
-                    'will not be drawn on something, look for what would show '
-                    'it indirectly.')
+            # No candidate list here: the aim goes into the agent's system
+            # prompt every turn regardless of context window, so naming what is
+            # still possible hands the accumulated investigation to every arm
+            # for free and makes a two-message window as good as a long one.
+            return DX.progress_note(history, self.rule_name)
         if self.run_type == CLINIC:
-            live = sorted(self.live_disorders(history))
-            if len(live) == 1:
-                return (f'Only {CL.DISORDER_TEXT[live[0]]} still fits. Say '
-                        f'plainly that you are diagnosing it.')
-            return ('Still possible: '
-                    + ', '.join(CL.DISORDER_TEXT[d] for d in live)
-                    + '. Ask about whatever separates them - and if the patient '
-                      'will not be drawn on something, look for what would '
-                      'show it indirectly.')
+            return CL.progress_note_text(len(self.live_disorders(history)))
         if self.run_type == DIAGNOSIS:
             live = sorted(self.live_conditions(history))
             if len(live) == 1:

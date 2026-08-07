@@ -206,6 +206,25 @@ def diagnosis_claimed(text):
 
 # --- briefs ---------------------------------------------------------------
 
+def progress_note(history, rule_name):
+    """Direction for an evolved aim, carrying no state.
+
+    This must not name what is still possible. The aim goes into the agent's
+    system prompt every turn regardless of the context window, so enumerating
+    the live candidate set here hands the whole accumulated investigation to
+    both arms for free - which is exactly the state the graph is supposed to be
+    tested on carrying. It made a two-message window as good as a thirty-two
+    message one, and the sweep measured nothing.
+    """
+    live = candidates_from(history, rule_name)
+    if len(live) == 1:
+        return ('One condition now accounts for everything established. Name '
+                'it as your diagnosis.')
+    return ('Ask about whatever best separates the possibilities you have not '
+            'ruled out. If the patient will not be drawn on something, work '
+            'out what would show it indirectly.')
+
+
 def clinician_brief():
     lines = ['A patient has come to you. Exactly one of these fits them:']
     lines += [f'  {c}' for c in conditions()]

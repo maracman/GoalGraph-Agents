@@ -624,6 +624,16 @@ def bank_summary():
     return '\n'.join(out)
 
 
+def progress_note_text(live_count):
+    """Direction without state - see the note in ddx_rules.progress_note."""
+    if live_count == 1:
+        return ('One disorder now accounts for everything established. Say '
+                'plainly that you are diagnosing it.')
+    return ('Ask about whatever best separates the disorders you have not '
+            'ruled out. If the patient will not be drawn on something, look '
+            'for what would show it indirectly.')
+
+
 def clinician_brief():
     return (
         'A patient has come to you. Exactly one of these fits them:\n  '
