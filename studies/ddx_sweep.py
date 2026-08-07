@@ -52,6 +52,19 @@ def graph_shape(path):
             'go': lab.get('Go', 0)}
 
 
+def alive(tries=30, gap=10):
+    """Wait for the app to answer. A sweep is hours long and the app may be
+    restarted under it; losing the whole remaining plan to one refused
+    connection wastes more than waiting does."""
+    for _ in range(tries):
+        try:
+            requests.get(BASE, timeout=15)
+            return True
+        except requests.RequestException:
+            time.sleep(gap)
+    return False
+
+
 def run_one(case, mode, window, model, max_calls, label):
     """One interview. Fresh session, so nothing carries between runs."""
     t0 = time.time()
@@ -84,8 +97,16 @@ def run_one(case, mode, window, model, max_calls, label):
             solved = True
             break
 
-    rows = list(csv.DictReader(io.StringIO(
-        s.get(f"{BASE}/export_run_data", timeout=60).text)))
+    try:
+        text = s.get(f"{BASE}/export_run_data", timeout=60).text
+    except requests.RequestException:
+        # The app went away mid-run. Report this run as lost rather than
+        # taking the rest of the sweep down with it.
+        return dict(case=case, mode=mode, window=window,
+                    model=model or 'default', solved=0, turns=turns,
+                    input_tokens=0, graph_path=0, carried=0, llm_subgoal=0,
+                    lost=1, minutes=round((time.time() - t0) / 60, 1))
+    rows = list(csv.DictReader(io.StringIO(text)))
     tokens = 0
     sources = collections.Counter()
     for row in rows:
@@ -143,6 +164,10 @@ def main():
                     default=['gpt-5.4-mini', 'gpt-5.4', 'gpt-5.5'])
     ap.add_argument('--hold-window', type=int, default=4)
     ap.add_argument('--out', default='studies/results/ddx_sweep.json')
+    ap.add_argument('--skip', type=int, default=0,
+                    help='resume: skip the first N runs of the plan')
+    ap.add_argument('--resume', action='store_true',
+                    help='load --out and skip the runs already recorded')
     a = ap.parse_args()
 
     try:
@@ -166,10 +191,21 @@ def main():
                                      window=a.hold_window, model=m,
                                      label=f'mdl-{m}-{mode}-r{rep}'))
 
-    print(f'{len(plan)} runs planned\n', flush=True)
     rows = []
+    done = 0
+    if a.resume and os.path.exists(a.out):
+        with open(a.out) as f:
+            rows = json.load(f)
+        done = len(rows)
+        print(f'resuming: {done} runs already recorded', flush=True)
+    done = max(done, a.skip)
+    plan = plan[done:]
+    print(f'{len(plan)} runs to go\n', flush=True)
     for i, job in enumerate(plan):
         label = job.pop('label')
+        if not alive():
+            sys.exit('app at :5000 is not responding; stopping so the '
+                     'remaining plan can be resumed with --resume')
         r = run_one(max_calls=a.max_calls, label=label, **job)
         rows.append(r)
         # A run that recorded no turns at all is not a result - it is the
