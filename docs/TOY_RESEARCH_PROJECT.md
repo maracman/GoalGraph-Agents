@@ -181,6 +181,41 @@ route quietly loses to a better one without anything being thrown away.
 
 ---
 
+## Carrying the graph on the corpus task
+
+The same comparison on the DDXPlus-derived clinic (`ddx_clinic`): eight
+patients, HIV and influenza alternating, one arm inheriting the clinician's
+graph each time (pruned to 40 nodes on transfer) and one starting fresh.
+
+| arm | solved | turns when solved | tokens/run | routed aims |
+|---|---|---|---|---|
+| carried | **7/8** | 44.4 | 121k | **7** |
+| fresh | 6/8 | **31.0** | 101k | 0 |
+
+**Read it as reliability, not speed.** The carried arm solved one more case but
+was slower per solve and ~20% dearer - recall is not free. The mechanically
+interesting run is the last one: seven of its aims came from the graph's own
+routing, nine edges were walked for the second time, one route was contradicted
+and kept at reduced confidence - and the run solved with trust intact. That is
+the first run in this project where the graph *chose the direction* rather than
+only recalling dead ends.
+
+Two earlier versions of this experiment failed for reasons worth keeping: with
+unbounded inheritance the carried graph reached 179 nodes and that arm solved
+nothing, and with the routing threshold above the similarity ceiling (0.55
+against a metric that tops out near 0.46 on long goal briefs) routing was
+impossible at any trust. Bounding transfer and lowering the gate are what made
+the run above possible.
+
+![Eight patients, one graph](../screenshots/ui_graph_ddx_carried.png)
+
+The same graph with ruled-out aims hidden - five investigation spines, each
+ending in a diagnosis, the amber edge a route that was doubted and kept:
+
+![The routes that survived](../screenshots/ui_graph_ddx_carried_route.png)
+
+---
+
 ## Run it yourself
 
 ```bash
