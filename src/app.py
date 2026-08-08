@@ -671,12 +671,15 @@ def visualize_graph_pyvis(graph_file_path, session_id, hide_nogo=False):
                      f"{' · judge opinion' if opinion else ' · checked against evidence'}")
             if visits:
                 hover += f" · seen {visits}x"
+            colour = NODE_COLOURS.get(edge_label, '#2a78d6')
             if contested:
                 # A route later experience disagreed with. It keeps its verdict
-                # and loses confidence, so it thins rather than disappearing.
+                # and loses confidence, so it turns amber and thins rather than
+                # disappearing - a doubted route, not a deleted one. (This used
+                # to be assigned and then overwritten one line later, so no
+                # contested edge ever actually rendered amber.)
                 hover += f" · contradicted {contested}x since"
                 colour = '#b45309'
-            colour = NODE_COLOURS.get(edge_label, '#2a78d6')
             length = nogo_length if edge_label == 'NoGo' else 150
             net.add_edge(u, v, label='', fullLabel=edge_label, title=hover,
                          weight=weight, length=length, color=colour,
@@ -3212,6 +3215,17 @@ def load_saved_graph_into_agent(graph_id, agent_id):
 
         data = request.get_json(silent=True) or {}
         trust = str(data.get('trust', request.form.get('trust', 'false'))).lower() == 'true'
+        # Inheritance is bounded by default. An unpruned graph compounds across
+        # runs and recall starts drowning the present problem in the residue of
+        # previous ones; see graph_memory.prune_for_transfer for the ranking.
+        from agent.graph_memory import prune_for_transfer
+        try:
+            cap = int(data.get('prune_to', 40))
+        except (TypeError, ValueError):
+            cap = 40
+        pruned = 0
+        if cap > 0:
+            G, pruned = prune_for_transfer(G, cap)
         unverified = 0
         if not trust:
             from agent.graph_memory import GraphMemory
@@ -3225,6 +3239,7 @@ def load_saved_graph_into_agent(graph_id, agent_id):
             "nodes": G.number_of_nodes(),
             "edges": G.number_of_edges(),
             "marked_unverified": unverified,
+            "pruned": pruned,
         })
     except Exception as e:
         flask_logger.error(f"Error loading saved graph into agent: {e}")

@@ -400,3 +400,39 @@ def legacy_nogo_statement(graph):
     clean = [n.replace('_NoGo', '') for n in nogo]
     listing = "\n".join(f" - {n}" for n in clean)
     return f"The following approaches at achieving the goal were unsuccessful:\n{listing}\n\n"
+
+
+def prune_for_transfer(G, cap=40):
+    """Cut an inherited graph down to the part worth carrying.
+
+    Unbounded inheritance is how a carried graph became a liability: eight
+    patients in, an agent inherited 179 nodes, and recall spent every turn
+    surfacing other patients' dead ends. The eight-patient arm solved nothing
+    while the fresh arm solved three - the graph was growing, not improving.
+
+    Keep the routes and the well-attested refutations, drop the one-off
+    residue. Rank: reached aims above refinements above dead ends; then
+    corroboration (visits on incident edges), then confidence, verified above
+    not. 'start' is always kept, or nothing can be routed from.
+    """
+    if G.number_of_nodes() <= cap:
+        return G, 0
+    status_rank = {'Go': 3, 'Progress': 2, 'NoGo': 1}
+
+    def value(node):
+        d = G.nodes[node]
+        visits = confidence = 0.0
+        for _, _, e in list(G.in_edges(node, data=True)) +                 list(G.out_edges(node, data=True)):
+            visits += float(e.get('visits') or 1)
+            confidence = max(confidence, float(e.get('weight') or 0))
+        return (status_rank.get(d.get('status'), 0),
+                visits, confidence,
+                1 if d.get('verified', True) else 0)
+
+    keep = {n for n in G.nodes if str(n) == 'start'}
+    ranked = sorted((n for n in G.nodes if n not in keep),
+                    key=value, reverse=True)
+    keep |= set(ranked[:cap - len(keep)])
+    dropped = G.number_of_nodes() - len(keep)
+    H = G.subgraph(keep).copy()
+    return H, dropped

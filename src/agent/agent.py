@@ -281,7 +281,14 @@ def already_ruled_out(graph, proposed, threshold=0.86):
 
 TRUST_FLOOR = 0.15          # never quite stop listening to the graph
 TRUST_DECAY = 0.6           # a graph route that fails costs this much trust
-ROUTE_MIN_SCORE = 0.55      # similarity x trust needed to override the judge
+# Similarity x trust needed for a graph route to override the judge. The
+# similarity is cosine between a node label (a sentence) and the agent's goal
+# (often a multi-kilobyte brief), which tops out around 0.45-0.55 even for a
+# genuinely on-goal route - the first value here, 0.55, was above the maximum
+# ever observed, so routing was impossible at any trust and 16 runs produced
+# one routed aim. At 0.40, a relevant route qualifies at full trust and one
+# failure (trust 0.6) pauses routing until a success earns it back.
+ROUTE_MIN_SCORE = 0.40
 
 
 def choose_aim(graph, current_node, goal_text, proposed, generation_vars,
