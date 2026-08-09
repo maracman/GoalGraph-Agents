@@ -491,10 +491,23 @@ Respond ONLY with the JSON object."""
 # Aim management
 # ---------------------------------------------------------------------------
 
-def review_subgoal(history, agent, generation_vars, graph, current_aim=None):
+def review_subgoal(history, agent, generation_vars, current_aim=None):
     """Use the LLM to judge progress on the current aim.
 
     Returns (rating, justification, suggestion, aim_status, next_aim) on success.
+
+    The judge is deliberately graph-blind: it sees the windowed conversation
+    and nothing else, so a verdict can only be earned by what the agent
+    actually did. (An earlier signature accepted the graph and never read it,
+    which implied a coupling that does not exist.)
+
+    The rating scale is anchored to observable outcomes because an unanchored
+    one measured nothing: across 6,182 judgements under the old prompt - a
+    Likert scale with the proposition left unstated - 92% of ratings were
+    exactly 5 and the values 1-3 never occurred once. Every threshold keyed to
+    the scale was dead: strong-failure (<=2) and regression (<=4) could not
+    fire from a judge verdict, leaving patience as the only working abandon
+    path on opinion tasks. A scale the model will not use is not a scale.
     """
     agent_name = agent['agent_name']
     current_aim = current_aim or agent['current_aim']
@@ -520,9 +533,16 @@ Classify the current aim:
 - "achieved": the current aim has been completed.
 - "abandon": the current aim is no longer useful or is clearly failing.
 
-Answer using the following scale:
-1 = Strongly disagree, 2 = Disagree, 3 = Slightly disagree,
-4 = Neither agree nor disagree, 5 = Slightly agree, 6 = Agree, 7 = Strongly agree.
+Rate this statement: "{agent_name}'s most recent turns moved the current aim
+forward." Use the full scale - most turns in a long conversation genuinely
+belong at 3 or 4, and inflating stalled turns to 5 hides failure:
+1 = the conversation contradicts the aim; pursuing it is making things worse
+2 = the aim is failing; recent replies undercut it and no path forward is visible
+3 = no movement; the last few turns added nothing the aim can use
+4 = unclear; mixed signals, too early to say
+5 = modest progress; one concrete step the aim can build on
+6 = clear progress; the aim is close or has resolved into a sharper next aim
+7 = the aim is fully achieved, demonstrated in the conversation
 
 Justify your response, then provide a suggestion that guides {agent_name}'s next action in this
 workspace. If the aim should progress, provide the next_aim as a concise graph node label. If not,
@@ -980,7 +1000,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
     if len(history) > 2 and current_aim:
         rating, justification, new_suggestion, aim_status, next_aim = review_subgoal(
             history + [(agent_name, response_text)],
-            agent, generation_vars, G, current_aim=current_aim
+            agent, generation_vars, current_aim=current_aim
         )
 
         # Where the keeper can settle it, evidence outranks the judge. A claim
