@@ -154,7 +154,7 @@ def ensure_text_columns(agent_df):
 
 
 def annotate_aim(graph, node, status, reason=None, rating=None, turn=None,
-                 ruleset=None, enabled=True):
+                 ruleset=None, enabled=True, evidence=False):
     """Attach to a node the payload the graph would otherwise throw away.
 
     Without this, `graph` memory mode has nothing to retrieve: recall looks for
@@ -172,7 +172,14 @@ def annotate_aim(graph, node, status, reason=None, rating=None, turn=None,
         data['full_text'] = str(node)
     if ruleset:
         data['ruleset'] = ruleset
-    data.setdefault('verified', True)
+    if evidence:
+        # An evidence-settled verdict re-earns trust for a node that arrived
+        # marked unverified from an earlier run. setdefault alone kept the
+        # doubt flag forever: once False, nothing ever set it back, so recall
+        # went on hedging about claims this very run had already confirmed.
+        data['verified'] = True
+    else:
+        data.setdefault('verified', True)
     if rating is not None:
         data['rating'] = int(rating)
     if turn is not None:
@@ -1019,13 +1026,19 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                     next_aim = keeper.progress_note(after_history)
                 logs.append("PROGRESS, confirmed by evidence")
             elif wasted:
+                try:
+                    wasted_kind = keeper.wasted_scope(history, after_history) \
+                        if hasattr(keeper, 'wasted_scope') else 'structural'
+                except Exception:                                  # noqa: BLE001
+                    wasted_kind = 'structural'
                 # A move that eliminated nothing is a dead end proven by
                 # arithmetic. Recording it is what puts branches on the graph
                 # beside the route - without it a run that wandered and a run
                 # that went straight to the answer draw identically.
                 aim_status, rating, verdict_src = 'abandon', 1, PROOF
                 justification = keeper.wasted_note(after_history)
-                logs.append("NOGO: that move eliminated nothing")
+                nogo_scope = wasted_kind
+                logs.append(f"NOGO: that move eliminated nothing ({wasted_kind})")
             elif rating >= 6 or aim_status == 'achieved':
                 # Evidence outranks the judge in *both* directions, not just
                 # when it refutes. Where the keeper can measure success, a judge
@@ -1110,7 +1123,8 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                 G[current_node][new_node]['verdict_source'] = verdict_src
                 annotate_aim(G, new_node, 'Go', reason=justification, rating=rating,
                              turn=turn_index, ruleset=agent.get('goal'),
-                             enabled=generation_vars.get('graph_memory_mode') == 'graph')
+                             enabled=generation_vars.get('graph_memory_mode') == 'graph',
+                             evidence=(verdict_src == PROOF))
                 current_node = new_node
                 current_aim, aim_source, graph_hint, rejected = choose_aim(
                     G, current_node, agent['goal'], next_aim, generation_vars,
@@ -1139,7 +1153,8 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                 G[current_node][new_node]['verdict_source'] = verdict_src
                 annotate_aim(G, new_node, 'Progress', reason=justification, rating=rating,
                              turn=turn_index, ruleset=agent.get('goal'),
-                             enabled=generation_vars.get('graph_memory_mode') == 'graph')
+                             enabled=generation_vars.get('graph_memory_mode') == 'graph',
+                             evidence=(verdict_src == PROOF))
                 current_node = new_node
                 current_aim, aim_source, graph_hint, rejected = choose_aim(
                     G, current_node, agent['goal'], next_aim, generation_vars,
@@ -1212,7 +1227,14 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                     # aim and why it failed rather than a bare "_NoGo" marker.
                     annotate_aim(G, nogo_node, 'NoGo', reason=justification, rating=rating,
                                  turn=turn_index, ruleset=agent.get('goal'),
-                                 enabled=generation_vars.get('graph_memory_mode') == 'graph')
+                                 enabled=generation_vars.get('graph_memory_mode') == 'graph',
+                                 evidence=(verdict_src == PROOF))
+                    if nogo_node in G:
+                        # Run-scoped dead ends stay useful for the rest of this
+                        # conversation and are dropped at transfer; see
+                        # prune_for_transfer.
+                        G.nodes[nogo_node]['scope'] = locals().get('nogo_scope',
+                                                                  'structural')
                     if nogo_node in G:
                         G.nodes[nogo_node]['full_text'] = str(current_aim)
                     if generation_vars.get('graph_memory_mode') == 'inline':

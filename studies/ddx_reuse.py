@@ -50,7 +50,6 @@ SEQUENCE = ['HIV (initial infection)', 'Influenza',
             'HIV (initial infection)', 'Influenza',
             'HIV (initial infection)', 'Influenza',
             'HIV (initial infection)', 'Influenza']
-WINDOW = 4
 
 
 def alive(tries=30, gap=10):
@@ -81,13 +80,13 @@ def graph_shape(path):
             'revisited': revisited}
 
 
-def run_one(case, label, max_calls, carried_graph):
+def run_one(case, label, max_calls, carried_graph, window=4):
     t0 = time.time()
     s = requests.Session()
     s.get(BASE, timeout=60)
     s.post(f"{BASE}/update_user_settings", data=dict(
         run_type='ddx_clinic', keeper_rule=case, graph_memory_mode='graph',
-        context_window=str(WINDOW), graph_recall_k='5',
+        context_window=str(window), graph_recall_k='5',
         graph_recall_chars='800', nogo_ungated='false',
         run_label=label), timeout=180)
     s.post(f"{BASE}/reset_run_trail", data={'run_label': label}, timeout=60)
@@ -157,6 +156,7 @@ def run_one(case, label, max_calls, carried_graph):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--max-calls', type=int, default=70)
+    ap.add_argument('--window', type=int, default=4)
     ap.add_argument('--out', default='studies/results/ddx_reuse.json')
     ap.add_argument('--resume', action='store_true')
     a = ap.parse_args()
@@ -183,7 +183,7 @@ def main():
             sys.exit('app not responding; rerun with --resume')
         label = f'reuse-{arm}-{idx}'
         r = run_one(case, label, a.max_calls,
-                    carried if arm == 'carried' else None)
+                    carried if arm == 'carried' else None, window=a.window)
         r['arm'], r['position'] = arm, idx
         if arm == 'carried':
             carried = r.get('graph_id') or carried

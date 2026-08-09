@@ -407,6 +407,29 @@ class Keeper:
         return (len(TS.candidates(moves_after))
                 >= len(TS.candidates(moves_before)))
 
+    def wasted_scope(self, before, after):
+        """Does this dead end outlive the conversation that produced it?
+
+        'You already asked that' is true of one conversation and meaningless in
+        the next, while 'the patient will not be drawn on this however you ask'
+        is a fact about the task. Transferring the first kind as if it were the
+        second told the next run's agent not to ask questions that were exactly
+        right for its patient - the recalled prohibitions were another
+        conversation's bookkeeping.
+        """
+        if self.run_type == DDX_CLINIC:
+            raised = set()
+            for _sp, msg in after[len(before):]:
+                raised |= DX.mentions(msg)
+            mine = DX.features_for(self.rule_name)
+            g = DX.guarded()
+            if raised and all(f in g and f in mine for f in raised):
+                return 'structural'      # deflection happens to every asker
+            return 'run'
+        if self.run_type == CLINIC:
+            return 'run'
+        return 'structural'
+
     def wasted_note(self, history):
         """Why the move was wasted, for the edge's reason text."""
         if self.run_type == DDX_CLINIC:

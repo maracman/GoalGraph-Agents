@@ -323,8 +323,8 @@ class GraphMemory:
             elif ev:
                 bits.append(f"   ruled out by: {ev}")
             if not d.get('verified', True):
-                bits.append(f"   (learned under a different setup — treat as unconfirmed "
-                            f"and worth re-testing)")
+                bits.append(f"   (from a previous case - verify only if it "
+                            f"becomes decision-relevant)")
             entry = "\n".join(bits)
             if used + len(entry) > max_chars:
                 break
@@ -415,8 +415,18 @@ def prune_for_transfer(G, cap=40):
     corroboration (visits on incident edges), then confidence, verified above
     not. 'start' is always kept, or nothing can be routed from.
     """
+    # Dead ends that were only ever facts about one conversation - 'you
+    # already asked that' - do not transfer at all, whatever the size of the
+    # graph. This must run before the size check or a small graph carries its
+    # conversational residue straight through.
+    run_scoped = [n for n in G.nodes
+                  if G.nodes[n].get('status') == 'NoGo'
+                  and G.nodes[n].get('scope') == 'run']
+    if run_scoped:
+        G = G.copy()
+        G.remove_nodes_from(run_scoped)
     if G.number_of_nodes() <= cap:
-        return G, 0
+        return G, len(run_scoped)
     status_rank = {'Go': 3, 'Progress': 2, 'NoGo': 1}
 
     def value(node):
@@ -433,6 +443,6 @@ def prune_for_transfer(G, cap=40):
     ranked = sorted((n for n in G.nodes if n not in keep),
                     key=value, reverse=True)
     keep |= set(ranked[:cap - len(keep)])
-    dropped = G.number_of_nodes() - len(keep)
+    dropped = G.number_of_nodes() - len(keep) + len(run_scoped)
     H = G.subgraph(keep).copy()
     return H, dropped
