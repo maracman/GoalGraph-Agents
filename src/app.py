@@ -2448,6 +2448,14 @@ def update_user_settings():
         if label is not None:
             session['state']['settings']['run_label'] = str(label)[:80]
 
+        for knob in ('route_min_score', 'trust_decay', 'trust_floor',
+                     'persistence_min', 'patience_max'):
+            raw = request.form.get(knob)
+            if raw not in (None, ''):
+                try:
+                    settings[knob] = float(raw)
+                except ValueError:
+                    pass
         for flag in ('nogo_ungated', 'go_corroborate'):
             value = request.form.get(flag)
             if value is not None:

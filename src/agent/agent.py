@@ -298,6 +298,21 @@ TRUST_DECAY = 0.6           # a graph route that fails costs this much trust
 ROUTE_MIN_SCORE = 0.40
 
 
+def tuning(generation_vars, name, default):
+    """A knob that a study can set per run without editing code.
+
+    The trust and routing constants were chosen by judgement and never swept;
+    an optimisation pass needs them settable through the same settings channel
+    as everything else, or every configuration would be a code edit and an app
+    restart.
+    """
+    try:
+        v = float((generation_vars or {}).get(name, default))
+        return v if v == v else default          # NaN guard
+    except (TypeError, ValueError):
+        return default
+
+
 def choose_aim(graph, current_node, goal_text, proposed, generation_vars,
                min_similarity=0.45, trust=1.0):
     """Pick the next aim, weighing the judge's proposal against the graph's route.
@@ -330,7 +345,8 @@ def choose_aim(graph, current_node, goal_text, proposed, generation_vars,
         # the agent rather than replaying an old one.
         if result is not None:
             path, target, similarity = result
-            if len(path) > 1 and similarity * trust >= ROUTE_MIN_SCORE:
+            route_gate = tuning(generation_vars, 'route_min_score', ROUTE_MIN_SCORE)
+            if len(path) > 1 and similarity * trust >= route_gate:
                 return (path[1], 'graph_path',
                         f"Follow known path toward '{target}' "
                         f"(similarity={similarity:.2f}, trust={trust:.2f}). "
@@ -812,8 +828,11 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
     aim_came_from = clean_text(agent.get('current_aim_source'), '') or 'carried'
     persistence_score = agent['persistance_score']
     current_node = clean_text(agent['current_node_location'], 'start')
-    patience_min = agent.get('persistance', 3)      # min turns before NoGo
-    patience_max = agent.get('patience', 6)          # max turns (impatience)
+    # Per-agent values, overridable per run so a study can sweep them.
+    patience_min = int(tuning(generation_vars, 'persistence_min',
+                              agent.get('persistance', 3)))
+    patience_max = int(tuning(generation_vars, 'patience_max',
+                              agent.get('patience', 6)))
     last_narration = agent.get('last_narration', '')
 
     # ------------------------------------------------------------------
@@ -1104,10 +1123,12 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
             # is generally sound, and belongs on a different timescale.
             if aim_came_from == 'graph_path':
                 advanced_ok = (rating >= 6 or aim_status in ('progress', 'achieved'))
+                decay = tuning(generation_vars, 'trust_decay', TRUST_DECAY)
+                floor = tuning(generation_vars, 'trust_floor', TRUST_FLOOR)
                 if advanced_ok:
-                    graph_trust = min(1.0, graph_trust / TRUST_DECAY)
+                    graph_trust = min(1.0, graph_trust / max(decay, 1e-6))
                 elif aim_status == 'abandon' or rating <= 2:
-                    graph_trust = max(TRUST_FLOOR, graph_trust * TRUST_DECAY)
+                    graph_trust = max(floor, graph_trust * decay)
                 logs.append(f"graph trust now {graph_trust:.2f} "
                             f"({'route worked' if advanced_ok else 'route did not'})")
 
