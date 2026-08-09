@@ -216,43 +216,60 @@ ending in a diagnosis, the amber edge a route that was doubted and kept:
 
 ---
 
-## The shorter the window, the harder the agent leans on the graph
+## The graph's advantage peaks where context is scarce but usable
 
-The same carried-versus-fresh comparison, run at two context windows. At four
-messages the window is tight; at two it cannot hold a single exchange plus its
-follow-up.
+Carried versus fresh at three context windows, eight patients each, same
+sequence throughout:
 
 | window | arm | solved | turns when solved | aims routed from the graph |
 |---|---|---|---|---|
-| 4 | carried | **7/8** | 44.4 | 7 |
+| 2 | carried | 1/8 | 21.0 | 44 |
+| 2 | fresh | 0/8 | - | 0 |
+| **3** | **carried** | **5/8** | **39.8** | **71** |
+| **3** | **fresh** | **2/8** | **58.0** | **0** |
+| 4 | carried | 7/8 | 44.4 | 7 |
 | 4 | fresh | 6/8 | 31.0 | 0 |
-| 2 | carried | 1/8 | **21.0** | **44** |
-| 2 | fresh | **0/8** | - | 0 |
 
-Three things in that table are the report.
+**The advantage is an inverted U, and window three is its peak.** At four
+messages the context nearly suffices: the graph is barely consulted (seven
+routed aims), and carrying buys one extra solve at a speed cost. At two the
+task is under its floor: the graph is heavily consulted but cannot rescue it.
+At three - enough context to function, too little to hold the investigation -
+the carried arm solves **5/8 against 2/8, eighteen turns faster when it
+solves**, and consults the graph more than at any other window. It is the only
+cell where carrying wins on reliability and speed at once.
 
-**Reliance on the graph scales with scarcity.** Seven routed aims at window
-four became forty-four at window two. The agent substitutes the graph for the
-context it does not have - which is the architecture's core claim, here as a
-measurement rather than an assertion.
+Consultation tracks scarcity monotonically: 7 routed aims at window four, 71
+at three, 44 at two (fewer than three because runs collapse before routes can
+be walked). The agent substitutes the graph for the context it lacks, in
+proportion to the lack - measured, not asserted.
 
-**At window two, the only run that solved was a carried one that routed.**
-Fifteen of sixteen runs hit the seventy-turn cap; the exception inherited a
-graph, took six aims from it, and finished in twenty-one turns. One run proves
-mechanism, not advantage - but it is the single fastest solve either arm
-produced at that window, at a window where fresh solved nothing.
-
-**A two-message window is below this task's floor.** Even with the graph,
-1/8. The window where carrying pays as an outcome rather than a mechanism is
-the moderate one, and the honest summary is: the graph does not rescue an
-impossible context; it substitutes for a merely insufficient one.
-
-What starvation looks like in the graph itself - the window-two graph has no
-blue terminals and dense orange fans, an agent burning questions rather than
-converging; compare the window-four figure above with its five spines each
-ending in a diagnosis:
+The window-two graph shows what the floor looks like - no diagnoses reached,
+dense dead-end fans:
 
 ![Window two: no diagnoses, dense dead ends](../screenshots/ui_graph_ddx_w2.png)
+
+### A screen of the tuning knobs, and what it caught
+
+One knob moved at a time from its default, four-patient carried sequences at
+window four. Four runs per cell ranks configurations and catches a knob that
+is badly wrong; it cannot resolve small differences.
+
+| config | change | solved | routed |
+|---|---|---|---|
+| baseline | - | 1/4 | 2 |
+| route_easier | routing gate 0.40 → 0.33 | 2/4 | 17 |
+| trust_gentler | trust decay 0.60 → 0.80 | 3/4 | 48 |
+| abandon_faster | persistence 3→2, patience 6→4 | 2/4 | 31 |
+
+The screen's most useful product is a caveat: **minimum trust was 1.0 in every
+run of this study**, so the trust-decay mechanism never engaged - routed aims
+were succeeding or drifting, never failing outright. That means
+`trust_gentler` is mechanically identical to baseline here, and its 3/4 is the
+luck of its particular chain, not the knob. What the screen does support:
+easing the routing gate genuinely increases engagement (2 → 17 routed aims),
+and faster abandonment buys nothing. A knob that cannot fire is the finding;
+tuning it would have been noise-fitting.
 
 ### What transfer was costing, and what changed
 
