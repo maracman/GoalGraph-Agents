@@ -216,6 +216,68 @@ ending in a diagnosis, the amber edge a route that was doubted and kept:
 
 ---
 
+## The shorter the window, the harder the agent leans on the graph
+
+The same carried-versus-fresh comparison, run at two context windows. At four
+messages the window is tight; at two it cannot hold a single exchange plus its
+follow-up.
+
+| window | arm | solved | turns when solved | aims routed from the graph |
+|---|---|---|---|---|
+| 4 | carried | **7/8** | 44.4 | 7 |
+| 4 | fresh | 6/8 | 31.0 | 0 |
+| 2 | carried | 1/8 | **21.0** | **44** |
+| 2 | fresh | **0/8** | - | 0 |
+
+Three things in that table are the report.
+
+**Reliance on the graph scales with scarcity.** Seven routed aims at window
+four became forty-four at window two. The agent substitutes the graph for the
+context it does not have - which is the architecture's core claim, here as a
+measurement rather than an assertion.
+
+**At window two, the only run that solved was a carried one that routed.**
+Fifteen of sixteen runs hit the seventy-turn cap; the exception inherited a
+graph, took six aims from it, and finished in twenty-one turns. One run proves
+mechanism, not advantage - but it is the single fastest solve either arm
+produced at that window, at a window where fresh solved nothing.
+
+**A two-message window is below this task's floor.** Even with the graph,
+1/8. The window where carrying pays as an outcome rather than a mechanism is
+the moderate one, and the honest summary is: the graph does not rescue an
+impossible context; it substitutes for a merely insufficient one.
+
+What starvation looks like in the graph itself - the window-two graph has no
+blue terminals and dense orange fans, an agent burning questions rather than
+converging; compare the window-four figure above with its five spines each
+ending in a diagnosis:
+
+![Window two: no diagnoses, dense dead ends](../screenshots/ui_graph_ddx_w2.png)
+
+### What transfer was costing, and what changed
+
+An audit of the thirteen-turn overhead found the carried graph was
+transferring one conversation's bookkeeping as if it were knowledge, three
+ways at once:
+
+- **Dead ends that die with the conversation were carried as prohibitions.**
+  "You already asked that" is true of one interview and wrong for the next.
+  NoGo nodes now carry a scope - a deflection any asker would hit transfers,
+  re-asked settled ground does not.
+- **Doubt was permanent.** An inherited claim kept its unverified flag even
+  after this run's own evidence confirmed it, so recall hedged about settled
+  facts every turn. Evidence now restores trust in a node.
+- **The hedge itself instructed re-testing** - "treat as unconfirmed and worth
+  re-testing" spends turns by design. It now reads "verify only if it becomes
+  decision-relevant".
+
+The window-two runs above are the first under the corrected transfer; the
+window-four rows predate it. n = 8 per cell throughout, one model, two
+conditions - these are demonstrations with measurements attached, not
+estimates.
+
+---
+
 ## Run it yourself
 
 ```bash
