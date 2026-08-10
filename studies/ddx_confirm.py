@@ -72,7 +72,8 @@ def run_one(case, label, max_calls, carried_graph, knobs):
     form = dict(run_type='ddx_clinic', keeper_rule=case,
                 graph_memory_mode='graph', context_window=str(WINDOW),
                 graph_recall_k='5', graph_recall_chars='800',
-                nogo_ungated='false', run_label=label)
+                nogo_ungated='false', judge_delay_seconds='0',
+                run_label=label)
     form.update({k: str(v) for k, v in knobs.items()})
     s.post(f"{BASE}/update_user_settings", data=form, timeout=180)
     s.post(f"{BASE}/reset_run_trail", data={'run_label': label}, timeout=60)
