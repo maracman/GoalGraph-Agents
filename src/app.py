@@ -2897,7 +2897,8 @@ def export_run_data():
                         'llm_calls', 'input_tokens', 'output_tokens', 'tokens_estimated',
                         'stated_rule', 'verdict_source',
                         'persistence_count', 'graph_contribution_chars',
-                        'graph_nodes', 'graph_edges', 'justification']
+                        'graph_trust', 'graph_nodes', 'graph_edges',
+                        'justification']
 
         rows = []
         for entry in trail:

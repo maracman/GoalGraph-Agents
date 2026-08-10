@@ -295,6 +295,52 @@ estimates.
 
 ---
 
+## The trust mechanism, finally observed working
+
+A graph carried into the wrong problem should be *doubted*, not obeyed and not
+deleted. That is what run-scoped trust is for: a route that fails costs the
+graph credibility for the rest of that run, and a success earns it back.
+
+For a long time every study reported the mechanism as never firing. That was
+the measuring apparatus again - the exporter dropped the trust column and the
+reading code defaulted the absence to 1.0. The session trails had the truth:
+trust had been moving for days, down its exact designed ladder
+(1.0 → 0.6 → 0.36 → 0.216 → 0.15 floor, with 0.25s marking recoveries).
+
+The designed test: build the graph on HIV and influenza, then hand the agent
+four sarcoidosis patients - hard, and profiled close enough to HIV that
+inherited routes genuinely mislead.
+
+| arm | runs where trust engaged | floor reached |
+|---|---|---|
+| carried | **6 of 8** | twice |
+| fresh | 0 of 8 | - |
+
+Trust engages exactly where designed: only when routes exist, dropping when
+they mislead on the wrong-distribution patients, recovering on success. On
+outcome, the only solved shifted run was a carried one, in eleven turns -
+consistent with distrust-then-fallback working, though a single run proves
+mechanism rather than advantage.
+
+## The results above are judge-dependent, and the honest table says so
+
+Re-running the window-three comparison under the anchored judge collapsed both
+arms: carried 1/8 against fresh 1/8, where the flat judge gave 5/8 against
+2/8. The anchored judge abandons stalled lines instead of rating them a
+perpetual "5 / continue", and on this task that churn currently costs more
+than it saves. Its rating distribution confirms the anchoring took: 21% of
+judgements are now 3s, which literally never occurred before - but the
+inverted-U table above was measured entirely under the flat judge, and the
+carried-versus-fresh gap at window three does not survive the fix.
+
+What survives judge-independently: routing engagement still scales with
+scarcity, the trust mechanism works, and verdicts on keeper tasks were always
+evidence-governed. What does not: the specific solve counts, until the grid is
+re-measured under the anchored judge. This section exists so the table above
+is read with that in mind.
+
+---
+
 ## Run it yourself
 
 ```bash
