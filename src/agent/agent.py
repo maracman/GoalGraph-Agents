@@ -928,7 +928,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
         ruled_out = ''
     elif graph_mode == 'graph':
         ruled_out = GraphMemory(G, ruleset=agent.get('goal', 'default')).render(
-            current_aim or agent.get('goal', ''),
+            clean_text(current_aim) or clean_text(agent.get('goal'), ''),
             k=int(generation_vars.get('graph_recall_k', 4)),
             max_chars=int(generation_vars.get('graph_recall_chars', 600)),
         )

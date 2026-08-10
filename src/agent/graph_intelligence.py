@@ -44,7 +44,20 @@ def _get_embedding_model():
 
 
 def get_embedding(text: str) -> Optional[np.ndarray]:
-    """Get the embedding for a text string, using cache."""
+    """Get the embedding for a text string, using cache.
+
+    Coerces at the boundary because a pandas NaN is a *truthy float*: it walks
+    straight through `current_aim or fallback` guards, reaches encode(), and
+    the resulting exception was being caught and logged per call - 576 times
+    across the study logs. Every one of those was a turn where recall or
+    routing silently did nothing while the run carried on looking normal.
+    """
+    if not isinstance(text, str):
+        if text is None or text != text:      # None or NaN
+            return None
+        text = str(text)
+    if not text.strip():
+        return None
     if text in _embedding_cache:
         return _embedding_cache[text]
 
@@ -72,7 +85,9 @@ def get_embeddings_batch(texts: List[str]) -> Optional[np.ndarray]:
 
     if uncached_texts:
         try:
-            new_embeddings = model.encode(uncached_texts, normalize_embeddings=True)
+            new_embeddings = model.encode(
+                [t if isinstance(t, str) else str(t) for t in uncached_texts],
+                normalize_embeddings=True)
             for text, emb in zip(uncached_texts, new_embeddings):
                 _embedding_cache[text] = emb
         except Exception as e:
