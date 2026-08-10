@@ -41,10 +41,17 @@ import networkx as nx                                             # noqa: E402
 
 BASE = "http://localhost:5000"
 GATE_SEQ = ['HIV (initial infection)', 'Influenza'] * 4
+# The first shift test used anaphylaxis and pancreatic neoplasm on one prior
+# solve each - they turned out easy (fresh went 4/4 in ~26 turns), so nothing
+# ever punished a wrong inherited route and trust had nothing to react to.
+# Sarcoidosis is hard (9/25 across prior runs) without being demonstrated
+# impossible, and its feature profile overlaps HIV enough that inherited
+# HIV routes should genuinely mislead. The fresh arm on the same sequence
+# controls for its difficulty.
 SHIFT_SEQ = ['HIV (initial infection)', 'Influenza',
              'HIV (initial infection)', 'Influenza',
-             'Anaphylaxis', 'Pancreatic neoplasm',
-             'Anaphylaxis', 'Pancreatic neoplasm']
+             'Sarcoidosis', 'Sarcoidosis',
+             'Sarcoidosis', 'Sarcoidosis']
 WINDOW = 3
 
 
@@ -146,9 +153,13 @@ def main():
     ap.add_argument('--max-calls', type=int, default=70)
     ap.add_argument('--out', default='studies/results/ddx_confirm.json')
     ap.add_argument('--resume', action='store_true')
+    ap.add_argument('--shift-only', action='store_true',
+                    help='skip the gate phase (already settled: 0.40 stays)')
     a = ap.parse_args()
 
     plan = build_plan()
+    if a.shift_only:
+        plan = [j for j in plan if j['phase'] == 'shift']
     rows = []
     if a.resume and os.path.exists(a.out):
         with open(a.out) as f:
