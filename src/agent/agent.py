@@ -950,6 +950,17 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
     except Exception as e:  # noqa: BLE001
         logger.warning(f"keeper unavailable: {e}")
 
+    # Scorer-known task state the window cannot carry. Appended to the
+    # suggestion rather than the goal so it appears only while true, and
+    # through the keeper so both arms of a comparison get it identically.
+    if keeper and hasattr(keeper, 'status_hint'):
+        try:
+            hint = keeper.status_hint(history)
+        except Exception:                                          # noqa: BLE001
+            hint = ''
+        if hint:
+            suggestion = f"{suggestion} {hint}".strip() if suggestion else hint
+
     prompt = format_prompt(
         history,
         agent['description'],

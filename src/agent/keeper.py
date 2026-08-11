@@ -452,6 +452,32 @@ class Keeper:
                 f'eliminated nothing. Still {len(live)} possible: '
                 + ', '.join(live))
 
+    def status_hint(self, history):
+        """Task-state feedback the agent cannot reconstruct from its window.
+
+        A short-window agent cannot hold the tally of what it has established,
+        so it keeps investigating past the point of certainty: in the window
+        sweeps, every capped run had narrowed the field to exactly one
+        condition and simply never committed. The scorer knows when the field
+        has closed; withholding that is not rigour, it is a task with a rule
+        the player cannot see. The hint names the *state*, never the answer,
+        and both arms of any comparison receive it identically.
+        """
+        if self.run_type == DDX_CLINIC:
+            live = DX.candidates_from(history, self.rule_name)
+            if len(live) == 1:
+                return ('Everything established so far is consistent with '
+                        'exactly one remaining condition. If you can name it, '
+                        'state your diagnosis now rather than asking further '
+                        'questions.')
+        if self.run_type == CLINIC:
+            live = self.live_disorders(history)
+            if len(live) == 1:
+                return ('Everything established so far points to exactly one '
+                        'remaining disorder. If you can name it, state your '
+                        'diagnosis now rather than asking further questions.')
+        return ''
+
     def progress_note(self, history):
         """What advancing looks like from here, so an evolved aim has somewhere to go."""
         if self.run_type == DDX_CLINIC:
