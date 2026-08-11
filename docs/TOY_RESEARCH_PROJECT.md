@@ -322,6 +322,68 @@ outcome, the only solved shifted run was a carried one, in eleven turns -
 consistent with distrust-then-fallback working, though a single run proves
 mechanism rather than advantage.
 
+## The grid, restated under the anchored judge
+
+The judge repair (see the development notes) forced a re-measurement of every
+cell. This is the whole grid under the anchored judge - the judge that can
+actually abandon a stalled line - with the flat-judge numbers kept for
+comparison:
+
+| window | arm | anchored: solved | turns | tokens/run | flat judge: solved |
+|---|---|---|---|---|---|
+| 2 | carried | **4/8** | 26.0 | **119k** | 1/8 |
+| 2 | fresh | 2/8 | 22.0 | 149k | 0/8 |
+| 3 | carried | 1/8 | 61.0 | 175k | 5/8 |
+| 3 | fresh | 1/8 | 21.0 | 166k | 2/8 |
+| 4 | carried | **4/8** | **25.0** | **124k** | 7/8 |
+| 4 | fresh | 3/8 | 51.7 | 165k | 6/8 |
+
+**Under the anchored judge, carrying wins on reliability, speed and cost at
+once at window four** - 4/8 against 3/8, twice as fast when solving, a quarter
+cheaper, because a run that solves early stops early. At window two it doubles
+the solve rate. The flat-judge pattern - carried more reliable but slower -
+inverts: with a judge that kills dead lines, the graph's routes convert
+directly into speed.
+
+**Window three is the anomaly and is reported as one.** Both arms collapsed to
+1/8 there under the anchored judge, against healthier cells either side; n=8
+per cell, the run-to-run variance on this task is large, and no story offered
+here would be anything better than a fit to noise. It is the cell to re-run
+first if anyone extends this.
+
+Routing and trust are now routine rather than exceptional: 37-54 routed aims
+per carried cell, and trust engaged in ten of the eleven carried runs where
+routing occurred.
+
+![Window four under the anchored judge](../screenshots/ui_graph_ddx_w4_anchored.png)
+
+## The trust mechanism, finally observed working
+
+A graph carried into the wrong problem should be *doubted*, not obeyed and not
+deleted. That is what run-scoped trust is for: a route that fails costs the
+graph credibility for the rest of that run, and a success earns it back.
+
+For a long time every study reported the mechanism as never firing. That was
+the measuring apparatus again - the exporter dropped the trust column and the
+reading code defaulted the absence to 1.0. The session trails had the truth:
+trust had been moving for days, down its exact designed ladder
+(1.0 → 0.6 → 0.36 → 0.216 → 0.15 floor, with 0.25s marking recoveries).
+
+The designed test: build the graph on HIV and influenza, then hand the agent
+four sarcoidosis patients - hard, and profiled close enough to HIV that
+inherited routes genuinely mislead.
+
+| arm | runs where trust engaged | floor reached |
+|---|---|---|
+| carried | **6 of 8** | twice |
+| fresh | 0 of 8 | - |
+
+Trust engages exactly where designed: only when routes exist, dropping when
+they mislead on the wrong-distribution patients, recovering on success. On
+outcome, the only solved shifted run was a carried one, in eleven turns -
+consistent with distrust-then-fallback working, though a single run proves
+mechanism rather than advantage.
+
 ## The results above are judge-dependent, and the honest table says so
 
 Re-running the window-three comparison under the anchored judge collapsed both
