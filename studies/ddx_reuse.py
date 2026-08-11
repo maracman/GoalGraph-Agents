@@ -88,7 +88,7 @@ def run_one(case, label, max_calls, carried_graph, window=4):
         run_type='ddx_clinic', keeper_rule=case, graph_memory_mode='graph',
         context_window=str(window), graph_recall_k='5',
         graph_recall_chars='800', nogo_ungated='false',
-        run_label=label), timeout=180)
+        judge_delay_seconds='0', run_label=label), timeout=180)
     s.post(f"{BASE}/reset_run_trail", data={'run_label': label}, timeout=60)
 
     ags = s.get(f"{BASE}/get_agent_graphs", timeout=60).json()
