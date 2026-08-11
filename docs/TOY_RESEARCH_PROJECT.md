@@ -185,7 +185,11 @@ route quietly loses to a better one without anything being thrown away.
 
 The same comparison on the DDXPlus-derived clinic (`ddx_clinic`): eight
 patients, HIV and influenza alternating, one arm inheriting the clinician's
-graph each time (pruned to 40 nodes on transfer) and one starting fresh.
+graph each time (pruned to 40 nodes on transfer) and one starting fresh. These
+were the first corpus-task measurements, taken before the judge was repaired;
+the final numbers under the repaired judge are in
+[the restated grid below](#the-grid-restated-under-the-anchored-judge), and
+the mechanical findings here survived that change.
 
 | arm | solved | turns when solved | tokens/run | routed aims |
 |---|---|---|---|---|
@@ -216,10 +220,13 @@ ending in a diagnosis, the amber edge a route that was doubted and kept:
 
 ---
 
-## The graph's advantage peaks where context is scarce but usable
+## Varying the context window (first measurement, earlier judge)
 
 Carried versus fresh at three context windows, eight patients each, same
-sequence throughout:
+sequence throughout. These numbers were taken under the earlier judge, whose
+rating scale later proved defective; the grid was re-measured after the repair
+and the two tables differ instructively - see
+[the restated grid](#the-grid-restated-under-the-anchored-judge).
 
 | window | arm | solved | turns when solved | aims routed from the graph |
 |---|---|---|---|---|
@@ -230,14 +237,10 @@ sequence throughout:
 | 4 | carried | 7/8 | 44.4 | 7 |
 | 4 | fresh | 6/8 | 31.0 | 0 |
 
-**The advantage is an inverted U, and window three is its peak.** At four
-messages the context nearly suffices: the graph is barely consulted (seven
-routed aims), and carrying buys one extra solve at a speed cost. At two the
-task is under its floor: the graph is heavily consulted but cannot rescue it.
-At three - enough context to function, too little to hold the investigation -
-the carried arm solves **5/8 against 2/8, eighteen turns faster when it
-solves**, and consults the graph more than at any other window. It is the only
-cell where carrying wins on reliability and speed at once.
+Under this judge the advantage was an inverted U peaking at window three:
+5/8 against 2/8, eighteen turns faster when solving. That shape did not
+survive the judge repair, and the restated grid below is the standing result.
+What did survive is the consultation pattern:
 
 Consultation tracks scarcity monotonically: 7 routed aims at window four, 71
 at three, 44 at two (fewer than three because runs collapse before routes can
@@ -262,14 +265,16 @@ is badly wrong; it cannot resolve small differences.
 | trust_gentler | trust decay 0.60 → 0.80 | 3/4 | 48 |
 | abandon_faster | persistence 3→2, patience 6→4 | 2/4 | 31 |
 
-The screen's most useful product is a caveat: **minimum trust was 1.0 in every
-run of this study**, so the trust-decay mechanism never engaged - routed aims
-were succeeding or drifting, never failing outright. That means
-`trust_gentler` is mechanically identical to baseline here, and its 3/4 is the
-luck of its particular chain, not the knob. What the screen does support:
-easing the routing gate genuinely increases engagement (2 → 17 routed aims),
-and faster abandonment buys nothing. A knob that cannot fire is the finding;
-tuning it would have been noise-fitting.
+An earlier version of this section reported that trust never engaged during
+the screen and dismissed `trust_gentler` as chain luck. That reading came
+through the broken exporter (measurement artifact seven in the development
+notes): the session trails show trust engaged in seven of the sixteen screen
+runs, including three of the four `trust_gentler` runs. So the decay knob was
+live, and its 3/4 may be signal - but four runs per cell still cannot rank it,
+and the one screen hint tested at full scale, the easier routing gate, was
+refuted there (3/8 against the baseline's 5/8). The screen's durable lesson is
+about screens: every hint it produced changed under either a bigger sample or
+a fixed instrument.
 
 ### What transfer was costing, and what changed
 
@@ -357,50 +362,6 @@ routing occurred.
 
 ![Window four under the anchored judge](../screenshots/ui_graph_ddx_w4_anchored.png)
 
-## The trust mechanism, finally observed working
-
-A graph carried into the wrong problem should be *doubted*, not obeyed and not
-deleted. That is what run-scoped trust is for: a route that fails costs the
-graph credibility for the rest of that run, and a success earns it back.
-
-For a long time every study reported the mechanism as never firing. That was
-the measuring apparatus again - the exporter dropped the trust column and the
-reading code defaulted the absence to 1.0. The session trails had the truth:
-trust had been moving for days, down its exact designed ladder
-(1.0 → 0.6 → 0.36 → 0.216 → 0.15 floor, with 0.25s marking recoveries).
-
-The designed test: build the graph on HIV and influenza, then hand the agent
-four sarcoidosis patients - hard, and profiled close enough to HIV that
-inherited routes genuinely mislead.
-
-| arm | runs where trust engaged | floor reached |
-|---|---|---|
-| carried | **6 of 8** | twice |
-| fresh | 0 of 8 | - |
-
-Trust engages exactly where designed: only when routes exist, dropping when
-they mislead on the wrong-distribution patients, recovering on success. On
-outcome, the only solved shifted run was a carried one, in eleven turns -
-consistent with distrust-then-fallback working, though a single run proves
-mechanism rather than advantage.
-
-## The results above are judge-dependent, and the honest table says so
-
-Re-running the window-three comparison under the anchored judge collapsed both
-arms: carried 1/8 against fresh 1/8, where the flat judge gave 5/8 against
-2/8. The anchored judge abandons stalled lines instead of rating them a
-perpetual "5 / continue", and on this task that churn currently costs more
-than it saves. Its rating distribution confirms the anchoring took: 21% of
-judgements are now 3s, which literally never occurred before - but the
-inverted-U table above was measured entirely under the flat judge, and the
-carried-versus-fresh gap at window three does not survive the fix.
-
-What survives judge-independently: routing engagement still scales with
-scarcity, the trust mechanism works, and verdicts on keeper tasks were always
-evidence-governed. What does not: the specific solve counts, until the grid is
-re-measured under the anchored judge. This section exists so the table above
-is read with that in mind.
-
 ---
 
 ## Run it yourself
@@ -440,12 +401,13 @@ measurable and it is visible in the graph.
 per person, so the turn counts are observations rather than estimates. That the
 confidence decay is tuned correctly — two conditions got *worse* with reuse,
 and the alcohol-related case degraded badly enough to be the most interesting
-open question in the project. And nothing here measures whether the graph beats
-simply giving the agent a longer context window, which is the comparison a
-sceptical reader should want.
+open question in the project. The window grid bears on
+whether the graph substitutes for context, and under the repaired judge a
+carried graph at a two-message window solved more than an unaided agent at
+four; a direct sweep against much longer windows remains unrun.
 
 The task designs that failed on the way to this one, the regression that made
-every graph shallow, and four occasions where the measuring tools produced a
+every graph shallow, and seven occasions where the measuring tools produced a
 number that looked like a result are in
 [DEVELOPMENT_NOTES.md](DEVELOPMENT_NOTES.md).
 

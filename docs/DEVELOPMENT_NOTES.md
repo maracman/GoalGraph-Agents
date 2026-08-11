@@ -456,7 +456,7 @@ built with a doubled prefix. Both produced zeros that looked like failures.
 Study scripts measured `graph_trust` from the run-data CSV with
 `row.get('graph_trust') or 1.0`. The exporter's column list predated the
 field, so the get returned empty and the `or` manufactured an eternal 1.0 -
-three studies concluded the trust mechanism never fired while the session
+four studies concluded the trust mechanism never fired while the session
 trails recorded it firing in dozens of runs, walking its exact designed decay
 ladder. A default on the read path converts a missing column into a
 plausible measurement. Fail loudly on absent fields, or verify the export
