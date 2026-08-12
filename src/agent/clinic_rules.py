@@ -638,10 +638,15 @@ def progress_note_text(live_count):
             'for what would show it indirectly.')
 
 
-def clinician_brief():
+def clinician_brief(order=None):
+    # `order` shuffles only how the candidates are listed. The opener here is
+    # authored per case in PRESENTATIONS rather than picked by position, so
+    # unlike ddx_clinic there is no index-derived tell to break.
+    items = ([(k, DISORDER_TEXT[k]) for k in order if k in DISORDER_TEXT]
+             if order else list(DISORDER_TEXT.items()))
     return (
         'A patient has come to you. Exactly one of these fits them:\n  '
-        + '\n  '.join(f'{k} - {v}' for k, v in DISORDER_TEXT.items())
+        + '\n  '.join(f'{k} - {v}' for k, v in items)
         + '\n\nYou may ask about any of these:\n  '
         + '\n  '.join(f'{k} - {v}' for k, v in FEATURES.items())
         + '\n\nThe patient will open with what actually brought them in, which '

@@ -1997,7 +1997,11 @@ def generate():
             # The run type decides what the agent is for; a leftover persona
             # from a chat scenario would have it negotiating a subscription
             # while the keeper answers questions about integers.
-            roles = keeper.roles() if hasattr(keeper, 'roles') else None
+            # Salted with the session id so the candidate list is ordered
+            # differently in every run, and reproducibly: the order can be
+            # recovered from the session id alone and never has to be stored.
+            roles = (keeper.roles(salt=session['state'].get('session_id'))
+                     if hasattr(keeper, 'roles') else None)
             rows = session['state'].get('agents_df', [])
             if roles:
                 # Two-agent task: each side gets its own brief, in order.

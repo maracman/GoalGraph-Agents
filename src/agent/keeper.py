@@ -522,7 +522,24 @@ class Keeper:
             return ''
         return f"Move the sentence closer to: {task['target']}"
 
-    def roles(self):
+    def _presentation_order(self, salt):
+        """This run's ordering of the candidate labels, or None for canonical.
+
+        Each task names its candidates in its own vocabulary, so the list comes
+        from the task's own rule module; only the shuffling is shared.
+        """
+        if salt is None:
+            return None
+        source = {DDX_CLINIC: lambda: DX.conditions(),
+                  CLINIC: lambda: list(CL.DISORDER_TEXT),
+                  DIAGNOSIS: lambda: list(DG.CONDITION_TEXT)}.get(self.run_type)
+        if not source:
+            return None
+        order = list(source())
+        random.Random(f'{self.run_type}:{salt}').shuffle(order)
+        return order
+
+    def roles(self, salt=None):
         """Per-agent briefs, for tasks where the agents are not interchangeable.
 
         Single-agent tasks give every agent the same goal, because there is only
@@ -530,7 +547,14 @@ class Keeper:
         agents the same brief is how the diagnosis run first came out as two
         models talking about being evaluated: the keeper overwrote each agent's
         goal with one shared string, which for this run type was empty.
+
+        `salt` varies the order the candidates are listed in, per run. The list
+        was identical every time, so any positional preference the model has
+        applied to the same conditions in every run and could not be told apart
+        from the task. Pass the session id: the order is then reproducible from
+        it and never needs storing. Omit it and the canonical order is kept.
         """
+        order = self._presentation_order(salt)
         if self.run_type == DDX_CLINIC:
             return [
                 {'agent_name': 'Dr Nazari',
@@ -538,11 +562,11 @@ class Keeper:
                                  'says what each answer rules out, and looks '
                                  'for indirect evidence when a patient will not '
                                  'be drawn on something.'),
-                 'goal': DX.clinician_brief()},
+                 'goal': DX.clinician_brief(order)},
                 {'agent_name': 'Ash',
                  'description': ('Someone who has come for help but finds it '
                                  'hard to talk about themselves.'),
-                 'goal': DX.patient_brief(self.rule_name)},
+                 'goal': DX.patient_brief(self.rule_name, order)},
             ]
         if self.run_type == CLINIC:
             return [
@@ -551,7 +575,7 @@ class Keeper:
                                  'says out loud what each answer rules out, and '
                                  'looks for indirect evidence when a patient '
                                  'will not be drawn on something.'),
-                 'goal': CL.clinician_brief()},
+                 'goal': CL.clinician_brief(order)},
                 {'agent_name': 'Robin',
                  'description': ('Someone who has come for help but finds it '
                                  'hard to talk about themselves. Answers what '
@@ -566,7 +590,7 @@ class Keeper:
                                  'answer rules out, and is willing to ask an '
                                  'awkward question when the diagnosis turns on '
                                  'it.'),
-                 'goal': DG.clinician_brief()},
+                 'goal': DG.clinician_brief(order)},
                 {'agent_name': 'Sam',
                  'description': ('Someone who has come to a clinic because '
                                  'something is wrong and wants an answer. '

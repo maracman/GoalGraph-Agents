@@ -11,6 +11,7 @@ never touch this run type.
 """
 
 import functools
+import random
 
 from . import claims
 from . import ddx_import as DX
@@ -97,10 +98,36 @@ COMPLAINTS = (
 )
 
 
-def presenting_complaint(rule_name):
+def presentation_order(salt=None):
+    """The order the candidate conditions are shown in for one run.
+
+    Fixed order had two effects worth removing. The candidate list was
+    identical in every run, so any positional preference the model has applied
+    to the same conditions every time - and the list is read once, at the top
+    of a long brief, which is where position tells most.
+
+    The second is worse. presenting_complaint picked the opening line by index,
+    and there are exactly as many complaints as conditions, so the opening line
+    was a one-to-one tell for the answer. An agent carrying a graph between
+    patients could learn the opener rather than diagnose - which is the arm the
+    reuse studies are trying to measure. Shuffling per run breaks that mapping
+    across runs without touching the openers themselves.
+
+    Deterministic in `salt`, so a run is reproducible from its session id and
+    the order never has to be stored. `None` keeps the canonical order, which
+    is what the unit tests and default_case rely on.
+    """
+    order = list(conditions())
+    if salt is None:
+        return order
+    random.Random(str(salt)).shuffle(order)
+    return order
+
+
+def presenting_complaint(rule_name, order=None):
     """What brought them in - a consequence, never a symptom."""
     name = base_case(rule_name)
-    order = conditions()
+    order = order or conditions()
     idx = order.index(name) if name in order else 0
     return COMPLAINTS[idx % len(COMPLAINTS)]
 
@@ -226,9 +253,9 @@ def progress_note(history, rule_name):
             'out what would show it indirectly.')
 
 
-def clinician_brief():
+def clinician_brief(order=None):
     lines = ['A patient has come to you. Exactly one of these fits them:']
-    lines += [f'  {c}' for c in conditions()]
+    lines += [f'  {c}' for c in (order or conditions())]
     lines.append('')
     lines.append('You may ask about any of these:')
     for code in sorted(set().union(*[profile(c) for c in conditions()])):
@@ -247,7 +274,7 @@ def clinician_brief():
     return '\n'.join(lines)
 
 
-def patient_brief(rule_name):
+def patient_brief(rule_name, order=None):
     case = base_case(rule_name)
     mine = sorted(profile(case))
     g = guarded()
@@ -258,7 +285,7 @@ def patient_brief(rule_name):
         'while and you want help, but you find it hard to talk about yourself.',
         '',
         'Open with exactly this, and nothing more:',
-        f'  "{presenting_complaint(rule_name)}"',
+        f'  "{presenting_complaint(rule_name, order)}"',
         '',
         'This is what is true of you:',
     ]

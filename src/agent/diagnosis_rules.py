@@ -247,11 +247,13 @@ def describe(condition):
             f'{optimal_questions(condition)} questions if asked well{guarded}')
 
 
-def clinician_brief():
+def clinician_brief(order=None):
+    items = ([(k, CONDITION_TEXT[k]) for k in order if k in CONDITION_TEXT]
+             if order else list(CONDITION_TEXT.items()))
     return (
         'A patient has come to you. Exactly one of these conditions is the '
         'answer:\n  '
-        + '\n  '.join(f'{k} - {v}' for k, v in CONDITION_TEXT.items())
+        + '\n  '.join(f'{k} - {v}' for k, v in items)
         + '\n\nWork out which, then say plainly that you are diagnosing it. '
           'Do not name a condition that is not on this list.\n\n'
         'You may ask about any of these:\n  '
