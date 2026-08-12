@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { fetchAgentGraphs, visualizeGraph } from '../services/api';
 import { useSession } from '../contexts/SessionContext';
+import GraphLegend from './common/GraphLegend';
 
 const GraphView = () => {
   const { sessionId, sessionState } = useSession();
@@ -132,25 +133,7 @@ const GraphView = () => {
         </div>
       </div>
 
-      <div className="graph-legend">
-        <h3>Graph Legend</h3>
-        <div className="legend-item">
-          <div className="legend-color" style={{ backgroundColor: 'blue' }}></div>
-          <span>Node - Active aim</span>
-        </div>
-        <div className="legend-item">
-          <div className="legend-color" style={{ backgroundColor: 'gray' }}></div>
-          <span>Node - Previous aim</span>
-        </div>
-        <div className="legend-item">
-          <div className="legend-line" style={{ borderTop: '2px solid green' }}></div>
-          <span>"Go" edge - Successful path</span>
-        </div>
-        <div className="legend-item">
-          <div className="legend-line" style={{ borderTop: '2px dashed red' }}></div>
-          <span>"NoGo" edge - Failed path</span>
-        </div>
-      </div>
+      <GraphLegend />
     </div>
   );
 };

@@ -9,6 +9,7 @@ import {
   deleteSavedGraph
 } from '../services/api';
 import { useSession } from '../contexts/SessionContext';
+import GraphLegend from './common/GraphLegend';
 
 const GraphLibrary = () => {
   const { sessionState } = useSession();
@@ -173,28 +174,7 @@ const GraphLibrary = () => {
         </div>
 
         {graphUrl && (
-          <div className="graph-legend-inline">
-            <div className="legend-item">
-              <div className="legend-color" style={{ backgroundColor: 'blue' }}></div>
-              <span>Active aim</span>
-            </div>
-            <div className="legend-item">
-              <div className="legend-color" style={{ backgroundColor: 'gray' }}></div>
-              <span>Previous aim</span>
-            </div>
-            <div className="legend-item">
-              <div className="legend-line" style={{ borderTop: '2px solid green' }}></div>
-              <span>Go (success)</span>
-            </div>
-            <div className="legend-item">
-              <div className="legend-line" style={{ borderTop: '2px solid #2563eb' }}></div>
-              <span>Progress (aim evolved)</span>
-            </div>
-            <div className="legend-item">
-              <div className="legend-line" style={{ borderTop: '2px dashed red' }}></div>
-              <span>NoGo (fail)</span>
-            </div>
-          </div>
+          <GraphLegend inline />
         )}
       </div>
 

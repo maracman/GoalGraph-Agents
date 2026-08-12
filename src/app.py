@@ -573,6 +573,72 @@ def inject_graph_explorer(html_path, node_count):
         f.write(contents)
 
 
+# Nodes are coloured by what was decided about them, not by edge weight.
+# Weight now carries a *confidence*, and every verdict the keeper settles has
+# exactly 1.0 - so the old greyscale-by-weight ramp collapsed to a single shade
+# and rendered every node the same pale grey.
+# Progress is not a neutral state, it is the route. Grey read as "unresolved"
+# and made the one thing the agent actually achieved the faintest mark on the
+# page, while dead ends were the brightest.
+#
+# These live at module level, and the legend below is derived from them and
+# served to the UI at /api/graph_legend, because the frontend used to keep its
+# own hand-written copy of this scheme. Two copies drifted: both legends
+# claimed blue meant "active aim" and dashed meant "failed", when blue means
+# Go and dashed means the judge was guessing. A legend that contradicts the
+# picture is worse than no legend, so there is now one source for both.
+NODE_COLOURS = {
+    'NoGo': '#eb6834',      # ruled out
+    'Go': '#2a78d6',        # reached
+    'Progress': '#2f855a',  # advanced, and the run went on from here
+}
+START_COLOUR = '#111827'      # the 'start' node
+UNDECIDED_COLOUR = '#b9b8b2'  # nothing decided about it yet
+CONTESTED_COLOUR = '#b45309'  # a route later experience contradicted
+
+GRAPH_LEGEND = {
+    'nodes': [
+        {'colour': START_COLOUR, 'label': 'start',
+         'meaning': 'Where every graph begins.'},
+        {'colour': NODE_COLOURS['Progress'], 'label': 'Progress',
+         'meaning': 'The aim evolved into a better one, and the run went on '
+                    'from here.'},
+        {'colour': NODE_COLOURS['Go'], 'label': 'Go',
+         'meaning': 'The aim was reached.'},
+        {'colour': NODE_COLOURS['NoGo'], 'label': 'NoGo',
+         'meaning': 'The aim was ruled out.'},
+        {'colour': UNDECIDED_COLOUR, 'label': 'undecided',
+         'meaning': 'Nothing has been decided about this node yet.'},
+    ],
+    'edges': [
+        {'colour': NODE_COLOURS['Progress'], 'dashed': False, 'label': 'Progress'},
+        {'colour': NODE_COLOURS['Go'], 'dashed': False, 'label': 'Go'},
+        {'colour': NODE_COLOURS['NoGo'], 'dashed': False, 'label': 'NoGo'},
+        {'colour': CONTESTED_COLOUR, 'dashed': False, 'label': 'contested',
+         'meaning': 'A route later experience contradicted. It keeps its '
+                    'verdict and loses confidence rather than disappearing.'},
+    ],
+    'notes': [
+        'A node takes the colour of the verdict on the edge arriving at it.',
+        'Solid means the verdict was checked against evidence. Dashed means it '
+        'was the judge’s opinion — so a dashed NoGo is a guess, not a '
+        'proof.',
+        'Thicker edges carry more confidence; bigger nodes have more edges '
+        'meeting at them.',
+    ],
+}
+
+
+@app.route('/api/graph_legend', methods=['GET'])
+def api_graph_legend():
+    """The colour scheme the renderer actually uses, for the UI legend.
+
+    Served rather than duplicated in JS so the legend cannot describe a
+    different graph from the one on screen.
+    """
+    return jsonify({"success": True, "legend": GRAPH_LEGEND})
+
+
 def visualize_graph_pyvis(graph_file_path, session_id, hide_nogo=False):
     """Generate a visualization of the agent's decision graph.
 
@@ -606,20 +672,8 @@ def visualize_graph_pyvis(graph_file_path, session_id, hide_nogo=False):
         # Calculate the length for "NoGo" edges
         nogo_length = (mean_weight - (std_weight * 2)) * 100 if mean_weight and std_weight else 100
 
-        # Nodes are coloured by what was decided about them, not by edge
-        # weight. Weight now carries a *confidence*, and every verdict the
-        # keeper settles has exactly 1.0 - so the old greyscale-by-weight
-        # ramp collapsed to a single shade and rendered every node the same
-        # pale grey.
-        # Progress is not a neutral state, it is the route. Grey read as
-        # "unresolved" and made the one thing the agent actually achieved the
-        # faintest mark on the page, while dead ends were the brightest.
-        NODE_COLOURS = {
-            'NoGo': '#eb6834',      # ruled out
-            'Go': '#2a78d6',        # reached
-            'Progress': '#2f855a',  # advanced, and the run went on from here
-        }
-
+        # Colours come from the module-level scheme, which is also what
+        # /api/graph_legend serves to the UI.
         def verdict_on(node):
             """What the graph decided about this node, from its incoming edge."""
             for _, _, d in G.in_edges(node, data=True):
@@ -630,9 +684,9 @@ def visualize_graph_pyvis(graph_file_path, session_id, hide_nogo=False):
         for node, node_data in G.nodes(data=True):
             verdict, edge = verdict_on(node)
             if node == 'start' or str(node).endswith('/start'):
-                color = '#111827'
+                color = START_COLOUR
             else:
-                color = NODE_COLOURS.get(verdict, '#b9b8b2')
+                color = NODE_COLOURS.get(verdict, UNDECIDED_COLOUR)
 
             label = graph_node_label(node, node_data)
             confidence = edge.get('weight')
@@ -671,7 +725,7 @@ def visualize_graph_pyvis(graph_file_path, session_id, hide_nogo=False):
                      f"{' · judge opinion' if opinion else ' · checked against evidence'}")
             if visits:
                 hover += f" · seen {visits}x"
-            colour = NODE_COLOURS.get(edge_label, '#2a78d6')
+            colour = NODE_COLOURS.get(edge_label, NODE_COLOURS['Go'])
             if contested:
                 # A route later experience disagreed with. It keeps its verdict
                 # and loses confidence, so it turns amber and thins rather than
@@ -679,7 +733,7 @@ def visualize_graph_pyvis(graph_file_path, session_id, hide_nogo=False):
                 # to be assigned and then overwritten one line later, so no
                 # contested edge ever actually rendered amber.)
                 hover += f" · contradicted {contested}x since"
-                colour = '#b45309'
+                colour = CONTESTED_COLOUR
             length = nogo_length if edge_label == 'NoGo' else 150
             net.add_edge(u, v, label='', fullLabel=edge_label, title=hover,
                          weight=weight, length=length, color=colour,
@@ -2892,8 +2946,16 @@ def export_run_data():
             'nogo_ungated': settings.get('nogo_ungated', ''),
         }
 
+        # keeper_rule is deliberately NOT in this list. It is a run-level
+        # setting, and it used to appear in both lists, which did two things:
+        # it wrote the column twice into the header, and - worse - the copy
+        # loop below overwrote the run-level value with entry.get(..., '').
+        # The trail only records keeper_rule on turns where the keeper speaks,
+        # and on diagnosis, clinic and ddx_clinic it never speaks (the patient
+        # is a second agent), so every row of those exports came out blank for
+        # a run that did have a rule set.
         turn_columns = ['turn', 'agent', 'aim', 'aim_source', 'rating', 'aim_status', 'next_aim',
-                        'history_len', 'keeper_rule', 'keeper_move', 'keeper_verdict',
+                        'history_len', 'keeper_move', 'keeper_verdict',
                         'llm_calls', 'input_tokens', 'output_tokens', 'tokens_estimated',
                         'stated_rule', 'verdict_source',
                         'persistence_count', 'graph_contribution_chars',
@@ -2905,10 +2967,14 @@ def export_run_data():
             row = dict(run_columns)
             for col in turn_columns:
                 row[col] = entry.get(col, '')
-            # The mode recorded at the time of the turn wins over the current
-            # setting, so a mid-run change does not silently relabel earlier rows.
+            # What was recorded at the time of the turn wins over the current
+            # setting, so a mid-run change does not silently relabel earlier
+            # rows. Only when it was actually recorded, though: absent means
+            # "not captured on this turn", not "there was no rule".
             if entry.get('graph_memory_mode'):
                 row['graph_memory_mode'] = entry['graph_memory_mode']
+            if entry.get('keeper_rule'):
+                row['keeper_rule'] = entry['keeper_rule']
             rows.append(row)
 
         if request.args.get('format') == 'json':
