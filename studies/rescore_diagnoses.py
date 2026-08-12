@@ -73,6 +73,26 @@ def target_for(run_type, rule_name):
     return rule_name
 
 
+def answer_position(settings):
+    """Where the true answer sat in this run's candidate list, 1-based.
+
+    None for runs made before the list was shuffled and recorded - those all
+    used one fixed order, so position is a constant there and cannot be
+    separated from which condition it was.
+    """
+    order = settings.get('candidate_order') or []
+    answer = str(settings.get('keeper_rule') or '').strip()
+    if not order or not answer:
+        return None
+    if answer in order:
+        return order.index(answer) + 1
+    head = answer.split('(')[0].strip().lower()
+    for i, name in enumerate(order):
+        if head and str(name).lower().startswith(head):
+            return i + 1
+    return None
+
+
 def outcome(run_type, history, rule_name):
     """(old_solved, new_solved, stopped_at_old, stopped_at_new)."""
     want = target_for(run_type, rule_name)
@@ -120,6 +140,7 @@ def main():
             'old_solved': bool(old), 'new_solved': bool(new),
             'censored': bool(censored),
             'old_stop': old_at, 'new_stop': new_at,
+            'answer_position': answer_position(s),
         })
 
     if not rows:
@@ -163,6 +184,28 @@ def main():
         if c['runs'] < 3:
             continue
         print(f"{case:28s} {c['runs']:5d} {c['old']:5d} {c['new']:5d} {c['censored']:9d}")
+
+    # Was being listed first worth anything? Only answerable for runs made
+    # after the order started being shuffled and recorded; before that every
+    # run used the same order, so position is confounded with condition.
+    positioned = [r for r in rows if r['answer_position']]
+    print(f"\nruns with a recorded candidate order: {len(positioned)} of {len(rows)}")
+    if positioned:
+        pos = collections.defaultdict(collections.Counter)
+        for r in positioned:
+            c = pos[r['answer_position']]
+            c['runs'] += 1
+            c['solved'] += r['new_solved']
+            c['censored'] += r['censored']
+        print(f"\n{'answer listed at':>17s} {'runs':>5s} {'solved':>7s} {'rate':>6s}")
+        for p in sorted(pos):
+            c = pos[p]
+            clean = c['runs'] - c['censored']
+            rate = f"{c['solved']/clean:.0%}" if clean else '-'
+            print(f"{p:>17} {c['runs']:5d} {c['solved']:7d} {rate:>6s}")
+    else:
+        print('  (none yet - every run so far used the one fixed order, so '
+              'position cannot be told apart from which condition it was)')
 
     if a.out:
         with open(a.out, 'w') as f:

@@ -522,11 +522,17 @@ class Keeper:
             return ''
         return f"Move the sentence closer to: {task['target']}"
 
-    def _presentation_order(self, salt):
+    def candidate_order(self, salt=None):
         """This run's ordering of the candidate labels, or None for canonical.
 
         Each task names its candidates in its own vocabulary, so the list comes
         from the task's own rule module; only the shuffling is shared.
+
+        The caller is expected to record what this returns rather than rely on
+        being able to recompute it. Deriving the order from a salt is only
+        reproducible while the salting scheme never changes, and it makes the
+        order invisible in the data - where it wants to be a factor you can
+        index scores by, not a detail to reconstruct.
         """
         if salt is None:
             return None
@@ -539,7 +545,7 @@ class Keeper:
         random.Random(f'{self.run_type}:{salt}').shuffle(order)
         return order
 
-    def roles(self, salt=None):
+    def roles(self, order=None):
         """Per-agent briefs, for tasks where the agents are not interchangeable.
 
         Single-agent tasks give every agent the same goal, because there is only
@@ -548,13 +554,12 @@ class Keeper:
         models talking about being evaluated: the keeper overwrote each agent's
         goal with one shared string, which for this run type was empty.
 
-        `salt` varies the order the candidates are listed in, per run. The list
-        was identical every time, so any positional preference the model has
-        applied to the same conditions in every run and could not be told apart
-        from the task. Pass the session id: the order is then reproducible from
-        it and never needs storing. Omit it and the canonical order is kept.
+        `order` is this run's candidate ordering, from candidate_order(). It is
+        passed in rather than derived here so that one caller decides it once
+        and can record it alongside the run - the order is a factor to index
+        results by, not an implementation detail. Omit it for the canonical
+        order.
         """
-        order = self._presentation_order(salt)
         if self.run_type == DDX_CLINIC:
             return [
                 {'agent_name': 'Dr Nazari',

@@ -1997,10 +1997,20 @@ def generate():
             # The run type decides what the agent is for; a leftover persona
             # from a chat scenario would have it negotiating a subscription
             # while the keeper answers questions about integers.
-            # Salted with the session id so the candidate list is ordered
-            # differently in every run, and reproducibly: the order can be
-            # recovered from the session id alone and never has to be stored.
-            roles = (keeper.roles(salt=session['state'].get('session_id'))
+            # The candidate list is ordered differently in every run, so a
+            # positional preference in the model cannot masquerade as a
+            # property of the task. Decided once here and written into the
+            # settings, so it reaches every exported row: the order is a factor
+            # results can be indexed by - was the answer listed first or last -
+            # rather than something to recompute later from a salting scheme
+            # that may since have changed.
+            candidate_order = (
+                keeper.candidate_order(salt=session['state'].get('session_id'))
+                if hasattr(keeper, 'candidate_order') else None)
+            if candidate_order:
+                settings['candidate_order'] = list(candidate_order)
+                session['state']['settings'] = settings
+            roles = (keeper.roles(candidate_order)
                      if hasattr(keeper, 'roles') else None)
             rows = session['state'].get('agents_df', [])
             if roles:
@@ -2922,6 +2932,27 @@ def reset_run_trail():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+def _answer_position(settings):
+    """Where the true answer sat in this run's candidate list, 1-based.
+
+    Empty when the run did not shuffle, or when the answer is not a plain
+    member of the list - a rule name may select a presentation of a condition
+    rather than the condition itself, so it is matched by prefix as a
+    fallback rather than assumed to appear verbatim.
+    """
+    order = settings.get('candidate_order') or []
+    answer = str(settings.get('keeper_rule') or '').strip()
+    if not order or not answer:
+        return ''
+    if answer in order:
+        return order.index(answer) + 1
+    head = answer.split('(')[0].strip().lower()
+    for i, name in enumerate(order):
+        if head and str(name).lower().startswith(head):
+            return i + 1
+    return ''
+
+
 @app.route('/export_run_data', methods=['GET'])
 def export_run_data():
     """Flat, per-turn record of a run, for comparing runs against each other.
@@ -2955,6 +2986,13 @@ def export_run_data():
             'run_type': settings.get('run_type', 'chat'),
             'keeper_rule': settings.get('keeper_rule', ''),
             'nogo_ungated': settings.get('nogo_ungated', ''),
+            # The order the candidates were listed in for this run, and where
+            # the true answer sat in it. Recorded rather than recomputed so a
+            # positional effect can be measured directly - group by
+            # answer_position and see whether being listed first helps - and so
+            # an old export stays readable if the shuffling ever changes.
+            'candidate_order': '|'.join(settings.get('candidate_order') or ()),
+            'answer_position': _answer_position(settings),
         }
 
         # keeper_rule is deliberately NOT in this list. It is a run-level
