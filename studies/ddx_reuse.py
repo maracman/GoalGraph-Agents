@@ -80,10 +80,13 @@ def graph_shape(path):
             'revisited': revisited}
 
 
-def run_one(case, label, max_calls, carried_graph, window=4):
+def run_one(case, label, max_calls, carried_graph, window=4, model=None):
     t0 = time.time()
     s = requests.Session()
     s.get(BASE, timeout=60)
+    if model:
+        s.post(f"{BASE}/update_llm_settings",
+               json={'provider': 'openai-codex', 'model': model}, timeout=60)
     s.post(f"{BASE}/update_user_settings", data=dict(
         run_type='ddx_clinic', keeper_rule=case, graph_memory_mode='graph',
         context_window=str(window), graph_recall_k='5',
@@ -157,6 +160,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--max-calls', type=int, default=70)
     ap.add_argument('--window', type=int, default=4)
+    ap.add_argument('--model', default=None,
+                    help='override the model for every call in these runs')
     ap.add_argument('--out', default='studies/results/ddx_reuse.json')
     ap.add_argument('--resume', action='store_true')
     a = ap.parse_args()
@@ -183,7 +188,8 @@ def main():
             sys.exit('app not responding; rerun with --resume')
         label = f'reuse-{arm}-{idx}'
         r = run_one(case, label, a.max_calls,
-                    carried if arm == 'carried' else None, window=a.window)
+                    carried if arm == 'carried' else None, window=a.window,
+                    model=a.model)
         r['arm'], r['position'] = arm, idx
         if arm == 'carried':
             carried = r.get('graph_id') or carried

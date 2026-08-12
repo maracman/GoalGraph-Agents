@@ -310,5 +310,29 @@
   "revisited": 0,
   "arm": "fresh",
   "position": 4
+ },
+ {
+  "case": "Influenza",
+  "label": "reuse-fresh-5",
+  "solved": 1,
+  "turns": 49,
+  "inherited": 0,
+  "input_tokens": 133428,
+  "graph_path": 0,
+  "carried": 46,
+  "llm_subgoal": 0,
+  "trust_low": 1.0,
+  "minutes": 9.6,
+  "graph_id": "graph_561a2736-0fb6-4bd3-91a4-f9a85951f301",
+  "path": "/Users/mand6499/Documents/AgentGraphs/thinking-agents/studies/../src/chat_cache/graphs/agent_80f54338-e042-4ec3-99ea-25c10368eb8c_graph.graphml",
+  "nodes": 15,
+  "depth": 5,
+  "progress": 4,
+  "nogo": 9,
+  "go": 1,
+  "contested": 0,
+  "revisited": 0,
+  "arm": "fresh",
+  "position": 5
  }
 ]
