@@ -78,7 +78,16 @@ def run_one(case, label, window, max_calls, carried_graph, knobs):
                 graph_recall_k='5', graph_recall_chars='800',
                 nogo_ungated='false', run_label=label)
     form.update({k: str(v) for k, v in knobs.items()})
-    s.post(f"{BASE}/update_user_settings", data=form, timeout=180)
+    r = s.post(f"{BASE}/update_user_settings", data=form, timeout=180)
+    # The whole point of this script is that arms differ by one knob. If the
+    # knob does not apply, every cell is the baseline and the ranking it prints
+    # is run-to-run noise - which is what it was until the endpoint was fixed.
+    if r.status_code != 200:
+        raise SystemExit(f"[{label}] settings rejected: HTTP {r.status_code} {r.text[:200]}")
+    applied = (r.json().get('settings') or {})
+    missing = [k for k in knobs if applied.get(k) is None]
+    if missing:
+        raise SystemExit(f"[{label}] settings accepted but not applied: {missing}")
     s.post(f"{BASE}/reset_run_trail", data={'run_label': label}, timeout=60)
 
     ags = s.get(f"{BASE}/get_agent_graphs", timeout=60).json()

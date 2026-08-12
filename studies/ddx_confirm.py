@@ -75,7 +75,17 @@ def run_one(case, label, max_calls, carried_graph, knobs):
                 nogo_ungated='false', judge_delay_seconds='0',
                 run_label=label)
     form.update({k: str(v) for k, v in knobs.items()})
-    s.post(f"{BASE}/update_user_settings", data=form, timeout=180)
+    r = s.post(f"{BASE}/update_user_settings", data=form, timeout=180)
+    # An arm that differs from another only by a knob is comparing a
+    # configuration against itself if the knob fails to apply, and the endpoint
+    # returning 500 with the settings half-applied is exactly how that happened
+    # once. Fail loudly rather than record a run under settings it never had.
+    if r.status_code != 200:
+        raise SystemExit(f"[{label}] settings rejected: HTTP {r.status_code} {r.text[:200]}")
+    applied = (r.json().get('settings') or {})
+    missing = [k for k in knobs if applied.get(k) is None]
+    if missing:
+        raise SystemExit(f"[{label}] settings accepted but not applied: {missing}")
     s.post(f"{BASE}/reset_run_trail", data={'run_label': label}, timeout=60)
 
     ags = s.get(f"{BASE}/get_agent_graphs", timeout=60).json()

@@ -2502,14 +2502,21 @@ def update_user_settings():
         if label is not None:
             session['state']['settings']['run_label'] = str(label)[:80]
 
+        # These wrote to a bare `settings`, which is not a local here and does
+        # not exist at module level either. Every such request raised NameError,
+        # was swallowed by the handler below, and came back as a 500 with the
+        # knob unset - so the five tuning knobs silently never applied, and any
+        # study whose arms differ only by a knob was comparing a configuration
+        # against itself. The settings sent earlier in the same request still
+        # landed, which is why this looked like a working endpoint.
         for knob in ('route_min_score', 'trust_decay', 'trust_floor',
                      'persistence_min', 'patience_max'):
             raw = request.form.get(knob)
             if raw not in (None, ''):
                 try:
-                    settings[knob] = float(raw)
+                    session['state']['settings'][knob] = float(raw)
                 except ValueError:
-                    pass
+                    flask_logger.warning(f"Invalid value for {knob}: {raw}")
         for flag in ('nogo_ungated', 'go_corroborate'):
             value = request.form.get(flag)
             if value is not None:
