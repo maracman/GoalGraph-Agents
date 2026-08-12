@@ -20,6 +20,7 @@ of those are real outcomes and both are visible in the graphs.
 Nothing here asks a model what happened. Which symptoms have been disclosed is
 read from the transcript, and the candidate set follows from the table below.
 """
+from . import claims
 
 # --- what can be asked about ---------------------------------------------
 
@@ -156,14 +157,16 @@ def disclosures_from(history, condition):
 
 
 def diagnosis_claimed(text):
-    """The condition a clinician has committed to, if any."""
-    low = str(text or '').lower()
-    if 'diagnos' not in low and 'it is ' not in low:
-        return None
-    for name, pretty in CONDITION_TEXT.items():
-        if name.replace('_', ' ') in low or pretty.lower() in low or name in low:
-            return name
-    return None
+    """The condition a clinician has committed to, if any.
+
+    The commitment test lives in claims.claimed_label; this supplies only the
+    wording particular to this task. This one was the loosest of the three -
+    it also accepted the bare phrase 'it is ' as evidence of a diagnosis.
+    """
+    return claims.claimed_label(
+        text,
+        {name: claims.aliases_for(name) + [str(pretty).lower()]
+         for name, pretty in CONDITION_TEXT.items()})
 
 
 def has(condition, symptom):

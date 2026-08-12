@@ -12,6 +12,7 @@ never touch this run type.
 
 import functools
 
+from . import claims
 from . import ddx_import as DX
 
 TARGET = 'HIV (initial infection)'
@@ -192,16 +193,16 @@ def confirmed_count(history, rule_name):
 
 
 def diagnosis_claimed(text):
-    low = str(text or '').lower()
-    if 'diagnos' not in low:
-        return None
-    for name in conditions():
-        if name.lower() in low:
-            return name
-        head = name.split('(')[0].strip().lower()
-        if head and head in low:
-            return name
-    return None
+    """The condition the clinician has committed to, if any.
+
+    Delegates the "is this a commitment" question to claims.claimed_label and
+    supplies only this task's vocabulary. It used to accept any message
+    containing 'diagnos' and return the first condition named anywhere in it,
+    which scored "nothing here is diagnostic of HIV yet" as a diagnosis of HIV
+    - and, because HIV sorts first here, scored it that way preferentially.
+    """
+    return claims.claimed_label(
+        text, {name: claims.aliases_for(name) for name in conditions()})
 
 
 # --- briefs ---------------------------------------------------------------

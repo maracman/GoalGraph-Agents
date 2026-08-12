@@ -24,6 +24,7 @@ graph: the direct question, which is blocked, and a longer detour that works.
 A decision graph is worth having exactly when there is more than one way to get
 somewhere and they are not equally good.
 """
+from . import claims
 
 # --- features -------------------------------------------------------------
 
@@ -468,14 +469,17 @@ def known_from(history, case):
 
 
 def diagnosis_claimed(text):
-    """The disorder a clinician has committed to, if any."""
-    low = str(text or '').lower()
-    if 'diagnos' not in low:
-        return None
-    for name, pretty in DISORDER_TEXT.items():
-        if name in low or name.replace('_', ' ') in low or pretty.lower() in low:
-            return name
-    return None
+    """The disorder a clinician has committed to, if any.
+
+    The commitment test lives in claims.claimed_label; this supplies only the
+    wording particular to this task. Previously any message containing
+    'diagnos' counted, and the disorder returned was the first in dict order
+    that appeared anywhere in it rather than the one being committed to.
+    """
+    return claims.claimed_label(
+        text,
+        {name: claims.aliases_for(name) + [str(pretty).lower()]
+         for name, pretty in DISORDER_TEXT.items()})
 
 
 def meets(disorder, present):
