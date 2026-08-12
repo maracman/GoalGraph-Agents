@@ -334,5 +334,29 @@
   "revisited": 0,
   "arm": "fresh",
   "position": 5
+ },
+ {
+  "case": "HIV (initial infection)",
+  "label": "reuse-fresh-6",
+  "solved": 1,
+  "turns": 15,
+  "inherited": 0,
+  "input_tokens": 30529,
+  "graph_path": 0,
+  "carried": 12,
+  "llm_subgoal": 0,
+  "trust_low": 1.0,
+  "minutes": 2.2,
+  "graph_id": "graph_4404d346-0110-4c48-8d82-e4cfdcb083f9",
+  "path": "/Users/mand6499/Documents/AgentGraphs/thinking-agents/studies/../src/chat_cache/graphs/agent_4bdb7fc4-1ad7-4ac8-8afd-888f25e25581_graph.graphml",
+  "nodes": 7,
+  "depth": 5,
+  "progress": 4,
+  "nogo": 1,
+  "go": 1,
+  "contested": 0,
+  "revisited": 0,
+  "arm": "fresh",
+  "position": 6
  }
 ]

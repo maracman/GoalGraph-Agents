@@ -162,12 +162,15 @@ def main():
     ap.add_argument('--window', type=int, default=4)
     ap.add_argument('--model', default=None,
                     help='override the model for every call in these runs')
+    ap.add_argument('--patients', type=int, default=None,
+                    help='truncate the sequence to the first N patients per arm')
     ap.add_argument('--out', default='studies/results/ddx_reuse.json')
     ap.add_argument('--resume', action='store_true')
     a = ap.parse_args()
 
-    plan = [('carried', i, c) for i, c in enumerate(SEQUENCE)] + \
-           [('fresh', i, c) for i, c in enumerate(SEQUENCE)]
+    seq = SEQUENCE[:a.patients] if a.patients else SEQUENCE
+    plan = [('carried', i, c) for i, c in enumerate(seq)] + \
+           [('fresh', i, c) for i, c in enumerate(seq)]
 
     rows = []
     if a.resume and os.path.exists(a.out):
