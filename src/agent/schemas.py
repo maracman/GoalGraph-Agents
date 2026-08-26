@@ -18,6 +18,20 @@ json_schema_review_goal = {
     "required": ["rating", "justification", "suggestion"]
 }
 
+# Schema for the route-or-invent fork, where the agent reads its own scratchpad
+# and either takes a place the graph offers or names one that is not on it yet.
+# `choice` is 0 for "none of these fit", so a reply that rejects every option is
+# a decision rather than a parse failure.
+json_schema_aim_choice = {
+    "type": "object",
+    "properties": {
+        "choice": {"type": "integer", "minimum": 0},
+        "new_aim": {"type": ["string", "null"]},
+        "why": {"type": "string"}
+    },
+    "required": ["choice"]
+}
+
 # Schema for generating new subgoals
 json_schema_new_subgoal = {
     "type": "object",
@@ -36,7 +50,12 @@ json_schema_response = {
         "narration": {"type": "string"},
         # On keeper runs the agent states its current claim in a checkable
         # form, so refutation becomes a fact rather than a judgement.
-        "rule": {"type": "string"}
+        "rule": {"type": "string"},
+        # With aim_scratchpad on, the agent keeps a running note of where the
+        # investigation stands. It is read back at the route-or-invent fork,
+        # where it decides which place on the graph to go to next, or that none
+        # of them fit and the aim has to be a new one.
+        "notes": {"type": "string"}
     },
     "required": ["agent_response"]
 }
@@ -160,7 +179,34 @@ json_schemas = {
                     "nogo_ungated": {"type": "boolean"},
                     # Whether a candidate Go must survive an independent
                     # attempt to refute it.
-                    "go_corroborate": {"type": "boolean"}
+                    "go_corroborate": {"type": "boolean"},
+                    # Who arbitrates the route-or-invent fork.
+                    #   gate       similarity * trust >= route_min_score
+                    #   judgement  the agent picks from the same candidates,
+                    #              with only the conversation to go on
+                    #   scratchpad as judgement, plus its own running note
+                    # judgement exists to separate "let the agent decide" from
+                    # "let the agent decide with a persistent note": without
+                    # it, any difference could be the extra reasoning step
+                    # rather than the memory, and the study would need running
+                    # again to find out which.
+                    "aim_fork_mode": {
+                        "type": "string",
+                        "enum": ["gate", "judgement", "scratchpad"]
+                    },
+                    # Whether the aim scaffold runs at all. 'off' is the
+                    # ablation of the original design: no aim, no judge, no
+                    # graph writes - a plain conversing agent.
+                    "aim_system": {"type": "string", "enum": ["on", "off"]},
+                    # A named variation of the task's rules, interpreted by
+                    # the task's own rule module (e.g. ddx 'stateful_patient':
+                    # the patient keeps full history and never repeats an
+                    # answer). Empty = the task as shipped.
+                    "task_variant": {"type": "string"},
+                    # Pins this run's candidate ordering so paired arms face an
+                    # identical list. Unset, the order is salted per session and
+                    # varies run to run.
+                    "order_salt": {"type": "string"}
                 }
             },
             "play": {"type": "boolean"},

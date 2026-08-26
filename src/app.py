@@ -1249,6 +1249,12 @@ def update_llm_settings():
             llm_settings['max_tokens'] = int(max_tokens)
         if top_p is not None:
             llm_settings['top_p'] = float(top_p)
+        strict = data.get('strict_provider')
+        if strict is not None:
+            llm_settings['strict_provider'] = bool(strict)
+        for k in ('judge_provider', 'judge_model'):
+            if data.get(k) is not None:
+                llm_settings[k] = str(data.get(k))
         if fallback_to_local is not None:
             llm_settings['fallback_to_local'] = bool(fallback_to_local)
         
@@ -1895,7 +1901,12 @@ def submit():
         fast_graph_run = request.form.get('fast_graph_run', 'false').lower() == 'true'
         session['state']['fast_graph_run'] = fast_graph_run
         session['state']['generation_delay_ms'] = 0 if fast_graph_run else DEFAULT_GENERATION_DELAY_MS
-        session['state']['judge_delay_seconds'] = 0 if fast_graph_run else DEFAULT_JUDGE_DELAY_SECONDS
+        # Keep an explicitly configured pacing; fast mode still forces 0 and
+        # the default only fills a value nothing has set.
+        session['state']['judge_delay_seconds'] = (
+            0 if fast_graph_run
+            else float(session['state'].get('judge_delay_seconds',
+                                            DEFAULT_JUDGE_DELAY_SECONDS)))
 
         # Initialize the generation process
         session['state']['current_generation'] = 0
@@ -2005,7 +2016,9 @@ def generate():
             # rather than something to recompute later from a salting scheme
             # that may since have changed.
             candidate_order = (
-                keeper.candidate_order(salt=session['state'].get('session_id'))
+                keeper.candidate_order(
+                    salt=(settings.get('order_salt')
+                          or session['state'].get('session_id')))
                 if hasattr(keeper, 'candidate_order') else None)
             if candidate_order:
                 settings['candidate_order'] = list(candidate_order)
@@ -2021,6 +2034,12 @@ def generate():
                     row['description'] = role['description']
                     if role.get('agent_name'):
                         row['agent_name'] = role['agent_name']
+                    # A role that carries its own context window keeps it
+                    # (0 = unlimited); one that does not uses the session's.
+                    if 'context_window' in role:
+                        row['context_window'] = role['context_window']
+                    elif 'context_window' in row:
+                        del row['context_window']
             else:
                 for row in rows:
                     row['goal'] = keeper.agent_goal()
@@ -2502,6 +2521,35 @@ def update_user_settings():
         if mode in ('none', 'inline', 'description', 'graph'):
             session['state']['settings']['graph_memory_mode'] = mode
 
+        # A study drives many runs through update_user_settings alone; the
+        # judge pacing knob was only settable via /submit, so 'judge_delay=0'
+        # in a study script was silently ignored and every judge call slept.
+        delay = request.form.get('judge_delay_seconds')
+        if delay is not None:
+            try:
+                session['state']['judge_delay_seconds'] = max(0.0, float(delay))
+            except (TypeError, ValueError):
+                pass
+
+        variant = request.form.get('task_variant')
+        if variant is not None:
+            session['state']['settings']['task_variant'] = str(variant)
+
+        aims = request.form.get('aim_system')
+        if aims in ('on', 'off'):
+            session['state']['settings']['aim_system'] = aims
+
+        fork = request.form.get('aim_fork_mode')
+        if fork in ('gate', 'judgement', 'scratchpad'):
+            session['state']['settings']['aim_fork_mode'] = fork
+
+        # Pins the candidate ordering so paired runs face an identical list.
+        # A study sets it per block; left unset the order is salted per session
+        # and varies run to run, which is the original behaviour.
+        salt = request.form.get('order_salt')
+        if salt is not None:
+            session['state']['settings']['order_salt'] = str(salt)
+
         for param, lo, hi in (('graph_recall_k', 1, 20),
                               ('graph_recall_chars', 100, 4000),
                               ('context_window', 0, 200)):
@@ -2622,19 +2670,23 @@ def toggle_agent_mute():
         # Get the agent index
         agent_index = agents_df[agents_df['agent_id'] == agent_id].index[0]
         
-        # Toggle mute status
-        agents_df.at[agent_index, 'muted'] = not agents_df.at[agent_index, 'muted']
+        # Toggle mute status. Plain bool throughout: pandas hands back
+        # numpy.bool_, which the session JSON survives but jsonify does not -
+        # the state mutated and then the response 500ed, so every caller saw
+        # an error for a toggle that had in fact worked.
+        new_muted = bool(not agents_df.at[agent_index, 'muted'])
+        agents_df.at[agent_index, 'muted'] = new_muted
         session['state']['agents_df'] = agents_df.to_dict('records')
         
         # Update agent_mutes array to match
-        session['state']['agent_mutes'][agent_index] = agents_df.at[agent_index, 'muted']
+        session['state']['agent_mutes'][agent_index] = new_muted
         
         save_current_session(session['state'])
         
         return jsonify({
             "success": True,
             "agent_id": agent_id,
-            "muted": agents_df.at[agent_index, 'muted']
+            "muted": new_muted
         })
     except Exception as e:
         flask_logger.error(f"Error toggling agent mute status: {str(e)}")
@@ -2986,6 +3038,13 @@ def export_run_data():
             'run_type': settings.get('run_type', 'chat'),
             'keeper_rule': settings.get('keeper_rule', ''),
             'nogo_ungated': settings.get('nogo_ungated', ''),
+            # Which arbiter chose the aims in this run: the trust gate, or the
+            # agent reading its own scratchpad. On every row, because a routed
+            # -aims count means nothing without knowing what decided to route.
+            'aim_fork_mode': settings.get('aim_fork_mode', 'gate'),
+            'task_variant': settings.get('task_variant', ''),
+            'aim_system': settings.get('aim_system', 'on'),
+            'order_salt': settings.get('order_salt', ''),
             # The order the candidates were listed in for this run, and where
             # the true answer sat in it. Recorded rather than recomputed so a
             # positional effect can be measured directly - group by
@@ -3006,8 +3065,12 @@ def export_run_data():
         turn_columns = ['turn', 'agent', 'aim', 'aim_source', 'rating', 'aim_status', 'next_aim',
                         'history_len', 'keeper_move', 'keeper_verdict',
                         'llm_calls', 'input_tokens', 'output_tokens', 'tokens_estimated',
-                        'stated_rule', 'verdict_source',
+                        'aim_chosen_this_turn', 'stated_rule', 'verdict_source',
                         'persistence_count', 'graph_contribution_chars',
+                        'fork_context_chars', 'fork_outcome',
+                        'fork_candidates', 'fork_has_path', 'fork_path_sim',
+                        'fork_path_offered', 'fork_choice', 'fork_choice_kind',
+                        'holdout_accuracy',
                         'graph_trust', 'graph_nodes', 'graph_edges',
                         'justification']
 

@@ -274,7 +274,24 @@ def clinician_brief(order=None):
     return '\n'.join(lines)
 
 
-def patient_brief(rule_name, order=None):
+STATEFUL = 'stateful_patient'
+
+
+def stateful(variant):
+    """Does this variant make the patient a stateful, non-repeating environment?
+
+    Without it the patient is as forgetful as the clinician: it does not
+    remember having answered, so any fact the clinician's window has dropped
+    can be re-elicited for the price of a turn, and shrinking the window costs
+    nothing. Both window sweeps found exactly that - the no-memory control was
+    flat from 2 messages to 32. For "memory carries information past the
+    window" to be testable at all, forgetting has to have a consequence, which
+    means the environment must not forget along with the agent.
+    """
+    return (variant or '') == STATEFUL
+
+
+def patient_brief(rule_name, order=None, variant=''):
     case = base_case(rule_name)
     mine = sorted(profile(case))
     g = guarded()
@@ -305,6 +322,16 @@ def patient_brief(rule_name, order=None):
         'directly, you change the subject or answer vaguely - but you answer '
         'everything else honestly, including things that happen to be related.',
     ]
+    if stateful(variant):
+        lines += [
+            '  You answer each question ONCE. If the clinician asks something '
+            'you have already answered in this conversation, do not answer it '
+            'again: say only "I\'ve already told you that" (or as much of it '
+            'as fits your mood) and stop. Never restate or summarise what you '
+            'said before, even to be helpful, even if pressed, even if the '
+            'clinician says they forgot. A new question deserves an answer; a '
+            'repeated one does not.',
+        ]
     return '\n'.join(lines)
 
 

@@ -90,10 +90,14 @@ def available_rules(run_type):
 class Keeper:
     """Answers the agent, and knows whether the agent's aim is true."""
 
-    def __init__(self, run_type, rule_name=None, seed=0):
+    def __init__(self, run_type, rule_name=None, seed=0, variant=''):
         self.run_type = run_type
         self.rule_name = rule_name or self._default_rule(run_type)
         self.seed = seed
+        # A named variation of the task's rules, interpreted by the task's own
+        # rule module. Carried here rather than branched on: the keeper only
+        # passes it through, so a task without variants ignores it.
+        self.variant = variant or ''
         # Set by the caller before reply() on stateful run types, so the keeper
         # can replay where the agent currently stands.
         self._history = []
@@ -254,19 +258,26 @@ class Keeper:
         return TS.candidates(self.scored_moves(history))
 
     def is_complete(self, history):
-        """Has the task been finished? Only meaningful where there is a target."""
+        """Has the task been finished? Only meaningful where there is a target.
+
+        On the two-agent clinical tasks only the clinician's messages count:
+        the diagnosis is the clinician's job, and scanning every speaker let a
+        patient musing about its own condition end the run as solved.
+        """
         if self.run_type == DDX_CLINIC:
             want = DX.base_case(self.rule_name)
-            for _speaker, message in history:
-                if DX.diagnosis_claimed(message) == want:
+            clinician = self.roles()[0]['agent_name']
+            for speaker, message in history:
+                if speaker == clinician and DX.diagnosis_claimed(message) == want:
                     return True
             return False
         if self.run_type == CLINIC:
             # the rule name may pick a particular presentation, but the
             # clinician only ever names the disorder
             want = CL.base_case(self.rule_name)
-            for _speaker, message in history:
-                if CL.diagnosis_claimed(message) == want:
+            clinician = self.roles()[0]['agent_name']
+            for speaker, message in history:
+                if speaker == clinician and CL.diagnosis_claimed(message) == want:
                     return True
             return False
         if self.run_type == DIAGNOSIS:
@@ -571,7 +582,15 @@ class Keeper:
                 {'agent_name': 'Ash',
                  'description': ('Someone who has come for help but finds it '
                                  'hard to talk about themselves.'),
-                 'goal': DX.patient_brief(self.rule_name, order)},
+                 'goal': DX.patient_brief(self.rule_name, order,
+                                          variant=self.variant),
+                 # The patient is the environment, and an environment that
+                 # forgets what it already said is what lets a short-window
+                 # clinician re-elicit anything for the price of a turn. A
+                 # stateful patient keeps the whole conversation whatever the
+                 # session window is - context_window 0 means unlimited.
+                 **({'context_window': 0}
+                    if DX.stateful(self.variant) else {})},
             ]
         if self.run_type == CLINIC:
             return [
@@ -829,7 +848,14 @@ class Keeper:
                 return ('Give me a sentence in double quotes.', None, None)
             accepted, rejected = self.attempts_from(self._history or [])
             got = len(self.distinct_accepted(self._history or []))
-            if CR.is_repeat(move, rejected):
+            # Repeat only when the move is rejected AGAIN. normalise() strips
+            # punctuation, so a rejected sentence repaired by exactly the
+            # missing comma or question mark normalises identically to the
+            # original - and the verdict-blind check answered that successful
+            # repair with "already tried and rejected" while attempts_from,
+            # progress and completion all counted it accepted. The keeper was
+            # contradicting its own scoring at the agent's best moment.
+            if not verdict and CR.is_repeat(move, rejected):
                 return ('You have already tried that and I rejected it. '
                         'Try something you have not tried.', move, False)
             if verdict:
@@ -1078,4 +1104,5 @@ def make_keeper(settings):
         return None
     return Keeper(run_type,
                   rule_name=(settings or {}).get('keeper_rule'),
-                  seed=int((settings or {}).get('seed', 0) or 0))
+                  seed=int((settings or {}).get('seed', 0) or 0),
+                  variant=str((settings or {}).get('task_variant', '') or ''))

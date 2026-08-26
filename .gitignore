@@ -40,3 +40,4 @@ src/static/bundle.js.LICENSE.txt
 .claude/
 # DDXPlus corpus — fetched on demand, not vendored (CC-BY-4.0, ~90MB)
 data/ddxplus/
+data

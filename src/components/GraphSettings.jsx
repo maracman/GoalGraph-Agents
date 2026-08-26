@@ -39,6 +39,32 @@ const MODE_HELP = {
     'size of the graph. Break-even against the full list is around ten ruled-out aims.',
 };
 
+const FORK_MODES = [
+  { value: 'gate', label: 'Gate — similarity \u00d7 trust, against a threshold' },
+  { value: 'judgement', label: 'The agent, from the graph\u2019s candidates' },
+  { value: 'scratchpad', label: 'The agent, with its own running note' },
+];
+
+const FORK_HELP = {
+  gate:
+    'The fork between following a known route and inventing a new aim is decided by one ' +
+    'number: the route\u2019s similarity to the goal times how much the graph has been worth ' +
+    'this run. That product latches — one failed route puts trust at 0.6, which needs a ' +
+    'similarity of 0.67 to route again, and similarity tops out near 0.46, so a single ' +
+    'failure can switch routing off for the rest of the run.',
+  judgement:
+    'The agent is shown the same candidates the gate would have scored — the next step on ' +
+    'the known path with its similarity, plus the aims already reached from here — and takes ' +
+    'one, or says none fit and names its own. It has only the conversation to go on. This is ' +
+    'the control for the extra reasoning step: without it, any gain from the running note ' +
+    'could just as well be the extra call.',
+  scratchpad:
+    'As above, plus a note the agent rewrites each turn and reads back at the fork, capped by ' +
+    'the same budget retrieval spends. The candidates and the similarity are identical to ' +
+    'judgement — what differs is whether it has a persistent record of where the ' +
+    'investigation stands.',
+};
+
 const GraphSettings = () => {
   const [runTypes, setRunTypes] = useState([]);
   const [settings, setSettings] = useState({
@@ -51,6 +77,7 @@ const GraphSettings = () => {
     graph_recall_chars: 600,
     nogo_ungated: false,
     go_corroborate: false,
+    aim_fork_mode: 'gate',
   });
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -132,6 +159,10 @@ const GraphSettings = () => {
   };
 
   const retrieval = settings.graph_memory_mode === 'graph';
+  // The scratchpad is held to the same ceiling as retrieval, so the budget has
+  // to be reachable whenever either is on — hiding it would make the one
+  // setting that keeps their cost comparable invisible in half the comparison.
+  const budgeted = retrieval || settings.aim_fork_mode === 'scratchpad';
   const activeType = runTypes.find((t) => t.id === settings.run_type);
   const rules = (activeType && activeType.rules) || [];
 
@@ -216,8 +247,9 @@ const GraphSettings = () => {
         <small className="setting-help">{MODE_HELP[settings.graph_memory_mode]}</small>
       </div>
 
-      {retrieval && (
+      {budgeted && (
         <>
+          {retrieval && (
           <div className="setting-group">
             <Slider
               id="graph_recall_k"
@@ -233,6 +265,7 @@ const GraphSettings = () => {
               but leave less room for the conversation itself.
             </small>
           </div>
+          )}
 
           <div className="setting-group">
             <Slider
@@ -245,12 +278,28 @@ const GraphSettings = () => {
               onChange={(value) => change('graph_recall_chars', value)}
             />
             <small className="setting-help">
-              A hard ceiling on the recalled text. Aims past the budget are dropped and
-              the agent is told how many were left out, so it knows the list is partial.
+              {retrieval
+                ? 'A hard ceiling on the recalled text. Aims past the budget are dropped and '
+                  + 'the agent is told how many were left out, so it knows the list is partial. '
+                  + 'It also caps the scratchpad, so the two cost the same context.'
+                : 'A hard ceiling on the scratchpad. The agent is told the limit and anything '
+                  + 'past it is cut. It is the same budget retrieval spends, which is what '
+                  + 'keeps their cost comparable.'}
             </small>
           </div>
         </>
       )}
+
+      <div className="setting-group">
+        <Dropdown
+          label="Who chooses the next aim"
+          options={FORK_MODES}
+          value={settings.aim_fork_mode}
+          onChange={(value) => change('aim_fork_mode', value)}
+          fullWidth
+        />
+        <small className="setting-help">{FORK_HELP[settings.aim_fork_mode]}</small>
+      </div>
 
       <h3>Verdicts</h3>
 

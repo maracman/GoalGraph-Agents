@@ -8,13 +8,15 @@ import networkx as nx
 import pandas as pd
 from .schemas import (
     json_schemas,
+    json_schema_aim_choice,
     json_schema_review_goal,
     json_schema_new_subgoal,
     json_schema_response
 )
 from .llm_service import llm_service
-from .graph_memory import (GraphMemory, legacy_nogo_statement,
-                           verdict_confidence, PROOF, OPINION)
+from .graph_memory import (GraphMemory, legacy_nogo_statement, NOTEPAD_FIELD,
+                           notepad_prompt, render_notepad, trim_notepad,
+                           verdict_confidence, NOGO, PROOF, OPINION)
 from .graph_intelligence import (
     find_path_to_goal,
     import_graph,
@@ -100,10 +102,17 @@ def llm_judge_call(system_prompt, user_prompt, generation_vars):
         'top_p': 0.9,
     }
     # Carry over provider / model from generation_vars so the judge uses the
-    # same backend the agent is configured with.
-    for key in ('provider', 'model', 'offline'):
+    # same backend the agent is configured with - unless a judge override is
+    # set. In a model comparison the judge and keeper are the instrument, not
+    # the subject: a weak model judging a weak model confounds acting with
+    # scoring, and a judge that cannot emit JSON stops recording verdicts, so
+    # the graph never gets built and the memory arm silently dies.
+    for key in ('provider', 'model', 'offline', 'strict_provider'):
         if key in generation_vars:
             options[key] = generation_vars[key]
+    if generation_vars.get('judge_provider'):
+        options['provider'] = generation_vars['judge_provider']
+        options['model'] = generation_vars.get('judge_model') or options.get('model')
 
     if options.get('offline', False):
         return None  # Cannot judge in offline mode
@@ -142,13 +151,17 @@ def get_go_nogo_nodes(graph):
 # rather than widening it, which breaks the write-back after an aim is set.
 _TEXT_COLUMNS = ('current_aim', 'suggestion', 'current_node_location',
                  'last_response', 'last_narration', 'persistance_score',
-                 'current_aim_source')
+                 'current_aim_source', 'notepad')
 
 
 def ensure_text_columns(agent_df):
     """Widen text columns to object so aim write-back cannot fail on dtype."""
     for col in _TEXT_COLUMNS:
-        if col in agent_df.columns and agent_df[col].dtype != object:
+        if col not in agent_df.columns:
+            # A session created before a column existed still has to accept a
+            # write-back to it, and pandas will not create one from `.at`.
+            agent_df[col] = ''
+        elif agent_df[col].dtype != object:
             agent_df[col] = agent_df[col].astype(object)
     return agent_df
 
@@ -313,8 +326,234 @@ def tuning(generation_vars, name, default):
         return default
 
 
+def route_candidates(graph, current_node, path_result, current_aim='',
+                     ruleset='default', k=4, limit=6):
+    """The places on the graph worth going next from here.
+
+    Three sources, because one of them is nearly always empty. Measured on the
+    richest graph these runs produce (54 nodes, 53 edges): the nearest-goal
+    node is found comfortably — similarity 0.515, above every threshold in the
+    code — but a *directed path* to it exists from only 6 of 53 nodes. The
+    graph accumulates as a near-tree, so a node is reachable only from its own
+    ancestors, and `find_path_to_goal` asks for the goal-like node to be a
+    descendant of wherever the agent happens to be standing.
+
+    That is a third reason routing does not fire, underneath the trust latch
+    and independent of it: here trust was 1.0 and the similarity was fine, and
+    there was still no route. A fork offered only path candidates would have
+    nothing to choose between on nine turns in ten.
+
+    So the fork is also shown what the graph knows but cannot walk to: the most
+    relevant live aims anywhere in it. Adopting an aim is not traversing an
+    edge, and the path requirement is an artefact of modelling aims as a route
+    rather than as a set. Each candidate carries its `kind`, so a choice of a
+    genuine path can still be counted separately from the wider notion and
+    stays comparable with every result recorded before this existed.
+    """
+    out, seen = [], {current_node}
+    if path_result is not None:
+        path, target, similarity = path_result
+        if len(path) > 1:
+            out.append({'node': path[1], 'kind': 'path',
+                        'similarity': round(float(similarity), 2),
+                        'why': f"next step on the known path to '{target}'"})
+            seen.add(path[1])
+    if current_node in graph:
+        for nbr in graph.successors(current_node):
+            if nbr in seen or str(nbr).endswith('_NoGo'):
+                continue
+            data = graph.nodes[nbr]
+            if data.get('status') in (NOGO, 'abandon'):
+                continue
+            out.append({'node': nbr, 'kind': 'neighbour', 'similarity': None,
+                        'why': f"reached from here before "
+                               f"({data.get('status') or 'open'})"})
+            seen.add(nbr)
+
+    if len(out) < limit and current_aim:
+        mem = GraphMemory(graph, ruleset=ruleset)
+        live = tuple(s for s in {d.get('status') for _, d in graph.nodes(data=True)}
+                     if s and s != NOGO)
+        if live:
+            for node, data, score in mem.recall(current_aim, k=k + len(seen),
+                                                statuses=live):
+                if node in seen or str(node).endswith('_NoGo'):
+                    continue
+                out.append({'node': node, 'kind': 'similar',
+                            'similarity': round(float(score), 2),
+                            'why': f"recorded earlier as "
+                                   f"{data.get('status') or 'open'}, and close "
+                                   f"to what you are doing now"})
+                seen.add(node)
+                if len(out) >= limit:
+                    break
+    return out[:limit]
+
+
+def fork_mode(generation_vars):
+    """Who arbitrates the route-or-invent fork on this run."""
+    mode = (generation_vars or {}).get('aim_fork_mode', 'gate')
+    return mode if mode in ('gate', 'judgement', 'scratchpad') else 'gate'
+
+
+def scratchpad_fork(graph, current_node, goal_text, proposed, rejected,
+                    path_result, notepad, generation_vars):
+    """Let the agent decide, from its own notes, where to go next.
+
+    Returns (aim, source, suggestion) or None to fall back to the gate.
+
+    This replaces `similarity * trust >= route_min_score` as the arbiter of the
+    route-or-invent fork. That product latches off and cannot recover: one
+    failed route puts trust at 0.6, which needs similarity >= 0.67 to route
+    again, and node-label-to-goal-brief similarity tops out near 0.46. The
+    trust values in the recorded results are exactly 0.6^n, so the latch is
+    observed rather than argued.
+
+    What is replaced is only the arbiter. The retrieval that finds candidates
+    is unchanged, and the similarity is still computed and shown — the agent
+    gets the same evidence the gate had, plus the one thing the gate never had,
+    which is a record of where the investigation actually stands.
+
+    Trust is deliberately not shown. It is the artefact being removed, and
+    telling the agent "the graph has been unreliable" would reintroduce the
+    latch through the prompt instead of through arithmetic.
+    """
+    candidates = route_candidates(
+        graph, current_node, path_result,
+        current_aim=(proposed or goal_text),
+        ruleset=generation_vars.get('_ruleset', 'default'),
+        k=int(generation_vars.get('graph_recall_k', 4)))
+    notepad = (notepad or '').strip()
+    # Both arbitrated arms fork under identical conditions - candidates exist.
+    # Letting the scratchpad arm also fork on an empty candidate list would
+    # make the two arms differ in how often they fork as well as in what they
+    # read, and no comparison could separate the two.
+    if not candidates:
+        return None
+
+    lines = []
+    for i, c in enumerate(candidates, 1):
+        sim = f", similarity {c['similarity']}" if c['similarity'] is not None else ""
+        lines.append(f"  {i}. {c['node']}\n     ({c['why']}{sim})")
+    offered = "\n".join(lines) if lines else "  (the graph offers nothing from here)"
+
+    memory = render_notepad(notepad) if notepad else ""
+    dead = (f"\nA judge has proposed: \"{proposed}\"\n"
+            f"That proposal means the same as something already ruled out "
+            f"(\"{rejected}\"), so taking it as written would repeat a "
+            f"refuted attempt.\n" if rejected else
+            (f"\nA judge has proposed: \"{proposed}\"\n" if proposed else ""))
+
+    system_prompt = ("You are choosing what to pursue next. Always respond with "
+                     "valid JSON only.")
+    user_prompt = f"""{memory}Your long-range goal: {goal_text}
+
+Places the record of your own past attempts offers to go next:
+{offered}
+{dead}
+Take whichever numbered option is the next thing worth doing. Choose 0 only if
+none of them is, and name the aim you would pursue instead — "none of these"
+without an aim of your own leaves the decision unmade.
+
+Respond with JSON: {{"choice": <the option number, or 0>, "new_aim": "<the aim to \
+pursue instead, required when choice is 0>", "why": "<one sentence>"}}"""
+
+    scratchpad_fork.last_context = memory + offered
+    scratchpad_fork.last_outcome = 'fell_through'
+    # A decline is only evidence about the graph if a real route was on offer.
+    # Where find_path_to_goal gives nothing, all the fork can show is aims
+    # already reached from here, and declining to revisit them says nothing
+    # about the graph's routes. Recorded per fork so the decline rate can be
+    # read conditional on a route existing, rather than pooled and misread.
+    scratchpad_fork.last_stats = {
+        'fork_candidates': len(candidates),
+        'fork_has_path': int(path_result is not None),
+        'fork_path_sim': (round(float(path_result[2]), 3)
+                          if path_result is not None else ''),
+        'fork_choice': '',
+        'fork_choice_kind': '',
+        'fork_path_offered': int(any(c['kind'] == 'path' for c in candidates)),
+    }
+    raw = llm_judge_call(system_prompt, user_prompt, generation_vars)
+    if raw is None:
+        return None
+    out = validate_json(raw, json_schema_aim_choice)
+    if out is None:
+        logger.warning(f"Failed to parse scratchpad fork response: {raw[:200]}")
+        return None
+
+    why = clean_text(out.get('why'), '') or ''
+    try:
+        choice = int(out.get('choice'))
+    except (TypeError, ValueError):
+        choice = 0
+
+    scratchpad_fork.last_stats['fork_choice'] = choice
+    if 1 <= choice <= len(candidates):
+        picked = candidates[choice - 1]
+        scratchpad_fork.last_stats['fork_choice_kind'] = picked['kind']
+        scratchpad_fork.last_outcome = 'graph_path'
+        return (picked['node'], 'graph_path',
+                f"Taken from the record: {picked['why']}. {why}".strip())
+
+    # None of them fit. An aim of its own is the other half of the fork - the
+    # point is that it can leave the graph, not only move around inside it.
+    new_aim = clean_text(out.get('new_aim'), '')
+    if new_aim:
+        scratchpad_fork.last_outcome = 'carried'
+        return new_aim, 'carried', why
+
+    # It rejected every option and named nothing. That is still a decision not
+    # to route, so the judge's proposal stands - handing the fork back to the
+    # gate here would let the mechanism being replaced route after the agent
+    # had declined to, and put the control arm's behaviour inside the
+    # treatment arm's results.
+    if proposed and rejected is None:
+        scratchpad_fork.last_outcome = 'carried'
+        return proposed, 'carried', why or 'None of the recorded routes fit.'
+
+    # Nothing chosen, nothing proposed, or the only proposal is already
+    # refuted: there is no decision here to record, so let the gate run.
+    return None
+
+
+scratchpad_fork.last_context = ''
+scratchpad_fork.last_outcome = ''
+scratchpad_fork.last_stats = {}
+
+
+def record_fork_cost(trail, generation_vars):
+    """Fold what the fork read into the turn that ran it, and return it.
+
+    The fork happens after this turn's row is already appended - the verdict
+    has to land before there is anything to route from - so the row is topped
+    up in place rather than the cost being carried to the next turn, where it
+    would be attributed to a turn that did not spend it.
+
+    Returns the text so the caller can keep its own running total. Empty when
+    the fork did not run, which is what makes graph_contribution_chars in the
+    control arm mean exactly what it always did.
+    """
+    if fork_mode(generation_vars) == 'gate':
+        return ''
+    context, outcome = scratchpad_fork.last_context, scratchpad_fork.last_outcome
+    stats = scratchpad_fork.last_stats or {}
+    scratchpad_fork.last_context, scratchpad_fork.last_outcome = '', ''
+    scratchpad_fork.last_stats = {}
+    if context and trail:
+        trail[-1]['graph_contribution_chars'] = (
+            int(trail[-1].get('graph_contribution_chars') or 0) + len(context))
+        trail[-1]['fork_context_chars'] = len(context)
+        # What the agent did with the choice, kept separate from what it cost:
+        # a fork that fell through still spent the call, and counting it as a
+        # decision would overstate how often the scratchpad actually decided.
+        trail[-1]['fork_outcome'] = outcome
+        trail[-1].update(stats)
+    return context
+
+
 def choose_aim(graph, current_node, goal_text, proposed, generation_vars,
-               min_similarity=0.45, trust=1.0):
+               min_similarity=0.45, trust=1.0, notepad=''):
     """Pick the next aim, weighing the judge's proposal against the graph's route.
 
     Returns (aim, source, suggestion, rejected).
@@ -338,6 +577,19 @@ def choose_aim(graph, current_node, goal_text, proposed, generation_vars,
     rejected = already_ruled_out(graph, proposed)
 
     result = find_path_to_goal(graph, current_node, goal_text, min_similarity)
+
+    # The scratchpad decides the fork when it is switched on: same candidates,
+    # same similarity, a different arbiter. It returns None when it could not
+    # decide - no model, unparseable reply, or it rejected everything and named
+    # nothing - and the gate below then runs exactly as it always has, so a
+    # failure here costs a decision rather than the run.
+    if fork_mode(generation_vars) != 'gate':
+        chosen = scratchpad_fork(graph, current_node, goal_text, proposed,
+                                 rejected, result, notepad, generation_vars)
+        if chosen is not None:
+            aim, source, hint = chosen
+            return aim, source, hint, rejected
+
     if rejected is None and proposed:
         # The proposal is not a known dead end. Take the graph's route instead
         # only when it is both a good match for the goal and has been earning
@@ -366,6 +618,32 @@ def choose_aim(graph, current_node, goal_text, proposed, generation_vars,
     # is dropped: the planner picks fresh next turn, with the refutation in
     # front of it.
     return None, 'rejected', None, rejected
+
+
+def effective_window(agent, generation_vars):
+    """The context window this agent actually converses under.
+
+    Per-agent because the agents are not all the thing under test: in the
+    clinical tasks the patient is the environment, and an environment that
+    forgets what it already said lets a short-window agent re-elicit any
+    dropped fact for the price of a turn - which is why shrinking the window
+    never hurt anyone. A row-level 'context_window' (0 = unlimited) overrides
+    the session's; rows without one keep the session window, so nothing
+    changes for existing tasks.
+
+    The judge and planner deliberately do NOT get the override: they evaluate
+    the agent under test, so they stay on the session horizon.
+    """
+    # No `agent or {}`: the row is a pandas Series here, and truth-testing a
+    # Series raises. Missing column -> None (dict) or NaN (DataFrame row);
+    # both fall through to the session window.
+    override = agent.get('context_window') if agent is not None else None
+    try:
+        if override is not None and float(override) == float(override):  # NaN guard
+            return int(override)
+    except (TypeError, ValueError):
+        pass
+    return generation_vars.get('context_window', 0)
 
 
 def judge_view(history, generation_vars, default=10):
@@ -624,6 +902,14 @@ def generate_new_subgoal(history, agent, generation_vars, graph):
             nogo_list = "\n".join([f" - {node}" for node in clean_nodes])
             nogo_statement = f"The following approaches at achieving the goal were unsuccessful:\n{nogo_list}\n\n"
 
+    # The other half of the fork. When the graph offers no route at all there
+    # is nothing to choose between, and the aim has to be invented - so the
+    # scratchpad belongs here too, or the agent invents its next aim knowing
+    # only the last few messages and which labels are dead.
+    scratchpad = ""
+    if fork_mode(generation_vars) == 'scratchpad':
+        scratchpad = render_notepad(clean_text(agent.get('notepad'), ''))
+
     environment_info = ""
     if environment_changes:
         environment_info += f"Recent environment changes: {environment_changes}\n"
@@ -632,7 +918,7 @@ def generate_new_subgoal(history, agent, generation_vars, graph):
 
     # Exposed so the run trail can record what the graph actually contributed
     # to this turn, rather than only that it contributed something.
-    generate_new_subgoal.last_nogo_statement = nogo_statement
+    generate_new_subgoal.last_nogo_statement = nogo_statement + scratchpad
 
     system_prompt = "You are a strategic planner. Always respond with valid JSON only."
 
@@ -641,7 +927,7 @@ Recent chat: {recent_exchanges}
 {environment_info}
 {agent_name} description: {description}
 {agent_name} long-range workspace goal: {goal}
-{nogo_statement}
+{nogo_statement}{scratchpad}
 Consider the current situation and provide {agent_name} with an achievable next aim. The aim
 should be a useful node in a shared knowledge workspace: it may advance, refine, branch, or
 temporarily redirect the larger goal as new information appears. Additionally, detail the
@@ -675,9 +961,10 @@ generate_new_subgoal.last_nogo_statement = ''
 def get_agent_response(prompt, agent_name, generation_vars, last_narration=''):
     """Generate a response from the agent using the configured LLM.
 
-    Returns (response_text, narration, stated_rule). The rule is the agent's
-    current claim in a form a keeper can check; it is empty on chat runs, where
-    there is nothing to check it against.
+    Returns (response_text, narration, stated_rule, notes). The rule is the
+    agent's current claim in a form a keeper can check; it is empty on chat
+    runs, where there is nothing to check it against. The notes are the agent's
+    own memory in its own words, and are asked for only in notepad mode.
     """
 
     try:
@@ -687,7 +974,7 @@ def get_agent_response(prompt, agent_name, generation_vars, last_narration=''):
                 f"This is a simulated response from {agent_name}. "
                 f"In production, this would be generated by the AI model."
             )
-            return sim_response, "", ""
+            return sim_response, "", "", ""
 
         provider = generation_vars.get('provider', 'local')
         model = generation_vars.get('model')
@@ -704,6 +991,7 @@ def get_agent_response(prompt, agent_name, generation_vars, last_narration=''):
             'max_tokens': max_tokens,
             'top_p': top_p,
             'fallback_to_local': fallback_to_local,
+            'strict_provider': generation_vars.get('strict_provider', False),
             'offline_allowed': True
         }
 
@@ -723,6 +1011,17 @@ def get_agent_response(prompt, agent_name, generation_vars, last_narration=''):
                         speaker, content = parts[0].strip(), parts[1].strip()
                         role = "user" if speaker not in (agent_name,) else "assistant"
                         messages.append({"role": role, "content": content})
+                    elif messages[-1]["role"] != "system":
+                        # A colon-free line continues the previous message -
+                        # multi-line replies and narration. Dropping them also
+                        # dropped the '[N earlier message(s) are no longer
+                        # available]' notice, which silently turned the
+                        # documented honest window into a hidden one.
+                        messages[-1]["content"] += "\n" + line.strip()
+                    else:
+                        # Leading colon-free text (the elision notice) becomes
+                        # its own user-role note rather than vanishing.
+                        messages.append({"role": "user", "content": line.strip()})
 
                 prompt = messages
 
@@ -736,12 +1035,13 @@ def get_agent_response(prompt, agent_name, generation_vars, last_narration=''):
             agent_response = output.get('agent_response', raw)
             narration = output.get('narration', '')
             stated_rule = (output.get('rule') or '').strip()
+            notes = (output.get(NOTEPAD_FIELD) or '').strip()
 
             # Suppress narration if too similar to previous
             if narration and is_too_similar(narration, last_narration):
                 narration = ''
 
-            return agent_response, narration, stated_rule
+            return agent_response, narration, stated_rule, notes
 
         # Fallback: treat entire response as plain text.
         # Strip stray JSON wrapper artifacts the LLM sometimes leaves behind,
@@ -756,7 +1056,7 @@ def get_agent_response(prompt, agent_name, generation_vars, last_narration=''):
         else:
             # Just strip a trailing  "}  or  }  that leaked from JSON
             cleaned = re.sub(r'"\s*\}\s*$', '', cleaned)
-        return cleaned.strip(), "", ""
+        return cleaned.strip(), "", "", ""
 
     except Exception as e:
         logger.error(f"Error generating response: {str(e)}")
@@ -818,7 +1118,8 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
     )
     for runtime_key in ('fast_graph_run', 'judge_delay_seconds',
                         'graph_memory_mode', 'graph_recall_k',
-                        'graph_recall_chars', 'nogo_ungated',
+                        'graph_recall_chars', 'nogo_ungated', 'aim_fork_mode',
+                        'order_salt', 'task_variant', 'aim_system',
                         'context_window', 'run_type', 'keeper_rule', 'seed'):
         if runtime_key in settings:
             generation_vars[runtime_key] = settings[runtime_key]
@@ -854,6 +1155,10 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
     patience_max = int(tuning(generation_vars, 'patience_max',
                               agent.get('patience', 6)))
     last_narration = agent.get('last_narration', '')
+    # The agent's own notes, carried across turns on the agent rather than in
+    # the graph. This mode is the cheap alternative the graph has to beat, so
+    # it must not borrow the graph's machinery to work.
+    notepad = clean_text(agent.get('notepad'), '')
 
     # ------------------------------------------------------------------
     # Step 1: If no active aim, try graph-guided path first, then LLM
@@ -873,13 +1178,55 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
     generate_new_subgoal.last_nogo_statement = ''
     aim_source = 'carried'
 
-    if current_aim is None:
+    # aim_system 'off' is the ablation of the scaffold itself: no aim is ever
+    # selected, so nothing aim-shaped reaches the prompt, no judge reviews
+    # progress, and no verdict ever writes to the graph - the review block
+    # below already gates on current_aim, and the prompt builder already
+    # omits the aim line when there is none. The keeper, its status hints and
+    # the conversation are untouched, so an aims-off arm differs from an
+    # aims-on arm in exactly one thing: whether the agent is given a running
+    # goal at all. This is the control the original design never had.
+    if generation_vars.get('aim_system', 'on') == 'off':
+        current_aim = None
+    elif current_aim is None:
         # First: check if the graph already has a node close to our goal
-        # and a viable path to it
+        # and a viable path to it. Gated on memory mode exactly as choose_aim
+        # is: 'none' means the graph is recorded and never consulted, and this
+        # site consults it - it fires after every NoGo, and a NoGo-heavy run
+        # would have the "no graph" arm steering by stored aims while its
+        # contamination checks (which watch recall, not routing) stayed green.
         goal_text = agent['goal']
-        path_result = find_path_to_goal(G, current_node, goal_text)
+        path_result = None
+        if generation_vars.get('graph_memory_mode', 'description') != 'none':
+            path_result = find_path_to_goal(G, current_node, goal_text)
 
-        if path_result is not None:
+        # This is a route-or-invent decision too - it runs at the start of a
+        # run and after every abandoned aim - so whoever arbitrates the fork
+        # arbitrates here as well. Leaving it on the gate would have a large
+        # slice of aim selection behave identically in every arm, diluting the
+        # contrast the study exists to measure.
+        # choose_aim short-circuits mode 'none' before its fork runs; this
+        # site must match, or 'none' would mean two different things.
+        forked = (scratchpad_fork(G, current_node, goal_text, '', None,
+                                  path_result, notepad, generation_vars)
+                  if (fork_mode(generation_vars) != 'gate'
+                      and generation_vars.get('graph_memory_mode',
+                                              'description') != 'none')
+                  else None)
+        if forked is not None:
+            current_aim, forked_source, forked_hint = forked
+            # An aim it named itself is an invented one, whatever the fork
+            # calls it internally: at this site there is no judge proposal to
+            # carry, so 'carried' would be a third name for 'llm_subgoal'.
+            aim_source = ('graph_path' if forked_source == 'graph_path'
+                          else 'llm_subgoal')
+            suggestion = forked_hint or suggestion
+            persistence_count = 0
+            persistence_score = None
+            logs.append(f"Fork chose the opening aim for {agent_name} "
+                        f"({aim_source}): {current_aim}")
+            aim_came_from = aim_source
+        elif path_result is not None:
             path, target_node, similarity = path_result
             # The next node on the path becomes our aim
             next_step = path[1]  # path[0] is current_node
@@ -897,6 +1244,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                 f"Graph-guided aim for {agent_name}: '{current_aim}' "
                 f"(path to '{target_node}', similarity={similarity:.2f})"
             )
+            aim_came_from = aim_source
         else:
             # No useful path found – ask the LLM to generate a new aim
             new_subgoal, planned_action = generate_new_subgoal(
@@ -908,6 +1256,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
             persistence_count = 0
             persistence_score = None
             logs.append(f"New aim for {agent_name}: {current_aim}")
+            aim_came_from = aim_source
 
     # ------------------------------------------------------------------
     # What the graph put into this turn's prompt. Recorded rather than
@@ -921,6 +1270,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
     # agent is acting on an aim.
     ruled_out = ''
     graph_mode = generation_vars.get('graph_memory_mode', 'description')
+    recall_chars = int(generation_vars.get('graph_recall_chars', 600))
     # 'inline' deliberately retrieves nothing: the refutation was stated once,
     # in the conversation, and survives only as long as the window holds it.
     # That is the control for what persistent recall actually buys.
@@ -930,7 +1280,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
         ruled_out = GraphMemory(G, ruleset=agent.get('goal', 'default')).render(
             clean_text(current_aim) or clean_text(agent.get('goal'), ''),
             k=int(generation_vars.get('graph_recall_k', 4)),
-            max_chars=int(generation_vars.get('graph_recall_chars', 600)),
+            max_chars=recall_chars,
         )
     elif graph_mode == 'description':
         ruled_out = legacy_nogo_statement(G)
@@ -961,6 +1311,14 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
         if hint:
             suggestion = f"{suggestion} {hint}".strip() if suggestion else hint
 
+    # The scratchpad is written every turn and read at the fork, so the ask
+    # goes out every turn too. It sits alongside whatever the keeper already
+    # wants rather than displacing it: asked for by capability, not by task, so
+    # a keeper that needs a checkable claim still gets one.
+    rule_field = keeper.rule_prompt() if keeper else ''
+    if fork_mode(generation_vars) == 'scratchpad':
+        rule_field = f"{rule_field}\n{notepad_prompt(recall_chars)}".strip()
+
     prompt = format_prompt(
         history,
         agent['description'],
@@ -971,13 +1329,13 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
         suggestion=suggestion,
         last_narration=last_narration,
         ruled_out=ruled_out,
-        context_window=generation_vars.get('context_window', 0),
-        rule_field=(keeper.rule_prompt() if keeper else '')
+        context_window=effective_window(agent, generation_vars),
+        rule_field=rule_field
     )
 
     logger.info(f"Generating response for {agent_name}")
     try:
-        response_text, narration, stated_rule = get_agent_response(
+        response_text, narration, stated_rule, notes = get_agent_response(
             prompt, agent_name, generation_vars, last_narration
         )
     except AgentGenerationError as e:
@@ -996,6 +1354,17 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
         return history, agent_df, logs
 
     logs.append(f"Generated response for {agent_name}")
+
+    if fork_mode(generation_vars) == 'scratchpad':
+        # A turn that wrote nothing keeps the previous page rather than
+        # blanking it: a malformed reply should cost the agent the turn, not
+        # everything it had already worked out.
+        written = trim_notepad(notes, recall_chars)
+        if written:
+            notepad = written
+            logs.append(f"Scratchpad rewritten ({len(notepad)} chars)")
+        else:
+            logs.append("No notes this turn; the previous page stands")
 
     # Combine response with narration for display
     display_response = response_text
@@ -1018,9 +1387,11 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
         # contradicted by an observation is refuted as a matter of fact, so the
         # verdict is taken rather than asked for, and the edge carries proof
         # confidence instead of opinion.
+        holdout_accuracy = None
         if keeper and stated_rule:
             check = keeper.check_aim(stated_rule,
                                      keeper.observations_from(history))
+            holdout_accuracy = check.get('holdout_accuracy')
             if check.get('checkable') and check.get('consistent') is False:
                 contradiction = check.get('contradicted_by') or {}
                 aim_status, rating, verdict_src = 'abandon', 1, PROOF
@@ -1120,8 +1491,45 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                 'turn': _int(turn_index),
                 'agent': str(agent_name),
                 'aim': str(current_aim) if current_aim is not None else '',
-                'aim_source': str(aim_source),
-                'stated_rule': str(stated_rule or ''),
+                # Whether a decision was taken THIS turn, and what it chose;
+                # 'carried' where the aim simply persisted. The 'aim_source'
+                # column below is the origin of the aim being pursued, which
+                # survives across turns until something changes it.
+                #
+                # Both keys were once spelled 'aim_source' in this literal, so
+                # this one was silently dropped, and because only the
+                # post-verdict fork refreshed the survivor, a turn whose aim
+                # had just been chosen by Step 1 was stamped with the previous
+                # aim's label. In 654 recorded rows 'llm_subgoal' never once
+                # appeared, and 121 rows carried a label describing an aim
+                # already abandoned. Every aim-selection site now refreshes it,
+                # so the column finally means what its name says - at the cost
+                # of routed-aim counts no longer matching runs recorded before
+                # this, which were undercounting.
+                'aim_chosen_this_turn': str(aim_source),
+                # One column for the agent's structured self-report. Where the
+                # keeper asks for a checkable claim that is what lands here;
+                # where it asks for nothing - the clinical tasks, where this
+                # column has always been empty - the scratchpad does. Only one
+                # of the two is ever requested on a given run, so the column
+                # stays unambiguous without a second being invented for it.
+                'stated_rule': str(stated_rule or notepad or ''),
+                # Topped up by record_fork_cost when the fork runs after this
+                # row is appended; present here so the columns exist on every
+                # row rather than only on the rows that forked.
+                'fork_context_chars': 0,
+                'fork_outcome': '',
+                'fork_candidates': '',
+                'fork_has_path': '',
+                'fork_path_offered': '',
+                'fork_choice_kind': '',
+                # How the stated rule scores on unseen items, where the task
+                # has a holdout. The log line was the only place this landed,
+                # and on tasks with no completion condition it IS the outcome.
+                'holdout_accuracy': (holdout_accuracy
+                                     if holdout_accuracy is not None else ''),
+                'fork_path_sim': '',
+                'fork_choice': '',
                 'verdict_source': str(verdict_src),
                 'rating': _int(rating),
                 'aim_status': str(aim_status) if aim_status else '',
@@ -1180,8 +1588,9 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                 current_node = new_node
                 current_aim, aim_source, graph_hint, rejected = choose_aim(
                     G, current_node, agent['goal'], next_aim, generation_vars,
-                    trust=graph_trust)
+                    trust=graph_trust, notepad=notepad)
                 aim_came_from = aim_source
+                graph_contribution += record_fork_cost(trail, generation_vars)
                 suggestion = graph_hint or (new_suggestion if current_aim else '')
                 persistence_count = 0
                 persistence_score = None
@@ -1210,8 +1619,9 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                 current_node = new_node
                 current_aim, aim_source, graph_hint, rejected = choose_aim(
                     G, current_node, agent['goal'], next_aim, generation_vars,
-                    trust=graph_trust)
+                    trust=graph_trust, notepad=notepad)
                 aim_came_from = aim_source
+                graph_contribution += record_fork_cost(trail, generation_vars)
                 suggestion = graph_hint or new_suggestion
                 persistence_count = 0
                 persistence_score = None
@@ -1300,6 +1710,32 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                     persistence_count = 0
                     persistence_score = None
 
+    # The per-turn record lives inside the review block, which is skipped
+    # whenever there is no aim - correctly, except that an aims-off run then
+    # recorded nothing at all: no tokens, no turns, invisible to any study,
+    # and indistinguishable from a dead provider. A bare row keeps the
+    # accounting; every aim-shaped column stays empty because there is
+    # honestly nothing to put in it.
+    if (trail is not None
+            and generation_vars.get('aim_system', 'on') == 'off'):
+        trail.append({
+            'turn': int(turn_index),
+            'agent': str(agent_name),
+            'aim': '', 'aim_source': '', 'aim_chosen_this_turn': '',
+            'aim_status': '', 'stated_rule': str(stated_rule or ''),
+            'graph_memory_mode': str(generation_vars.get('graph_memory_mode',
+                                                         'description')),
+            'context_window': int(generation_vars.get('context_window', 0) or 0),
+            'history_len': int(len(history)),
+            'llm_calls': int(llm_service.usage()['calls']),
+            'input_tokens': int(llm_service.usage()['input_tokens']),
+            'output_tokens': int(llm_service.usage()['output_tokens']),
+            'tokens_estimated': int(llm_service.usage()['estimated']),
+            'graph_contribution_chars': 0,
+            'graph_nodes': int(G.number_of_nodes()),
+            'graph_edges': int(G.number_of_edges()),
+        })
+
     # ------------------------------------------------------------------
     # Step 4: Save updated state back to the DataFrame
     # ------------------------------------------------------------------
@@ -1316,6 +1752,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
     agent_df.at[agent_idx, 'current_node_location'] = current_node
     agent_df.at[agent_idx, 'last_response'] = response_text
     agent_df.at[agent_idx, 'last_narration'] = narration
+    agent_df.at[agent_idx, 'notepad'] = notepad
     agent_df.at[agent_idx, 'personal_history'] = history + [(agent_name, display_response)]
 
     # Add the response to the conversation history

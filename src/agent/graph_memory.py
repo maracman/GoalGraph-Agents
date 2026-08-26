@@ -392,6 +392,68 @@ class GraphMemory:
         }
 
 
+# ---------------------------------------------------------------------------
+# Scratchpad — the agent's own record of where the investigation stands
+# ---------------------------------------------------------------------------
+#
+# Not a rival to the graph: a surface for navigating it. The graph knows which
+# aims were reached and which were refuted, but nothing about it says where the
+# investigation *stands*, and that is what the route-or-invent fork needs in
+# order to choose a place to go next. So the agent keeps its own note and the
+# fork reads it, alongside the candidates the graph offers.
+#
+# Held to the same character budget as retrieval, so the two cost comparable
+# context, and the graph goes on recording exactly as it did.
+
+NOTEPAD_FIELD = 'notes'
+
+
+def notepad_prompt(max_chars=DEFAULT_RECALL_CHARS):
+    """The response field that asks the agent to keep its own running notes.
+
+    A key of its own rather than the keeper's "rule", so the two compose: on a
+    task where the keeper wants a checkable claim, the scratchpad sits beside
+    it instead of overwriting the claim and breaking the check. Where the
+    keeper asks for nothing — the clinical tasks — the notes are the only
+    structured field, and they land in the same `stated_rule` column a rule
+    would have.
+    """
+    return (f'- "{NOTEPAD_FIELD}": your running note of where this investigation '
+            f'stands. Rewrite it in full every turn, in at most {max_chars} '
+            f'characters — anything past that is cut. You will be shown this note '
+            f'when you next choose what to pursue, so record what you have '
+            f'established, what is still open, and what you have ruled out.')
+
+
+def trim_notepad(text, max_chars=DEFAULT_RECALL_CHARS):
+    """Hold the notes to the budget retrieval gets.
+
+    Line structure is left alone: "established / still open" is the shape that
+    makes a notepad worth keeping, and collapsing it to one line would throw
+    away the part being tested.
+    """
+    if text is None or isinstance(text, float):
+        # A page that round-trips through a DataFrame comes back as NaN when it
+        # was never written, and str(NaN) is the string 'nan' — which would be
+        # stored as the agent's memory and handed back to it as if it had
+        # written it. Same trap clean_text documents in agent.py.
+        return ''
+    if isinstance(text, (bytes, bytearray)):
+        text = text.decode('utf-8', 'ignore')
+    text = re.sub(r'[ \t]+', ' ', str(text)).strip()
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars - 1].rstrip() + '…'
+
+
+def render_notepad(text):
+    """The prompt fragment that carries the notes back to their author."""
+    text = (text or '').strip()
+    if not text:
+        return ''
+    return f"Where you left this investigation, in your own words:\n{text}\n\n"
+
+
 def legacy_nogo_statement(graph):
     """The original prompt fragment, for A/B against `GraphMemory.render`."""
     nogo = [v for _, v, a in graph.edges(data=True) if a.get('label') == NOGO]

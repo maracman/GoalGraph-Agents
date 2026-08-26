@@ -324,6 +324,56 @@ In `graph` mode, two extra sliders appear: **aims recalled per turn**
 default 600). The budget is a hard ceiling — aims past it are dropped and the
 agent is told how many were left out, so it knows the list is partial.
 
+### Who decides the next aim
+
+When an aim finishes, the agent either follows a route the graph already knows
+or invents a new aim. By default that fork is settled by one number: the
+route's similarity to the goal multiplied by `graph_trust`, against
+`route_min_score` (0.40).
+
+That product latches off. A failed route multiplies trust by `TRUST_DECAY`
+(0.6), so after one failure routing needs a similarity of 0.67 and after two it
+needs 1.1, which is unreachable — node-label-to-goal-brief similarity tops out
+near 0.46. The trust values in the recorded runs are exactly 0.6ⁿ, so this is
+observed rather than argued. `TRUST_FLOOR` is commented "never quite stop
+listening to the graph"; against a 0.40 gate it means the opposite.
+
+There is a deeper reason routing rarely fires, underneath the latch and
+independent of it. `find_path_to_goal` finds the node most similar to the goal
+and then demands a **directed path** to it. The graph accumulates as a
+near-tree — 54 nodes and 53 edges on a full eight-patient sequence — so a node
+is reachable only from its own ancestors. On that graph the nearest-goal node
+scores 0.515, comfortably above every threshold in the code, and a path to it
+exists from **6 of 53 nodes**. Trust at 1.0 and a good similarity still leave
+nine turns in ten with no route at all. The gate is not merely latched; most of
+the time it has nothing to offer.
+
+`aim_fork_mode` chooses who settles the fork:
+
+| mode | who decides | what it is for |
+|---|---|---|
+| `gate` | `similarity × trust ≥ route_min_score` | the shipped behaviour, and the control |
+| `judgement` | the agent, from the graph's candidates, with only the conversation | separates "let the agent decide" from "give it a memory" — without it, any gain could be the extra model call |
+| `scratchpad` | the agent, plus a running note it rewrites each turn | the note is capped by the same `graph_recall_chars` retrieval spends |
+
+Both arbitrated modes see the same candidates: the next step on a known path
+with its similarity when one exists, the aims already reached from here, and —
+because the first is usually absent — the most relevant live aims anywhere in
+the graph. Adopting an aim is not traversing an edge, and the path requirement
+is an artefact of modelling aims as a route rather than a set.
+
+`aim_source` is still recorded honestly — `graph_path` when the agent takes a
+place from the graph, `carried` when it invents one — and `fork_choice_kind`
+says which kind it took, so taking a genuine walkable path stays countable on
+its own and comparable with runs made before any of this existed. Trust is
+deliberately not shown to the agent: it is the artefact being removed, and
+naming it in the prompt would reintroduce the latch by another route. The fork
+costs one model call each time it fires; `fork_context_chars`, `fork_outcome`,
+`fork_candidates`, `fork_path_offered` and `fork_choice_kind` record what it
+read, what was on offer and what it did. If the call fails or the reply cannot
+be parsed, the fork falls back to the gate, so a failure costs a decision
+rather than the run.
+
 ### Context window
 
 `context_window` caps how many recent messages the agent, the judge, and the
@@ -373,12 +423,14 @@ exports them, one row per turn:
 ```
 session_id, run_label, provider, model, temperature, graph_memory_mode,
 graph_recall_k, graph_recall_chars, context_window, run_type, keeper_rule,
-nogo_ungated,
+nogo_ungated, aim_fork_mode, order_salt,
 turn, agent, aim, aim_source, rating, aim_status, next_aim, history_len,
 keeper_rule, keeper_move, keeper_verdict, llm_calls, input_tokens,
-output_tokens, tokens_estimated, stated_rule, verdict_source,
-persistence_count, graph_contribution_chars, graph_trust, graph_nodes,
-graph_edges, justification
+output_tokens, tokens_estimated, aim_chosen_this_turn, stated_rule,
+verdict_source, persistence_count, graph_contribution_chars,
+fork_context_chars, fork_outcome, fork_candidates, fork_has_path,
+fork_path_sim, fork_path_offered, fork_choice, fork_choice_kind,
+graph_trust, graph_nodes, graph_edges, justification
 ```
 
 Two columns carry most of the interpretive weight:
@@ -386,9 +438,32 @@ Two columns carry most of the interpretive weight:
 - **`verdict_source`** is `evidence` where a keeper settled the claim in code and
   `judge` where it is an LLM's opinion. It tells you how much of the graph is
   fact.
-- **`graph_contribution_chars`** is how many characters the graph actually put
-  into that turn's prompt. **If it is 0, the memory never engaged and the run is
+- **`graph_contribution_chars`** is how many characters the memory actually put
+  into that turn's prompt — the retrieved aims, plus whatever the aim fork read
+  on turns where it ran. **If it is 0, the memory never engaged and the run is
   not a test of anything.** Check it before believing any comparison.
+
+`stated_rule` holds whatever structured claim the agent was asked for: the
+keeper's checkable rule where there is one, and the scratchpad on the tasks
+where there is not. Only one of the two is ever requested on a given run, so the
+column stays unambiguous — but it means an empty `stated_rule` on a clinical
+task tells you the scratchpad was off, not that the agent said nothing.
+
+Two columns describe the aim, and they are not the same thing.
+`aim_chosen_this_turn` is what decided *this* turn's aim. `aim_source` is the
+source last set at the post-verdict fork, which persists across turns until the
+next verdict — so it does not see the Step-1 routing that happens when an aim
+has just been abandoned. Both were once spelled `aim_source` in the same dict
+literal, so the first was silently dropped for the whole history of the
+project; the older column keeps its meaning so prior results stay comparable.
+
+`fork_context_chars` and `fork_outcome` are non-empty only on the turns where
+the aim fork ran, and only when `aim_fork_mode` is not `gate`. `fork_outcome` is
+`graph_path` when the agent took a place from the graph, `carried` when it
+named its own, and `fell_through` when it could not decide and the trust gate
+settled it after all — which is worth reading before crediting the setting with
+a change, since a fork that always falls through is the old mechanism wearing a
+new name.
 
 `aim_source` says whether the graph or the judge supplied each aim.
 `keeper_verdict` is ground truth. Token counts cover every model call in the
