@@ -145,7 +145,7 @@ The viewer has a small explorer panel, top left:
 
 ### The turn loop
 
-Each time an agent takes a turn:
+With `aim_system` on, each time an agent takes a turn:
 
 1. **Pick an aim.** If the agent has no active aim, the system searches the
    graph for a known route toward its goal. If it finds one, the next node on
@@ -280,6 +280,12 @@ the graph does. They are in the UI rather than in code because a run is only
 interpretable if you can see how it was configured — and every one of them is
 written onto every row of the exported data.
 
+### Aim system
+
+`aim_system` turns the aim scaffold on or off. Off ablates the scaffold
+entirely: there is no aim, no judge review, and no graph writes. The keeper and
+the conversation are untouched.
+
 ### Task
 
 `chat` is ordinary conversation: no keeper, nothing checkable. The rest pair the
@@ -303,6 +309,10 @@ Each task offers a choice of **hidden rule**, listed in a second dropdown. The
 agent is never told it. It is what the keeper checks claims against, which is
 what makes a verdict a fact rather than an opinion.
 
+`task_variant` selects a named variation interpreted by the task's own module.
+The shipped `ddx` variant is `stateful_patient`: the patient keeps the full
+conversation regardless of the session window and never repeats an answer.
+
 Tasks and their rules are served from the Python side at `/api/run_types`, so a
 rule you add appears in the panel without rebuilding the frontend.
 
@@ -314,7 +324,7 @@ how you find out whether the graph earns its keep.
 
 | mode | UI label | what reaches the prompt | cost |
 |---|---|---|---|
-| `none` | Off | nothing. The graph is still recorded. | zero — the control arm |
+| `none` | Off | nothing. The graph is still recorded when `aim_system` is on. | zero — the control arm |
 | `inline` | Said once | the refutation is stated once, in the conversation, then left to scroll out of the window | one sentence, once |
 | `description` | Full list | every ruled-out aim, re-inserted every turn, no reasons and no filtering | grows with the graph — around 6,400 characters once 137 aims are ruled out |
 | `graph` | Retrieval | the nearest few ruled-out aims, each with the observation that killed it | fixed by the two limits below, not by graph size |
@@ -356,11 +366,23 @@ the time it has nothing to offer.
 | `judgement` | the agent, from the graph's candidates, with only the conversation | separates "let the agent decide" from "give it a memory" — without it, any gain could be the extra model call |
 | `scratchpad` | the agent, plus a running note it rewrites each turn | the note is capped by the same `graph_recall_chars` retrieval spends |
 
-Both arbitrated modes see the same candidates: the next step on a known path
-with its similarity when one exists, the aims already reached from here, and —
-because the first is usually absent — the most relevant live aims anywhere in
-the graph. Adopting an aim is not traversing an edge, and the path requirement
-is an artefact of modelling aims as a route rather than a set.
+Both arbitrated modes see candidates drawn from the same sources: the next step
+on a known path with its similarity when one exists, the aims already reached
+from here, and, because the first is usually absent, the most relevant live aims
+anywhere in the graph. Adopting an aim is not traversing an edge, and the path
+requirement is an artefact of modelling aims as a route rather than a set.
+
+`candidate_ranking` controls which candidates are offered and how they are
+described. `similarity` uses the ordinary candidates. `grooved` never offers
+`INHERITED` candidates below a similarity floor of 0.30, while nodes created by
+the current run are always offered. It annotates every candidate with its groove,
+meaning proven `Go` or `Progress` evidence with confidence weighted by visits,
+and its edge-distance to the goal-nearest node. These are annotations only; the
+ordering is unchanged.
+
+A keeper-verified advance automatically stamps its node with the move that
+proved it in `proof_move`. When an agent adopts such an aim, `aim_proof` keeps
+that proof in its prompt for as long as it holds the aim.
 
 `aim_source` is still recorded honestly — `graph_path` when the agent takes a
 place from the graph, `carried` when it invents one — and `fork_choice_kind`
@@ -376,11 +398,14 @@ rather than the run.
 
 ### Context window
 
-`context_window` caps how many recent messages the agent, the judge, and the
-subgoal planner may each see — one horizon shared by all three, so the graph is
-the only thing carrying information past it. Each component is told how many
-messages are hidden rather than left to assume it has everything. `0` means the
-whole conversation.
+`context_window` caps how many recent messages the judge and the subgoal planner
+may each see, and supplies the default window for each agent. Each component is
+told how many messages are hidden rather than left to assume it has everything.
+`0` means the whole conversation.
+
+An agent row may carry its own `context_window`, where `0` is unlimited. This
+overrides the session window for that agent's own prompt without changing the
+judge's, the planner's, or another agent's window.
 
 This is the setting that decides whether stored aims are worth anything. While
 the relevant history is still on screen, the agent can simply re-read what
@@ -396,6 +421,13 @@ judge can also abandon an aim on its first bad rating, which tends to collapse
 the graph into a hub of dead ends with no `Go` edges at all, because no aim
 survives long enough to progress. Regression and impatience always wait either
 way.
+
+### Move guard
+
+`move_guard` turns near-repeat checking on or off. When it is on and the keeper
+recognises a draft's move as a near-repeat of one already rejected, the draft is
+regenerated once with the refutation named. Fires are recorded per turn in
+`move_guard_fired`.
 
 ### Carrying a graph between runs
 
@@ -418,19 +450,28 @@ identical.
 ## Run data
 
 Every judged turn is recorded. **Decision Graph → Download this run as CSV**
-exports them, one row per turn:
+exports them, one row per turn.
+
+The per-run settings columns are:
 
 ```
 session_id, run_label, provider, model, temperature, graph_memory_mode,
-graph_recall_k, graph_recall_chars, context_window, run_type, keeper_rule,
-nogo_ungated, aim_fork_mode, order_salt,
+graph_recall_k, graph_recall_chars, context_window, run_type, task_variant,
+keeper_rule, nogo_ungated, aim_fork_mode, order_salt, aim_system,
+candidate_ranking, move_guard
+```
+
+The per-turn columns are:
+
+```
 turn, agent, aim, aim_source, rating, aim_status, next_aim, history_len,
-keeper_rule, keeper_move, keeper_verdict, llm_calls, input_tokens,
-output_tokens, tokens_estimated, aim_chosen_this_turn, stated_rule,
-verdict_source, persistence_count, graph_contribution_chars,
-fork_context_chars, fork_outcome, fork_candidates, fork_has_path,
-fork_path_sim, fork_path_offered, fork_choice, fork_choice_kind,
-graph_trust, graph_nodes, graph_edges, justification
+keeper_move, keeper_verdict, llm_calls, input_tokens, output_tokens,
+tokens_estimated, aim_chosen_this_turn, stated_rule, verdict_source,
+persistence_count, graph_contribution_chars, fork_context_chars,
+fork_outcome, fork_candidates, fork_has_path, fork_path_sim,
+fork_path_offered, fork_choice, fork_choice_kind, fork_choice_hops,
+fork_choice_groove, move_guard_fired, holdout_accuracy, graph_trust,
+graph_nodes, graph_edges, justification
 ```
 
 Two columns carry most of the interpretive weight:
@@ -486,7 +527,8 @@ alone.
 ### Conversation modes
 
 **You + Agent** — you talk to one agent directly. It responds in character while
-pursuing its goal; the aim system, judge, and graph all run behind the scenes.
+pursuing its goal; when `aim_system` is on, the aim system, judge, and graph all
+run behind the scenes.
 
 **Agent vs Agent** — two or more agents talk to each other and you act as
 narrator, setting the scene. Each pursues its own goal with its own graph, which
@@ -515,6 +557,7 @@ Reusable agent presets:
 | Goal | what the agent is trying to achieve |
 | Target Impression | how it wants to be perceived |
 | LLM Provider / Model | which model this agent runs on |
+| Context Window | recent messages available to this agent's own prompt; `0` is unlimited |
 | Persistence / Patience | how quickly it abandons or completes aims |
 
 Setting a provider and model on a preset flips its
@@ -557,10 +600,14 @@ in them was checked against a keeper.
 | HuggingFace | Mistral 7B Instruct | `HUGGINGFACE_API_KEY` |
 | Local | any GGUF model via `llama_cpp` | local file path |
 
+`judge_provider` and `judge_model` run the judge, planner, and fork arbiter on a
+different model from the acting agent.
+
 If the chosen provider fails, the system falls back in order:
 openai-codex → openai → anthropic → cohere → local. Rate limits (429) retry with
 exponential backoff — 2s, 4s, 8s, 16s — honouring `Retry-After` when the
-provider sends it.
+provider sends it. With `strict_provider` on, a provider failure fails the run
+instead of silently falling back to another provider.
 
 Generation parameters, settable per session or per agent: `temperature`,
 `max_tokens`, `top_p`, `top_k`, `repetition_penalty`, `seed`, `use_gpu`.
@@ -761,7 +808,7 @@ run. Then export the CSV.
 | method | route | description |
 |---|---|---|
 | GET | `/api/run_types` | tasks this build offers, and each one's hidden rules |
-| POST | `/update_user_settings` | task, rule, memory mode, window, gating, run label |
+| POST | `/update_user_settings` | task, rule, variant, aim system, memory mode, candidate ranking, move guard, window, gating, run label |
 | POST | `/reset_run_trail` | clear recorded turns — marks a boundary between arms |
 | GET | `/export_run_data` | the CSV; `?format=json` for the same rows as JSON |
 | GET | `/get_llm_providers` · `/get_llm_models?provider=X` | what is available |
@@ -776,6 +823,8 @@ run. Then export the CSV.
 
 The README describes the software. The research built with it lives elsewhere:
 
+- **[docs/DEMONSTRATION.md](docs/DEMONSTRATION.md)** — what the software does,
+  measured, with the script that reproduces each demonstration.
 - **[docs/TOY_RESEARCH_PROJECT.md](docs/TOY_RESEARCH_PROJECT.md)** — a worked
   example, start to finish: an agent that interviews and remembers what it ruled
   out.
