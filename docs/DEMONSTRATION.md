@@ -9,7 +9,7 @@ job is to make a proven path cheaper to take than to rediscover.
 
 Everything below was measured on the shipped code, with a small open model
 (llama-3.2-3B) acting and gpt-5.4 judging, on the hidden-rules sentence task
-(`constraints`). Each demonstration names the script that reproduces it.
+(`constraints`). Each demonstration names the script that reproduces it. The hands-on tour of driving the software lives in docs/WALKTHROUGH.md, while this document presents the measurements.
 
 ---
 

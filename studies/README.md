@@ -20,7 +20,7 @@ panel ever disagree, the script is wrong.
 Start the app first, then:
 
 ```bash
-# the headline comparison
+# memory modes across context windows
 python3 studies/constraints_study.py --level four_constraints \
         --reps 5 --windows 4 --modes none inline graph --max-calls 24
 
@@ -41,5 +41,6 @@ Results are written to `studies/results/`, one row per run, with the settings
 that produced it repeated on every row so files from different arms concatenate
 and group without reshaping.
 
-See [../docs/TOY_RESEARCH_PROJECT.md](../docs/TOY_RESEARCH_PROJECT.md) for what
-the numbers mean and what they do not.
+See [../docs/DEMONSTRATION.md](../docs/DEMONSTRATION.md) for what the numbers
+mean, and [../docs/WALKTHROUGH.md](../docs/WALKTHROUGH.md) for driving the
+same machinery by hand.

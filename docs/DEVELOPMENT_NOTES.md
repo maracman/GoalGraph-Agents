@@ -1,7 +1,7 @@
 # Development notes
 
 Working notes from building the example in
-[TOY_RESEARCH_PROJECT.md](TOY_RESEARCH_PROJECT.md): the task designs that did
+[WALKTHROUGH.md](WALKTHROUGH.md): the task designs that did
 not work, a regression that took a while to spot, and four occasions where the
 measuring tools produced a number that looked like a finding.
 

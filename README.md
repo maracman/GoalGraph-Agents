@@ -859,7 +859,7 @@ The README describes the software. The research built with it lives elsewhere:
 
 - **[docs/DEMONSTRATION.md](docs/DEMONSTRATION.md)**: what the software does,
   measured, with the script that reproduces each demonstration.
-- **[docs/TOY_RESEARCH_PROJECT.md](docs/TOY_RESEARCH_PROJECT.md)**: a worked
+- **[docs/WALKTHROUGH.md](docs/WALKTHROUGH.md)**: a worked
   example, start to finish: an agent that interviews and remembers what it ruled
   out.
 - **[docs/DEVELOPMENT_NOTES.md](docs/DEVELOPMENT_NOTES.md)**: the task designs
