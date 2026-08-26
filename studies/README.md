@@ -34,8 +34,8 @@ GOALGRAPH_BASE=http://localhost:5055 \
 
 The ddx and constraints studies read `GOALGRAPH_BASE` rather than hardcoding
 `:5000`, so they can be pointed at a second app instance and cannot collide
-with whatever is running on the usual port. Findings from the August 2026
-series are written up in `docs/FINDINGS.md`.
+with whatever is running on the usual port. The capabilities these scripts demonstrate are written up in
+`docs/DEMONSTRATION.md`.
 
 Results are written to `studies/results/`, one row per run, with the settings
 that produced it repeated on every row so files from different arms concatenate
