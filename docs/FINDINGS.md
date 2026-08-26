@@ -7,13 +7,15 @@ were refuted, and its job is to **remove friction along a path to a goal that
 has been proven before** — so an agent does not re-derive, re-litigate, or
 loop its way toward something a previous run already worked out.
 
-Ten study series (≈480 scored runs, all pre-registered, all with engagement
-tripwires) tested it both as what it is and as what it is not. The one-line
+Thirteen study series (≈600 scored runs, all pre-registered, all with
+engagement tripwires) tested it both as what it is and as what it is not. The one-line
 summary:
 
 > As a memory store it does not beat the agent's own prose **for the cases we
 > built**. As a goal scaffold it is heavily used by every model we tested,
-> and for weak models it is the difference between looping and functioning.
+> and for weak models it is the difference between looping and functioning —
+> and a graph paved by a strong agent measurably lifts a floored weaker one
+> it is handed to: the payload that transfers is the proven **template**.
 
 ---
 
@@ -125,6 +127,36 @@ different task entirely (placebo).
   metrics are where the effects live. A blinded coherence comparison on
   open-ended roleplay would test the original claim on its own terms.
 
+## 4b. The existence proof: proven paths pay where they are necessary
+
+"If the task expects proven options to help, the architecture should be able
+to achieve this." Built and tested: five_constraints floors the 3B absolutely
+- across every fresh arm ever run, 0/35 solves and roughly one accepted
+sentence per seven hundred turns - while gpt-5.4 solves it and paves a donor
+graph whose PROOF-verified nodes now carry the move that proved them (the
+accepted sentence itself).
+
+Getting the proof to the rider took one diagnosed iteration: delivered
+through the fork's hint it landed in `suggestion`, which the judge rewrites
+every turn - measured, the proofs reached the actor about once per run while
+it sat on proof-carrying aims for hundreds of turns. The fix: **the proof
+rides the aim**, the one channel that persists every turn the aim does.
+
+Two exploratory rounds then converged on an unregistered mechanism: donor
+graphs transmit the winning TEMPLATE - every solved donor run used the
+donor's sentence shape, including arms whose nodes carried no proof
+sentences, because the aim texts describe the recipe in words. The system
+also stamps and rides its own in-run proofs: agents were observed carrying
+sentences they had just had accepted forward on their own aims.
+
+The pre-registered confirmatory (fresh vs donor, n=20/19, primary at the
+right grain): distinct accepted sentences per run **0.80 vs 0.00,
+tie-corrected Mann-Whitney z = 3.03**; 18 of 19 accepted sentences matched
+the donor template family (mechanism receipt defined ex ante); solve 3/20 vs
+0/19 (directional only - execution reliability, not knowledge, caps
+conversion for a 3B). A donor goal-graph lifts a completely floored rider
+into producing rule-satisfying answers it never once produced alone.
+
 ## 5. Making the groove explicit: five mechanisms tested, one lesson
 
 The "deeper groove / easier path" intuition was implemented five ways and
@@ -171,5 +203,6 @@ from before them undercount routing and are not comparable.
 Full data: `studies/results/v3_fork_w3.json`, `v3_gradient.json`,
 `v3_constraints_w3.json`, `v3_weak_w3.json`, `v3_scaffold_w24.json`,
 `v3_transfer_two.json`, `v3_grooved.json`, `v3_grooved2.json`,
-`v3_guard.json`, `v3_replicate.json`. Study scripts under `studies/`, each
-with its design and pre-registration in the docstring.
+`v3_guard.json`, `v3_replicate.json`, `v3_concrete.json`,
+`v3_concrete_v2.json`, `v3_floorlift.json`. Study scripts under `studies/`,
+each with its design and pre-registration in the docstring.
