@@ -14,13 +14,17 @@ told which approaches have already been ruled out. Graphs can be saved, merged,
 and loaded into a different agent, so what one run learned is available to the
 next.
 
+GoalGraph has been in development since 2023. It was built in the Llama-2 era
+to stop local agents losing their goals and looping, moved to this repository
+in March 2025, and produced the measured demonstrations in
+docs/DEMONSTRATION.md in August 2026.
+
 There are two ways to use it:
 
 - **As a chat app.** Two or more agents talk, each pursuing its own goal, and
   you watch the strategy map build up.
-- **As an instrument.** Swap the human counterparty for a **keeper** — code
-  holding a hidden rule — and the agent's claims can be *checked* rather than
-  rated. Verdicts become facts, and every turn exports as a row of CSV.
+- **As an instrument.** Swap the human counterparty for a **keeper**, code holding a hidden rule, and
+the agent's claims can be *checked* rather than rated. Verdicts become facts, and every turn exports as a row of CSV.
 
 ---
 
@@ -151,9 +155,9 @@ A proven refutation should not look like a hunch, so it doesn't.
 Depth only increases on a `Go` or a `Progress`. So the shape of a graph is
 informative before you read a single label:
 
-- **A route** — chains of green and blue running outward from `start` — means
-  the agent kept advancing.
-- **A star** — one hub with nothing but orange spokes — means it never advanced.
+- **A route**, chains of green and blue running outward from `start`, means the
+  agent kept advancing.
+- **A star**, one hub with nothing but orange spokes, means it never advanced.
   It re-derived dead ends until its turns ran out.
 
 ### Getting around a large graph
@@ -382,9 +386,8 @@ listening to the graph"; against a 0.40 gate it means the opposite.
 
 There is a deeper reason routing rarely fires, underneath the latch and
 independent of it. `find_path_to_goal` finds the node most similar to the goal
-and then demands a **directed path** to it. The graph accumulates as a
-near-tree — 54 nodes and 53 edges on a full eight-patient sequence — so a node
-is reachable only from its own ancestors. On that graph the nearest-goal node
+and then demands a **directed path** to it. The graph accumulates as a near-tree, 54 nodes and 53 edges on a full eight-
+patient sequence, so a node is reachable only from its own ancestors. On that graph the nearest-goal node
 scores 0.515, comfortably above every threshold in the code, and a path to it
 exists from **6 of 53 nodes**. Trust at 1.0 and a good similarity still leave
 nine turns in ten with no route at all. The gate is not merely latched; most of
@@ -416,8 +419,8 @@ A keeper-verified advance automatically stamps its node with the move that
 proved it in `proof_move`. When an agent adopts such an aim, `aim_proof` keeps
 that proof in its prompt for as long as it holds the aim.
 
-`aim_source` is still recorded honestly — `graph_path` when the agent takes a
-place from the graph, `carried` when it invents one — and `fork_choice_kind`
+`aim_source` is still recorded honestly: `graph_path` when the agent takes a
+place from the graph, `carried` when it invents one; and `fork_choice_kind`
 says which kind it took, so taking a genuine walkable path stays countable on
 its own and comparable with runs made before any of this existed. Trust is
 deliberately not shown to the agent: it is the artefact being removed, and
@@ -539,9 +542,9 @@ a change, since a fork that always falls through is the old mechanism wearing a
 new name.
 
 `aim_source` says whether the graph or the judge supplied each aim.
-`keeper_verdict` is ground truth. Token counts cover every model call in the
-pipeline — agent, judge, and planner — because they are recorded at the single
-point all three pass through.
+`keeper_verdict` is ground truth. Token counts cover every model call in the pipeline, including agent, judge,
+and planner, because they are recorded at the single point all three pass
+through.
 
 The settings are repeated on **every row** rather than written once in a header,
 so exports from runs under different settings can be concatenated into one file
@@ -636,9 +639,8 @@ in them was checked against a keeper.
 different model from the acting agent.
 
 If the chosen provider fails, the system falls back in order:
-openai-codex → openai → anthropic → cohere → local. Rate limits (429) retry with
-exponential backoff — 2s, 4s, 8s, 16s — honouring `Retry-After` when the
-provider sends it. With `strict_provider` on, a provider failure fails the run
+openai-codex → openai → anthropic → cohere → local. Rate limits (429) retry with exponential backoff: 2s, 4s, 8s, 16s, honouring
+`Retry-After` when the provider sends it. With `strict_provider` on, a provider failure fails the run
 instead of silently falling back to another provider.
 
 Generation parameters, settable per session or per agent: `temperature`,
@@ -647,7 +649,7 @@ Generation parameters, settable per session or per agent: `temperature`,
 ### Sessions
 
 Create, duplicate, rename, reset, and delete sessions from the sidebar; load any
-past chat. Each session is a file — `{session_id}_state.json` in `chat_cache/` —
+past chat. Each session is a file (`{session_id}_state.json` in `chat_cache/`)
 holding the full history, agent states, graph paths, and configuration, which
 makes a session portable and inspectable without the app running.
 
