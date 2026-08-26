@@ -97,8 +97,14 @@ class LLMService:
             u = self._usage
         u['calls'] += 1
         if reported:
-            u['input_tokens'] += int(reported.get('input_tokens', 0) or 0)
-            u['output_tokens'] += int(reported.get('output_tokens', 0) or 0)
+            # Codex reports input_tokens/output_tokens; the OpenAI chat format
+            # (and every OpenAI-compatible host) reports prompt_tokens/
+            # completion_tokens. Reading only the first zeroed the counters on
+            # the second - a truthy usage dict means the estimator never runs.
+            u['input_tokens'] += int(reported.get('input_tokens')
+                                     or reported.get('prompt_tokens') or 0)
+            u['output_tokens'] += int(reported.get('output_tokens')
+                                      or reported.get('completion_tokens') or 0)
         else:
             # No usage reported by the provider. Roughly four characters to a
             # token; flagged so an estimate is never mistaken for a count.
@@ -113,6 +119,14 @@ class LLMService:
         self.config = {**DEFAULT_CONFIG, **(config or {})}
         self.api_keys = {}
         self.base_urls = dict(PROVIDER_BASE_URLS)  # copy defaults
+        # Any provider's endpoint is overridable from the environment, so an
+        # OpenAI-compatible host (OpenRouter, Groq, Together) can stand in for
+        # 'openai' without a code change: OPENAI_BASE_URL=https://... The value
+        # is the full completions URL, matching what get_base_url returns.
+        for _prov in ('openai', 'anthropic', 'cohere', 'huggingface'):
+            _env = os.environ.get(f'{_prov.upper()}_BASE_URL')
+            if _env:
+                self.base_urls[_prov] = _env
         self.provider = self.config['provider']
         self.local_model_path = None
         self.local_model_filename = None
@@ -239,6 +253,15 @@ class LLMService:
             return self.complete_with_api(prompt, options)
         except Exception as e:
             logger.error(f"Error with provider {provider}: {str(e)}")
+            # A comparison between models is only a comparison if each arm
+            # actually ran on its model. strict_provider turns the silent
+            # cross-provider rescue into a visible failure: better a lost run,
+            # retried on resume, than a frontier model quietly answering for
+            # the small one.
+            if options.get('strict_provider'):
+                raise Exception(
+                    f"Provider {provider} failed and strict_provider is set: "
+                    f"{str(e)}")
             if self.config['fallback_enabled']:
                 alternative_providers = ['openai-codex', 'openai', 'anthropic', 'cohere']
                 for alt_provider in alternative_providers:
