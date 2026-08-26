@@ -974,6 +974,26 @@ class Keeper:
                 out.append((move, verdict))
         return out
 
+    def known_bad_move(self, message, history):
+        """A move in this message that the record already refuted, or None.
+
+        The graph and transcript both know which moves failed; nothing acted
+        on that knowledge before the move was spent. This is the groove as a
+        guard-rail: where the task can recognise a re-tread of refuted ground
+        deterministically, it names the offending move so the caller can ask
+        for a different one BEFORE the turn is wasted. Tasks without a crisp
+        notion of a repeated move return None and nothing changes.
+        """
+        if self.run_type == CONSTRAINTS:
+            move = self.extract_move(message)
+            if not move:
+                return None
+            _accepted, rejected = self.attempts_from(history)
+            if rejected and CR.is_repeat(move, rejected):
+                return move
+            return None
+        return None
+
     def rule_prompt(self):
         """What to ask the agent for, so its claim can be checked."""
         if self.run_type == RULE_INDUCTION:

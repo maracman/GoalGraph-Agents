@@ -2539,6 +2539,10 @@ def update_user_settings():
         if aims in ('on', 'off'):
             session['state']['settings']['aim_system'] = aims
 
+        ranking = request.form.get('candidate_ranking')
+        if ranking in ('similarity', 'grooved'):
+            session['state']['settings']['candidate_ranking'] = ranking
+
         fork = request.form.get('aim_fork_mode')
         if fork in ('gate', 'judgement', 'scratchpad'):
             session['state']['settings']['aim_fork_mode'] = fork
@@ -2579,7 +2583,7 @@ def update_user_settings():
                     session['state']['settings'][knob] = float(raw)
                 except ValueError:
                     flask_logger.warning(f"Invalid value for {knob}: {raw}")
-        for flag in ('nogo_ungated', 'go_corroborate'):
+        for flag in ('nogo_ungated', 'go_corroborate', 'move_guard'):
             value = request.form.get(flag)
             if value is not None:
                 session['state']['settings'][flag] = value.lower() == 'true'
@@ -3044,6 +3048,8 @@ def export_run_data():
             'aim_fork_mode': settings.get('aim_fork_mode', 'gate'),
             'task_variant': settings.get('task_variant', ''),
             'aim_system': settings.get('aim_system', 'on'),
+            'candidate_ranking': settings.get('candidate_ranking', 'similarity'),
+            'move_guard': settings.get('move_guard', False),
             'order_salt': settings.get('order_salt', ''),
             # The order the candidates were listed in for this run, and where
             # the true answer sat in it. Recorded rather than recomputed so a
@@ -3070,6 +3076,8 @@ def export_run_data():
                         'fork_context_chars', 'fork_outcome',
                         'fork_candidates', 'fork_has_path', 'fork_path_sim',
                         'fork_path_offered', 'fork_choice', 'fork_choice_kind',
+                        'fork_choice_hops', 'fork_choice_groove',
+                        'move_guard_fired',
                         'holdout_accuracy',
                         'graph_trust', 'graph_nodes', 'graph_edges',
                         'justification']
@@ -3419,6 +3427,15 @@ def load_saved_graph_into_agent(graph_id, agent_id):
             mem = GraphMemory(G, ruleset=data.get('ruleset', 'imported'))
             unverified = mem.mark_unverified(data.get('ruleset', 'imported'))
             G = mem.G
+
+        # Everything arriving through a transfer is stamped as inherited, so
+        # downstream ranking can tell foreign content from nodes the receiving
+        # run creates itself. The distinction matters: a similarity floor that
+        # cannot see provenance filtered the agent's own young nodes along
+        # with the junk, and starved the self-paving loop it was protecting.
+        for n in G.nodes:
+            if str(n) != 'start':
+                G.nodes[n]['origin'] = 'inherited'
 
         nx.write_graphml(G, dest)
         return jsonify({

@@ -19,6 +19,7 @@ from .graph_memory import (GraphMemory, legacy_nogo_statement, NOTEPAD_FIELD,
                            verdict_confidence, NOGO, PROOF, OPINION)
 from .graph_intelligence import (
     find_path_to_goal,
+    find_nearest_goal_node,
     import_graph,
     combine_graphs,
     link_similar_nodes
@@ -326,8 +327,54 @@ def tuning(generation_vars, name, default):
         return default
 
 
+def groove_depth(graph, node):
+    """How well-worn this aim is: proven advances, weighted by evidence.
+
+    Go and Progress edges deepen the groove in proportion to their running
+    confidence and how often they were walked (log-damped, matching
+    update_graph's diminishing steps); NoGo edges cut against it. This is the
+    same evidence prune_for_transfer ranks by - one notion of "worth keeping"
+    doubling as "worth offering".
+    """
+    import math
+    score = 0.0
+    for _u, _v, e in list(graph.in_edges(node, data=True)) + \
+            list(graph.out_edges(node, data=True)):
+        sign = {'Go': 1.0, 'Progress': 0.6, 'NoGo': -0.5}.get(e.get('label'), 0.0)
+        try:
+            w = float(e.get('weight') or 0.0)
+        except (TypeError, ValueError):
+            w = 0.0
+        visits = int(e.get('visits') or 1)
+        score += sign * w * math.log1p(visits)
+    return round(score, 2)
+
+
+def goal_hops(graph, goal_text):
+    """Edge-distance from every node to the goal-nearest node, or {}.
+
+    Undirected on purpose: the graph accumulates as a near-tree, so a
+    directed path to the goal-like node exists from about one node in nine,
+    while undirected hops are defined for nearly every pair. Adopting an aim
+    is not traversing an edge - what the count carries is how close an aim
+    sits to the goal region in the graph's own experience, not whether it is
+    walkable from here.
+    """
+    result = find_nearest_goal_node(graph, goal_text)
+    if result is None:
+        return {}, None
+    goal_node, _sim = result
+    try:
+        hops = nx.single_source_shortest_path_length(
+            graph.to_undirected(as_view=True), goal_node)
+    except Exception:                                              # noqa: BLE001
+        return {}, goal_node
+    return hops, goal_node
+
+
 def route_candidates(graph, current_node, path_result, current_aim='',
-                     ruleset='default', k=4, limit=6):
+                     ruleset='default', k=4, limit=6, goal_text='',
+                     ranking='similarity'):
     """The places on the graph worth going next from here.
 
     Three sources, because one of them is nearly always empty. Measured on the
@@ -374,10 +421,24 @@ def route_candidates(graph, current_node, path_result, current_aim='',
         mem = GraphMemory(graph, ruleset=ruleset)
         live = tuple(s for s in {d.get('status') for _, d in graph.nodes(data=True)}
                      if s and s != NOGO)
+        # Under 'grooved' ranking, dissimilar INHERITED candidates are cut
+        # rather than offered. Top-k with no floor is how a clinical graph got
+        # its aims adopted into a sentence game: the least-dissimilar wrong
+        # things were still the k things on the list, and the arbiter trusted
+        # the list. The floor checks provenance because its first version did
+        # not: it filtered the agent's own young nodes along with the junk -
+        # own-run nodes start with thin similarity too - and the guard arm's
+        # solve rate paid for it. Foreign content earns its place; the run's
+        # own work is always on the table. 0.30 matches
+        # find_nearest_goal_node's own floor.
+        floor = 0.30 if ranking == 'grooved' else None
         if live:
             for node, data, score in mem.recall(current_aim, k=k + len(seen),
                                                 statuses=live):
                 if node in seen or str(node).endswith('_NoGo'):
+                    continue
+                if (floor is not None and float(score) < floor
+                        and data.get('origin') == 'inherited'):
                     continue
                 out.append({'node': node, 'kind': 'similar',
                             'similarity': round(float(score), 2),
@@ -387,6 +448,29 @@ def route_candidates(graph, current_node, path_result, current_aim='',
                 seen.add(node)
                 if len(out) >= limit:
                     break
+
+    if ranking == 'grooved' and out:
+        # The groove and the goal-distance are ANNOTATIONS, not sort keys.
+        # The first version ordered nearest-the-goal-first, and on a young
+        # self-paved graph everything is one hop from everything - the
+        # ordering made the agent's own first ideas look authoritative, the
+        # fork re-took them at twice the rate, and the guard arm's solve rate
+        # halved. The groove became a rut. Evidence goes to the arbiter;
+        # the list keeps its structural order (path, neighbours, similar).
+        hops, _goal_node = goal_hops(graph, goal_text or current_aim)
+        for c in out:
+            c['groove'] = groove_depth(graph, c['node'])
+            c['hops'] = hops.get(c['node'])
+            bits = []
+            if c['hops'] is not None:
+                bits.append(f"{c['hops']} edge{'s' if c['hops'] != 1 else ''} "
+                            f"from the goal area")
+            if c['groove'] > 0:
+                bits.append(f"well-worn (groove {c['groove']})")
+            elif c['groove'] < 0:
+                bits.append(f"mostly dead ends nearby (groove {c['groove']})")
+            if bits:
+                c['why'] = f"{c['why']}; {', '.join(bits)}"
     return out[:limit]
 
 
@@ -422,7 +506,9 @@ def scratchpad_fork(graph, current_node, goal_text, proposed, rejected,
         graph, current_node, path_result,
         current_aim=(proposed or goal_text),
         ruleset=generation_vars.get('_ruleset', 'default'),
-        k=int(generation_vars.get('graph_recall_k', 4)))
+        k=int(generation_vars.get('graph_recall_k', 4)),
+        goal_text=goal_text,
+        ranking=generation_vars.get('candidate_ranking', 'similarity'))
     notepad = (notepad or '').strip()
     # Both arbitrated arms fork under identical conditions - candidates exist.
     # Letting the scratchpad arm also fork on an empty candidate list would
@@ -492,6 +578,8 @@ pursue instead, required when choice is 0>", "why": "<one sentence>"}}"""
     if 1 <= choice <= len(candidates):
         picked = candidates[choice - 1]
         scratchpad_fork.last_stats['fork_choice_kind'] = picked['kind']
+        scratchpad_fork.last_stats['fork_choice_hops'] = picked.get('hops', '')
+        scratchpad_fork.last_stats['fork_choice_groove'] = picked.get('groove', '')
         scratchpad_fork.last_outcome = 'graph_path'
         return (picked['node'], 'graph_path',
                 f"Taken from the record: {picked['why']}. {why}".strip())
@@ -1120,6 +1208,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                         'graph_memory_mode', 'graph_recall_k',
                         'graph_recall_chars', 'nogo_ungated', 'aim_fork_mode',
                         'order_salt', 'task_variant', 'aim_system',
+                        'candidate_ranking', 'move_guard',
                         'context_window', 'run_type', 'keeper_rule', 'seed'):
         if runtime_key in settings:
             generation_vars[runtime_key] = settings[runtime_key]
@@ -1169,6 +1258,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
     if trail is not None:
         llm_service.reset_usage()
     verdict_src = OPINION   # upgraded to PROOF when a keeper settles it
+    move_guard_fired = 0
     stated_rule = ''
     inline_notes = []   # refutations spoken once into the conversation
     guided_path = None  # Will hold the path if graph search finds one
@@ -1338,6 +1428,30 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
         response_text, narration, stated_rule, notes = get_agent_response(
             prompt, agent_name, generation_vars, last_narration
         )
+        # The groove as a guard-rail: where the keeper can recognise a
+        # re-tread of already-refuted ground deterministically, the draft is
+        # sent back ONCE with the offending move named, before the turn is
+        # spent. One retry, not a loop: an agent that re-treads twice in a
+        # row keeps its second answer, and the failure stays visible in the
+        # record rather than being laundered by endless regeneration.
+        if (generation_vars.get('move_guard')
+                and keeper and hasattr(keeper, 'known_bad_move')):
+            try:
+                bad = keeper.known_bad_move(response_text, history)
+            except Exception:                                      # noqa: BLE001
+                bad = None
+            if bad:
+                logs.append(f"Move guard: draft re-trod refuted ground "
+                            f"('{str(bad)[:50]}'); regenerating once")
+                guard_note = (
+                    f"\n\nIMPORTANT: your draft proposed \"{bad}\", which was "
+                    f"already tried and rejected in this conversation. Do not "
+                    f"propose it or a near-rewording again. Propose something "
+                    f"substantially different.")
+                response_text, narration, stated_rule, notes = get_agent_response(
+                    prompt + guard_note, agent_name, generation_vars,
+                    last_narration)
+                move_guard_fired = 1
     except AgentGenerationError as e:
         logger.error(str(e))
         logs.append(str(e))
@@ -1523,6 +1637,9 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                 'fork_has_path': '',
                 'fork_path_offered': '',
                 'fork_choice_kind': '',
+                'fork_choice_hops': '',
+                'fork_choice_groove': '',
+                'move_guard_fired': int(move_guard_fired),
                 # How the stated rule scores on unseen items, where the task
                 # has a holdout. The log line was the only place this landed,
                 # and on tasks with no completion condition it IS the outcome.
@@ -1732,6 +1849,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
             'output_tokens': int(llm_service.usage()['output_tokens']),
             'tokens_estimated': int(llm_service.usage()['estimated']),
             'graph_contribution_chars': 0,
+            'move_guard_fired': int(move_guard_fired),
             'graph_nodes': int(G.number_of_nodes()),
             'graph_edges': int(G.number_of_edges()),
         })

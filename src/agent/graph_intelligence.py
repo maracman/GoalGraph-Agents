@@ -296,11 +296,29 @@ def import_graph(
         new_v = _rename(v)
 
         if target.has_edge(new_u, new_v):
-            # Edge already exists – keep the one with lower weight (fewer attempts)
-            existing_weight = target[new_u][new_v].get('weight', float('inf'))
-            new_weight = data.get('weight', float('inf'))
-            if new_weight < existing_weight:
-                target[new_u][new_v].update(data)
+            # Both graphs walked this edge, so the merged edge should carry
+            # BOTH bodies of evidence: visits sum, and the weight becomes the
+            # visits-weighted average of the two estimates. The old rule kept
+            # whichever weight was lower and overwrote the rest, which meant
+            # merging two graphs that had each proven a route made the groove
+            # shallower - the exact opposite of what shared experience should
+            # do. Labels: keep the better-attested edge's verdict, and keep
+            # any contradiction flag from either side.
+            e = target[new_u][new_v]
+            v1 = int(e.get('visits') or 1)
+            v2 = int(data.get('visits') or 1)
+            try:
+                w1 = float(e.get('weight') or 0.0)
+                w2 = float(data.get('weight') or 0.0)
+            except (TypeError, ValueError):
+                w1, w2 = 0.0, 0.0
+            pooled = (w1 * v1 + w2 * v2) / max(v1 + v2, 1)
+            if v2 > v1 and data.get('label'):
+                e['label'] = data.get('label')
+            if data.get('contradicted'):
+                e['contradicted'] = data.get('contradicted')
+            e['weight'] = round(min(max(pooled, 0.05), 1.0), 4)
+            e['visits'] = v1 + v2
         else:
             target.add_edge(new_u, new_v, **data)
 

@@ -194,6 +194,24 @@ json_schemas = {
                         "type": "string",
                         "enum": ["gate", "judgement", "scratchpad"]
                     },
+                    # How fork candidates are filtered and annotated.
+                    # 'similarity': nearest-k by embedding, no floor - as
+                    # originally shipped. 'grooved': inherited candidates
+                    # below a similarity floor are cut (the run's own nodes
+                    # never are), and every candidate carries its groove
+                    # (proven Go/Progress evidence) and edge-distance to the
+                    # goal area as annotations for the arbiter. Annotations,
+                    # not sort keys: ordering by them anchored agents to
+                    # their own first ideas.
+                    "candidate_ranking": {
+                        "type": "string",
+                        "enum": ["similarity", "grooved"]
+                    },
+                    # The groove as a guard-rail: when the keeper can
+                    # deterministically recognise a draft re-treading
+                    # already-refuted ground, the draft is regenerated once
+                    # with the refutation named, before the turn is spent.
+                    "move_guard": {"type": "boolean"},
                     # Whether the aim scaffold runs at all. 'off' is the
                     # ablation of the original design: no aim, no judge, no
                     # graph writes - a plain conversing agent.
