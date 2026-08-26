@@ -27,6 +27,9 @@ almost never finishes.
 | near-duplicate messages | 0.27 | 0.15 |
 | longest repeat streak | 7.0 | 2.9 |
 
+The table is the pre-registered replication, and both of its tests passed as
+registered: solving at Fisher p = 0.0084, looping at Mann-Whitney z = 2.37.
+
 Looping also falls monotonically as the scaffold and then the graph come on
 (0.32 → 0.14 → 0.035 near-dup across off / aims-only / aims+graph).
 

@@ -1,6 +1,6 @@
 # Studies
 
-Scripted versions of experiments you can also run by hand in the app.
+This directory contains the full GoalGraph evaluation program: thirteen pre-registered study series and roughly 600 scored runs as of August 2026. Pre-registrations live in study docstrings, engagement tripwires prevent dead arms from passing as results, settings are echoed before model spend, designs receive adversarial verification passes, and negative results remain recorded and scoped. AI agents executed the program under the author's direction, with every result mechanically verified before recording. The study scripts are the canonical method for producing and reproducing the reported measurements.
 
 | file | what it does |
 |---|---|

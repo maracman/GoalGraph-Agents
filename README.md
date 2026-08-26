@@ -1,6 +1,18 @@
 # GoalGraph
 
-**Chat agents that keep a map of what they have tried.**
+**Goal-graph scaffolding that records which aims advanced or were refuted, then feeds the result back so LLM agents do not loop or re-derive.**
+
+![In development since 2023](https://img.shields.io/badge/in%20development-since%202023-2f6f9f) ![Study series 13](https://img.shields.io/badge/study%20series-13-496b3a) ![Scored runs roughly 600](https://img.shields.io/badge/scored%20runs-roughly%20600-755a9f) ![Evaluation August 2026](https://img.shields.io/badge/evaluation-August%202026-9a5b34)
+
+**Proof at a glance**
+
+- In the pre-registered replication, an aimless small model solved **1/20** and the full system **9/20** (Fisher **p = 0.0084**), with near-duplicate looping falling from **0.27 to 0.15** (Mann-Whitney **z = 2.37**).
+- A graph paved by a strong model lifted a floored small model from **0.00 to 0.80 accepted answers per session** (**z = 3.03**).
+- Agents selected a graph aim on **96% of choices** when allowed to pick.
+
+**How it was proven**
+
+The [August 2026 measurements](docs/DEMONSTRATION.md) come from [thirteen pre-registered study series](studies/) and roughly 600 scored runs. Study docstrings hold the pre-registrations, engagement tripwires prevent dead arms from passing as results, settings are echoed before model spend, and study designs receive adversarial verification passes. AI agents executed the program under the author's direction, and every result was mechanically verified before recording. Every documented capability claim carries its measurement and reproduction script; negative results remain recorded and scoped.
 
 GoalGraph is a web app for running conversations in which each agent is
 pursuing something. As it talks, the agent sets itself a short-range **aim**, a
