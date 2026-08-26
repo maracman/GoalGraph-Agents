@@ -34,7 +34,10 @@ _ASSERTION = re.compile(
     r'\bi (?:now |would |will )?diagnose\b'
     r'|\bi am diagnosing\b'
     r'|\b(?:my|the|final|working) diagnosis is\b'
-    r'|\bdiagnosis\s*:',
+    # "diagnosis:" commits; "differential diagnosis:" enumerates. The bare
+    # form matched inside the differential one, which scored a clinician
+    # LISTING candidates as committing to whichever came first.
+    r'|(?<!differential )\bdiagnosis\s*:',
     re.I)
 
 # Hedges and refusals that precede the assertion rather than complete it:
@@ -68,16 +71,26 @@ def claimed_label(text, labels):
         # the first in the caller's list order. That distinction is the whole
         # bug: "I diagnose Influenza" in a message that also mentions HIV was
         # scored as HIV purely because HIV sorts earlier.
-        best, best_at = None, len(tail) + 1
+        # Only look inside the sentence the assertion starts; text past the
+        # full stop is discussion, not the commitment.
+        sentence_end = tail.find('.')
+        span = tail if sentence_end < 0 else tail[:sentence_end + 1]
+        best, best_at, named = None, len(span) + 1, set()
         for key, aliases in labels.items():
             for alias in aliases:
                 alias = str(alias or '').strip().lower()
                 if not alias:
                     continue
-                at = tail.find(alias)
-                if 0 <= at < best_at:
-                    best, best_at = key, at
-        if best is not None:
+                at = span.find(alias)
+                if at >= 0:
+                    named.add(key)
+                    if at < best_at:
+                        best, best_at = key, at
+        # Naming several conditions in the committing sentence is a list, not
+        # a commitment - "diagnosis: HIV, influenza or SLE" commits to none
+        # of them, and scoring the nearest was inventing a choice the speaker
+        # did not make.
+        if best is not None and len(named) == 1:
             return best
     return None
 
