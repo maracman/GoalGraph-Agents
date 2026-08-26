@@ -8,7 +8,7 @@ judge decides each turn whether that aim was reached, evolved, or should be
 abandoned, and every one of those decisions is written into a graph belonging to
 that agent.
 
-The graph is the point. It is not a log — it is fed back in. When the agent needs
+The graph is the point. It is not a log: it is fed back in. When the agent needs
 a new aim, it first looks in the graph for a route it already knows, and it is
 told which approaches have already been ruled out. Graphs can be saved, merged,
 and loaded into a different agent, so what one run learned is available to the
@@ -89,7 +89,7 @@ orange fans are aims it ruled out and did not revisit.
 ![A graph mid-run](screenshots/ui_graph_ddx_w4_anchored.png)
 
 Dense refutation is normal, not a malfunction. A run that tests many hypotheses
-and discards most of them looks like this — a few green spines with orange
+and discards most of them looks like this: a few green spines with orange
 sprays hanging off the nodes where the agent was working hardest.
 
 ![A dense graph](screenshots/ui_graph_ddx_w2.png)
@@ -103,7 +103,7 @@ one where something completed.
 
 Refuted aims are usually the majority of the picture, so the **Hide ruled-out
 aims** checkbox above the viewer is often the only way to see the route that was
-actually taken. This is the same graph as the one above with the box ticked —
+actually taken. This is the same graph as the one above with the box ticked:
 fifty-three nodes become thirty-two, and what is left is the spines and their
 endpoints.
 
@@ -119,14 +119,14 @@ graph has become doubtful about it.
 
 Everything in the picture is carrying information. Nothing is decorative.
 
-**Node colour** — set by the verdict on the edge that arrives at it:
+**Node colour**: set by the verdict on the edge that arrives at it:
 
 | colour | meaning |
 |---|---|
 | near-black | `start`. Every graph begins here. |
-| **green** | **Progress** — the aim evolved into a better or more specific one, and the run went on from here. |
-| **blue** | **Go** — the aim was reached. |
-| **orange** | **NoGo** — the aim was ruled out. |
+| **green** | **Progress**: the aim evolved into a better or more specific one, and the run went on from here. |
+| **blue** | **Go**: the aim was reached. |
+| **orange** | **NoGo**: the aim was ruled out. |
 | pale grey | nothing has been decided about this node yet. |
 
 **Node size** grows with the number of edges meeting at it, so hubs are where
@@ -137,14 +137,14 @@ the agent spent its effort.
 verdict and drops in confidence, so a reused graph shows routes that have become
 doubtful rather than ones that silently changed their mind.
 
-**Edge thickness** is confidence — the width is `1 + 4 × confidence`, so a
+**Edge thickness** is confidence: the width is `1 + 4 × confidence`, so a
 well-supported verdict is visibly heavier than a marginal one.
 
 **Solid or dashed** is the thing worth learning first:
 
-- **solid** — checked against evidence. A keeper, or the agent's own test
+- **solid**: checked against evidence. A keeper, or the agent's own test
   applied to an observation, settled this.
-- **dashed** — the LLM judge's opinion.
+- **dashed**: the LLM judge's opinion.
 
 A proven refutation should not look like a hunch, so it doesn't.
 
@@ -164,12 +164,12 @@ informative before you read a single label:
 
 The viewer has a small explorer panel, top left:
 
-- **Find node** — type to search node labels, with autocomplete.
-- **Fit** — zoom the whole graph back into view.
-- **Labels** — on or off. On automatically for graphs of 20 nodes or fewer;
+- **Find node**: type to search node labels, with autocomplete.
+- **Fit**: zoom the whole graph back into view.
+- **Labels**: on or off. On automatically for graphs of 20 nodes or fewer;
   off above that, because a hundred labels is a wall of text.
 - **The detail panel** shows the node count, and once you hover or select a
-  node, its incoming and outgoing neighbours as buttons — click them to walk the
+  node, its incoming and outgoing neighbours as buttons. Click them to walk the
   graph one hop at a time.
 - Hovering an edge shows its verdict, its confidence, whether it was checked or
   judged, and how many times it has been seen.
@@ -185,7 +185,7 @@ With `aim_system` on, each time an agent takes a turn:
 
 1. **Pick an aim.** If the agent has no active aim, the system searches the
    graph for a known route toward its goal. If it finds one, the next node on
-   that route becomes the aim. If not, the LLM writes a new aim — and is told
+   that route becomes the aim. If not, the LLM writes a new aim, and is told
    which approaches have already been ruled out, so it doesn't propose them
    again.
 2. **Respond.** The agent generates a reply in character, with its current aim
@@ -227,11 +227,11 @@ With `aim_system` on, each time an agent takes a turn:
 
 | verdict | condition |
 |---|---|
-| **Go** | rating ≥ 6 — the aim was reached |
+| **Go** | rating ≥ 6: the aim was reached |
 | **Progress** | the aim evolved into a better or more current one |
 | **NoGo** | rating ≤ 2, once the aim has had its minimum run |
-| **NoGo** | the score dropped by more than a point *and* the rating is ≤ 4 — going backwards |
-| **NoGo** | out of patience — stuck too long, forced abandonment |
+| **NoGo** | the score dropped by more than a point *and* the rating is ≤ 4, meaning it is going backwards |
+| **NoGo** | out of patience, stuck too long and forced abandonment |
 
 Two per-agent settings control how long an aim gets:
 
@@ -247,13 +247,13 @@ to look at rather than a conversation to read.
 
 ### What an edge weight means
 
-The weight on every edge is a **confidence between 0 and 1** — how much this
+The weight on every edge is a **confidence between 0 and 1**, showing how much this
 verdict should be trusted. One number, read by everything.
 
 | where the verdict came from | confidence |
 |---|---|
-| checked against evidence — a keeper, or the agent's own test applied to an observation | `1.0` |
-| the LLM judge | `0.3` plus `0.075` for each point the rating sits away from the midpoint of 4, capped at `0.6` — so `0.30` for a rating of 4, `0.525` at either extreme |
+| checked against evidence, including a keeper, or the agent's own test applied to an observation | `1.0` |
+| the LLM judge | `0.3` plus `0.075` for each point the rating sits away from the midpoint of 4, capped at `0.6`, so `0.30` for a rating of 4, `0.525` at either extreme |
 
 Opinion is deliberately held below certainty so that no rating, however
 confident, can outrank something that was actually checked.
@@ -263,7 +263,7 @@ moves it toward 1 and contradiction toward 0, both at rate `1/visits`. The secon
 visit moves the estimate halfway; the tenth barely moves it at all. A route
 confirmed four times dents to `0.80` on one contradiction, while a route seen
 once drops to `0.50`. A contradicted edge keeps its label, records `contested`,
-and renders amber — doubted, not deleted.
+and renders amber: doubted, not deleted.
 
 **For pathfinding**, confidence is turned into a cost: `1.1 − c` for a route and
 `1 + 10c` for a dead end. A well-supported route is cheap to take, and a *proven*
@@ -313,7 +313,7 @@ as separate graphs, even when the wording never matched.
 
 The **Decision Graph** panel in the sidebar holds the settings that decide what
 the graph does. They are in the UI rather than in code because a run is only
-interpretable if you can see how it was configured — and every one of them is
+interpretable if you can see how it was configured, and every one of them is
 written onto every row of the exported data.
 
 ### Aim system
@@ -336,8 +336,8 @@ agent with code that holds a hidden rule, so its claims can be tested.
 | `transformation` | code holding a hidden constraint on legal states | an intermediate state on the way to a goal |
 | `constraints` | code holding several hidden rules that must all hold | a belief about one of the rules |
 | `troubleshoot` | code holding a hidden fault | a belief about where the fault is |
-| `diagnosis` | another agent — a patient with a hidden condition | a belief about which condition |
-| `clinic` | another agent — a reserved patient, criteria-based | a criterion, pinned down or ruled out |
+| `diagnosis` | another agent, a patient with a hidden condition | a belief about which condition |
+| `clinic` | another agent, a reserved patient, criteria-based | a criterion, pinned down or ruled out |
 | `ddx_clinic` | the clinic game built from the public DDXPlus corpus (CC-BY-4.0) | as `clinic`, but with real conditions and symptoms, and guarded facts whose indirect routes are measured from patient co-occurrence rather than chosen |
 | `hidden_norm` | code deciding warm or flat replies from a hidden property of your message | a hypothesis, tested through dialogue |
 
@@ -355,19 +355,19 @@ rule you add appears in the panel without rebuilding the frontend.
 ### What the agent is told about ruled-out aims
 
 `graph_memory_mode` decides what, if anything, comes back from the graph. The
-four modes are a comparison, not a ranking — running the same task under each is
+four modes are a comparison, not a ranking: running the same task under each is
 how you find out whether the graph earns its keep.
 
 | mode | UI label | what reaches the prompt | cost |
 |---|---|---|---|
-| `none` | Off | nothing. The graph is still recorded when `aim_system` is on. | zero — the control arm |
+| `none` | Off | nothing. The graph is still recorded when `aim_system` is on. | zero, the control arm |
 | `inline` | Said once | the refutation is stated once, in the conversation, then left to scroll out of the window | one sentence, once |
-| `description` | Full list | every ruled-out aim, re-inserted every turn, no reasons and no filtering | grows with the graph — around 6,400 characters once 137 aims are ruled out |
+| `description` | Full list | every ruled-out aim, re-inserted every turn, no reasons and no filtering | grows with the graph, around 6,400 characters once 137 aims are ruled out |
 | `graph` | Retrieval | the nearest few ruled-out aims, each with the observation that killed it | fixed by the two limits below, not by graph size |
 
 In `graph` mode, two extra sliders appear: **aims recalled per turn**
 (`graph_recall_k`, default 4) and a **character budget** (`graph_recall_chars`,
-default 600). The budget is a hard ceiling — aims past it are dropped and the
+default 600). The budget is a hard ceiling: aims past it are dropped and the
 agent is told how many were left out, so it knows the list is partial.
 
 ### Who decides the next aim
@@ -379,7 +379,7 @@ route's similarity to the goal multiplied by `graph_trust`, against
 
 That product latches off. A failed route multiplies trust by `TRUST_DECAY`
 (0.6), so after one failure routing needs a similarity of 0.67 and after two it
-needs 1.1, which is unreachable — node-label-to-goal-brief similarity tops out
+needs 1.1, which is unreachable: node-label-to-goal-brief similarity tops out
 near 0.46. The trust values in the recorded runs are exactly 0.6ⁿ, so this is
 observed rather than argued. `TRUST_FLOOR` is commented "never quite stop
 listening to the graph"; against a 0.40 gate it means the opposite.
@@ -398,7 +398,7 @@ the time it has nothing to offer.
 | mode | who decides | what it is for |
 |---|---|---|
 | `gate` | `similarity × trust ≥ route_min_score` | the shipped behaviour, and the control |
-| `judgement` | the agent, from the graph's candidates, with only the conversation | separates "let the agent decide" from "give it a memory" — without it, any gain could be the extra model call |
+| `judgement` | the agent, from the graph's candidates, with only the conversation | separates "let the agent decide" from "give it a memory"; without it, any gain could be the extra model call |
 | `scratchpad` | the agent, plus a running note it rewrites each turn | the note is capped by the same `graph_recall_chars` retrieval spends |
 
 Both arbitrated modes see candidates drawn from the same sources: the next step
@@ -451,7 +451,7 @@ out of view.
 
 **Let the judge abandon an aim before it matures** (`nogo_ungated`), off by
 default. Off, only a refutation the keeper settles from evidence may skip the
-minimum persistence — a fact needs no waiting period, an opinion does. On, the
+minimum persistence: a fact needs no waiting period, an opinion does. On, the
 judge can also abandon an aim on its first bad rating, which tends to collapse
 the graph into a hub of dead ends with no `Go` edges at all, because no aim
 survives long enough to progress. Regression and impatience always wait either
@@ -473,7 +473,7 @@ it to the graph library, then start a fresh agent from it:
 POST /api/saved_graphs/<graph_id>/load_into/<agent_id>
 ```
 
-By default every carried-over aim is marked **unverified**, and recall says so —
+By default every carried-over aim is marked **unverified**, and recall says so:
 *"learned under a different setup, treat as unconfirmed and worth re-testing."*
 That default matters: a verdict established under one configuration is a claim
 under another, not a fact, and an agent that trusts a stale `NoGo` will suppress
@@ -515,20 +515,20 @@ Two columns carry most of the interpretive weight:
   `judge` where it is an LLM's opinion. It tells you how much of the graph is
   fact.
 - **`graph_contribution_chars`** is how many characters the memory actually put
-  into that turn's prompt — the retrieved aims, plus whatever the aim fork read
+  into that turn's prompt, including the retrieved aims, plus whatever the aim fork read
   on turns where it ran. **If it is 0, the memory never engaged and the run is
   not a test of anything.** Check it before believing any comparison.
 
 `stated_rule` holds whatever structured claim the agent was asked for: the
 keeper's checkable rule where there is one, and the scratchpad on the tasks
 where there is not. Only one of the two is ever requested on a given run, so the
-column stays unambiguous — but it means an empty `stated_rule` on a clinical
+column stays unambiguous, but it means an empty `stated_rule` on a clinical
 task tells you the scratchpad was off, not that the agent said nothing.
 
 Two columns describe the aim, and they are not the same thing.
 `aim_chosen_this_turn` is what decided *this* turn's aim. `aim_source` is the
 source last set at the post-verdict fork, which persists across turns until the
-next verdict — so it does not see the Step-1 routing that happens when an aim
+next verdict, so it does not see the Step-1 routing that happens when an aim
 has just been abandoned. Both were once spelled `aim_source` in the same dict
 literal, so the first was silently dropped for the whole history of the
 project; the older column keeps its meaning so prior results stay comparable.
@@ -537,7 +537,7 @@ project; the older column keeps its meaning so prior results stay comparable.
 the aim fork ran, and only when `aim_fork_mode` is not `gate`. `fork_outcome` is
 `graph_path` when the agent took a place from the graph, `carried` when it
 named its own, and `fell_through` when it could not decide and the trust gate
-settled it after all — which is worth reading before crediting the setting with
+settled it after all. This is worth reading before crediting the setting with
 a change, since a fork that always falls through is the old mechanism wearing a
 new name.
 
@@ -550,7 +550,7 @@ The settings are repeated on **every row** rather than written once in a header,
 so exports from runs under different settings can be concatenated into one file
 and grouped without any reshaping. Give each arm a different **run label**, and
 use **Start new run** to clear the recorded turns so what follows exports on its
-own — it marks a boundary in the data and leaves the conversation and the graph
+own. It marks a boundary in the data and leaves the conversation and the graph
 alone.
 
 `?format=json` on `/export_run_data` returns the same rows as JSON.
@@ -561,11 +561,11 @@ alone.
 
 ### Conversation modes
 
-**You + Agent** — you talk to one agent directly. It responds in character while
+**You + Agent**: you talk to one agent directly. It responds in character while
 pursuing its goal; when `aim_system` is on, the aim system, judge, and graph all
 run behind the scenes.
 
-**Agent vs Agent** — two or more agents talk to each other and you act as
+**Agent vs Agent**: two or more agents talk to each other and you act as
 narrator, setting the scene. Each pursues its own goal with its own graph, which
 is the setup for studying negotiation, debate, and whatever emerges.
 
@@ -577,7 +577,7 @@ retry and backoff intact for real rate limits. To build a dense graph fast:
 
 1. Create two agent presets with opposing goals.
 2. Give each a fast model in the Agent Library.
-3. Set `persistance` and `patience` low — 1 and 2.
+3. Set `persistance` and `patience` low, at 1 and 2.
 4. Start an Agent vs Agent chat, set a high turn count, tick Rapid, press Play.
 5. Save both graphs afterwards, and merge them to compare strategies.
 
@@ -597,7 +597,7 @@ Reusable agent presets:
 
 Setting a provider and model on a preset flips its
 `is_agent_generation_variables` flag, and that agent's calls route through its
-own provider instead of the session default — so you can put different models
+own provider instead of the session default, so you can put different models
 against each other in the same conversation.
 
 ### Graph library
@@ -621,7 +621,7 @@ Six seed graphs ship in `examples/graphs/`:
 
 ![The 129-node example strategy map](screenshots/example_strategy_map.png)
 
-Every edge here is dashed, because these are hand-authored seed graphs — nothing
+Every edge here is dashed, because these are hand-authored seed graphs. Nothing
 in them was checked against a keeper.
 
 ### Providers
@@ -698,12 +698,12 @@ buttons.
 └──────────────────────────────────────────────────────────────┘
 ```
 
-- **Frontend** — React 17 + Webpack 5, Context API for state, Lucide icons
-- **Backend** — Flask served by Waitress
-- **LLM access** — one abstraction layer with retry, fallback, and per-agent routing
-- **Graphs** — NetworkX directed graphs, `all-MiniLM-L6-v2` embeddings
-- **Visualisation** — PyVis HTML in an iframe, with the explorer panel injected
-- **Storage** — files on disk; no database
+- **Frontend**: React 17 + Webpack 5, Context API for state, Lucide icons
+- **Backend**: Flask served by Waitress
+- **LLM access**: one abstraction layer with retry, fallback, and per-agent routing
+- **Graphs**: NetworkX directed graphs, `all-MiniLM-L6-v2` embeddings
+- **Visualisation**: PyVis HTML in an iframe, with the explorer panel injected
+- **Storage**: files on disk; no database
 
 ## Project structure
 
@@ -726,7 +726,7 @@ GoalGraph-Agents/
 │   ├── styles/main.css
 │   ├── static/                     # Built bundle and generated graph HTML
 │   └── chat_cache/                 # Sessions, agent presets, graphs
-├── studies/                        # Scripted runs — the UI driven over HTTP
+├── studies/                        # Scripted runs, with the UI driven over HTTP
 ├── docs/                           # Worked example and development notes
 ├── examples/graphs/                # Seed GraphML files
 ├── screenshots/
@@ -843,7 +843,7 @@ run. Then export the CSV.
 |---|---|---|
 | GET | `/api/run_types` | tasks this build offers, and each one's hidden rules |
 | POST | `/update_user_settings` | task, rule, variant, aim system, memory mode, candidate ranking, move guard, window, gating, run label |
-| POST | `/reset_run_trail` | clear recorded turns — marks a boundary between arms |
+| POST | `/reset_run_trail` | clear recorded turns, marking a boundary between arms |
 | GET | `/export_run_data` | the CSV; `?format=json` for the same rows as JSON |
 | GET | `/get_llm_providers` · `/get_llm_models?provider=X` | what is available |
 | GET/POST | `/get_llm_settings` · `/update_llm_settings` | session LLM configuration |
@@ -857,16 +857,16 @@ run. Then export the CSV.
 
 The README describes the software. The research built with it lives elsewhere:
 
-- **[docs/DEMONSTRATION.md](docs/DEMONSTRATION.md)** — what the software does,
+- **[docs/DEMONSTRATION.md](docs/DEMONSTRATION.md)**: what the software does,
   measured, with the script that reproduces each demonstration.
-- **[docs/TOY_RESEARCH_PROJECT.md](docs/TOY_RESEARCH_PROJECT.md)** — a worked
+- **[docs/TOY_RESEARCH_PROJECT.md](docs/TOY_RESEARCH_PROJECT.md)**: a worked
   example, start to finish: an agent that interviews and remembers what it ruled
   out.
-- **[docs/DEVELOPMENT_NOTES.md](docs/DEVELOPMENT_NOTES.md)** — the task designs
+- **[docs/DEVELOPMENT_NOTES.md](docs/DEVELOPMENT_NOTES.md)**: the task designs
   that did not work, a regression that took a while to spot, and several
   occasions where the measuring tools produced a number that looked like a
   finding.
-- **[studies/](studies/)** — scripted versions of experiments you can also run by
+- **[studies/](studies/)**: scripted versions of experiments you can also run by
   hand. These are the UI driven over HTTP, not a separate measurement path: every
   setting goes through `/update_user_settings` and every number comes from
   `/export_run_data`. If a script and the panel ever disagree, the script is
