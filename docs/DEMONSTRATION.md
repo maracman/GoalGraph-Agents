@@ -102,6 +102,51 @@ performance lever. The leverage is:
 
 Reproduce the boundary: `studies/ddx_gradient.py`, `studies/constraints_memory.py`
 
+## Method
+
+All demonstrations drive the app over its own HTTP endpoints, exactly as the UI
+does. Every run starts a fresh server session with the second agent muted, so
+one agent proposes.
+
+The actor is `meta-llama/llama-3.2-3b-instruct` via an OpenAI-compatible host
+in strict provider mode: provider failure fails the run rather than switching
+models. The judge, planner, and fork arbiter use `gpt-5.4` through
+`judge_provider` / `judge_model`. Actor turns have a 250-token maximum;
+judge calls use temperature 0.5 and a 400-token maximum.
+
+Where graph recall is on, `k = 6` and the budget is 1,200 characters. Runs are
+capped at 40 generate calls, except the ddx uptake study, which uses 70. Arm
+order rotates per replicate block, runs resume by label, and
+`studies/results/` receives one JSON row per run.
+
+A `near-duplicate` has trigram-Jaccard >= 0.6 against any earlier message by
+the same agent. `distinct accepted` uses the keeper's novelty rule: word-overlap
+< 0.6 against the worked example and all earlier accepted answers. The paved-
+graph primary is a tie-corrected Mann-Whitney z on distinct accepted per run.
+
+The scaffold uses the constraints task, level `two_constraints`, window 24,
+gate fork, and n = 20 per arm. The three-arm layering figures use n = 12 per
+arm. Arms differ only in `aim_system` / `graph_memory_mode`.
+
+The paved-graph study uses level `five_constraints`, window 24, judgement fork,
+and n = 20 donor versus 19 unaided. `gpt-5.4` paves the donor graph on the same
+level with gate fork and window 24, carrying each solved run's graph into the
+next until three have solved. The final 28-node graph has 6 proof-stamped
+accepted sentences and transfers through the saved-graphs API; run-scoped dead
+ends are pruned on transfer. A template family has >= 0.5 word-overlap with a
+donor proof, or the sentence shape “was/is/are the ..., or not?”.
+
+The uptake study uses the ddx clinic task, window 3, a fixed 43-node inherited
+graph, and 72 runs across three fork arms. The 96% figure covers the 481 forks
+of the two agent-arbitrated arms.
+
+The provenance-floor study uses the ddx graph in the constraints task,
+judgement fork, and n = 8 per arm. Move-guard figures use gate-fork arms at
+n = 16.
+
+The named scripts are canonical: every setting they POST is the method, and
+each script's docstring states its design.
+
 ## Settings shipped
 
 | setting | values | what it does |

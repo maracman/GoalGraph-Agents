@@ -24,8 +24,40 @@ There are two ways to use it:
 
 ---
 
+## What it does, measured
+
+Everything below was measured on the shipped code, with a small open model
+(llama-3.2-3B) acting and gpt-5.4 judging, on the hidden-rules sentence task
+(`constraints`).
+
+### The scaffold
+
+| | no scaffold | full system |
+|---|---|---|
+| solved | 1/20 | **9/20** |
+| near-duplicate messages | 0.27 | 0.15 |
+| longest repeat streak | 7.0 | 2.9 |
+
+### A paved graph
+
+| | unaided 3B | 3B + paved graph |
+|---|---|---|
+| accepted answers per session | **0.00** (19 sessions, none) | **0.80** (z = 3.03) |
+| full solves | 0/19 | 3/20 |
+
+The proven **template** transfers: 18 of 19 accepted answers followed the
+sentence shape the donor graph proved.
+
+Agents take a graph aim on **96% of choices** when allowed to pick.
+
+See [docs/DEMONSTRATION.md](docs/DEMONSTRATION.md) for the full set and the
+reproduction scripts.
+
+---
+
 ## Contents
 
+- [What it does, measured](#what-it-does-measured)
 - [What a graph looks like](#what-a-graph-looks-like)
 - [How to read a graph](#how-to-read-a-graph)
 - [How it works](#how-it-works)
