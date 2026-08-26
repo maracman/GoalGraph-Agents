@@ -7,7 +7,7 @@ were refuted, and its job is to **remove friction along a path to a goal that
 has been proven before** — so an agent does not re-derive, re-litigate, or
 loop its way toward something a previous run already worked out.
 
-Six study series (≈300 scored runs, all pre-registered, all with engagement
+Ten study series (≈480 scored runs, all pre-registered, all with engagement
 tripwires) tested it both as what it is and as what it is not. The one-line
 summary:
 
@@ -41,7 +41,12 @@ aims (p ≈ 0.04).
 Honest caveat: the graph-vs-none *solve* split flipped direction between two
 studies run days apart (8/12 vs 3/12, then 3/12 vs 6/12) — the 3B is bimodal
 and hosted routing adds variance — so "the graph beats bare aims on solve
-rate" is **not established**. "The scaffold beats no scaffold" is.
+rate" is **not established**. "The scaffold beats no scaffold" is — and it
+**replicated**: a pre-registered confirmatory study (the two decisive arms
+only, n=20 each, nothing else varied) found solve 9/20 vs 1/20 (Fisher
+p = 0.0084) and looping 0.148 vs 0.271 (Mann-Whitney z = 2.37), both passing
+their pre-registered thresholds. This is the one effect in the investigation
+with a discovery and an independent replication behind it.
 
 ## 2. The paved path gets used — by every model
 
@@ -120,7 +125,38 @@ different task entirely (placebo).
   metrics are where the effects live. A blinded coherence comparison on
   open-ended roleplay would test the original claim on its own terms.
 
-## 5. Instrument findings that stand regardless of framing
+## 5. Making the groove explicit: five mechanisms tested, one lesson
+
+The "deeper groove / easier path" intuition was implemented five ways and
+each was tested against its own pre-registration on the weak-model platform:
+
+- **goal-hop ordering** (candidates sorted nearest-the-goal first): actively
+  harmful — on a young self-paved graph everything is one hop from
+  everything, the ordering made the agent's own first ideas look
+  authoritative, fork uptake doubled and the guard arm's solve rate halved.
+  The groove became a rut. Reverted to annotations.
+- **groove/hops annotations** (evidence shown per candidate, order
+  untouched): no detectable effect either way.
+- **similarity floor on inherited candidates**: mechanically perfect (junk
+  adoption 23 → 2 in the mismatch arm) but no outcome change — the harm it
+  guards against did not recur in the seasons it was tested.
+- **evidence-pooling merges** (visits sum, weights pool, instead of keeping
+  the shallower edge): kept as a straightforward bug fix — merging two
+  graphs that both proved a route used to make the groove shallower.
+- **the move guard** (a draft re-treading a rejected move is regenerated
+  once, with the refutation named): cuts re-treads ~4x (0.032 vs 0.120 per
+  proposal) but misses significance at n=16, converts to nothing on progress
+  or solve, and costs 12% more tokens. Re-treads were ~14% of proposals;
+  eliminating them could not move a task whose binding constraint is
+  cracking the rules.
+
+The lesson across all five matches the wider investigation: mechanisms that
+**withhold refuted or foreign options work as designed**, mechanisms that
+**push proven options do not help and can hurt**, and none of it moves
+outcomes while the arbiter already takes graph aims on ~96% of its choices.
+The scaffold carries the effect; the embellishments decorate it.
+
+## 6. Instrument findings that stand regardless of framing
 
 The graph-as-record earned its keep this week in a different way: the audits
 it enabled found and fixed real scoring bugs — the exported `aim_source`
@@ -134,5 +170,6 @@ from before them undercount routing and are not comparable.
 
 Full data: `studies/results/v3_fork_w3.json`, `v3_gradient.json`,
 `v3_constraints_w3.json`, `v3_weak_w3.json`, `v3_scaffold_w24.json`,
-`v3_transfer_two.json`. Study scripts under `studies/`, each with its design
-and pre-registration in the docstring.
+`v3_transfer_two.json`, `v3_grooved.json`, `v3_grooved2.json`,
+`v3_guard.json`, `v3_replicate.json`. Study scripts under `studies/`, each
+with its design and pre-registration in the docstring.
