@@ -168,7 +168,7 @@ def ensure_text_columns(agent_df):
 
 
 def annotate_aim(graph, node, status, reason=None, rating=None, turn=None,
-                 ruleset=None, enabled=True, evidence=False):
+                 ruleset=None, enabled=True, evidence=False, proof_move=None):
     """Attach to a node the payload the graph would otherwise throw away.
 
     Without this, `graph` memory mode has nothing to retrieve: recall looks for
@@ -201,6 +201,12 @@ def annotate_aim(graph, node, status, reason=None, rating=None, turn=None,
     # The first, specific justification beats a later vague restatement.
     if reason and len(str(reason)) > len(str(data.get('reason', ''))):
         data['reason'] = str(reason)[:300]
+    # The move that PROVED this aim - the accepted answer itself, not the
+    # strategy that produced it. Without it a proven node is advice; with it
+    # the node is rideable by an agent that could never have derived the move,
+    # which is the population proven paths exist for.
+    if proof_move:
+        data['proof_move'] = str(proof_move)[:300]
     return graph
 
 
@@ -412,9 +418,11 @@ def route_candidates(graph, current_node, path_result, current_aim='',
             data = graph.nodes[nbr]
             if data.get('status') in (NOGO, 'abandon'):
                 continue
+            why = f"reached from here before ({data.get('status') or 'open'})"
+            if data.get('proof_move'):
+                why += f"; proven with: \"{data['proof_move']}\""
             out.append({'node': nbr, 'kind': 'neighbour', 'similarity': None,
-                        'why': f"reached from here before "
-                               f"({data.get('status') or 'open'})"})
+                        'why': why})
             seen.add(nbr)
 
     if len(out) < limit and current_aim:
@@ -472,6 +480,16 @@ def route_candidates(graph, current_node, path_result, current_aim='',
             if bits:
                 c['why'] = f"{c['why']}; {', '.join(bits)}"
     return out[:limit]
+
+
+def proof_for(graph, aim):
+    """The stored proof behind an aim, when the aim is a graph node."""
+    try:
+        if aim and aim in graph:
+            return str(graph.nodes[aim].get('proof_move') or '')[:300]
+    except Exception:                                              # noqa: BLE001
+        pass
+    return ''
 
 
 def fork_mode(generation_vars):
@@ -771,7 +789,8 @@ def windowed(history, context_window):
 
 def format_prompt(history, agent_description, goal, name, user_name,
                   current_aim=None, suggestion=None, last_narration=None,
-                  ruled_out=None, context_window=0, rule_field=''):
+                  ruled_out=None, context_window=0, rule_field='',
+                  aim_proof=''):
     """Format the prompt for the agent, including subgoal context.
 
     `ruled_out` is what the decision graph has already established does not
@@ -790,6 +809,18 @@ workspace of possible aims, not as a single fixed route.
 """
     if current_aim:
         system_prompt += f"\nYour current aim is: {current_aim}\n"
+        # The proof rides the aim, not the suggestion. The suggestion is
+        # rewritten by the judge every turn, so anything delivered there
+        # survives exactly one turn - measured: proofs reached the actor about
+        # once per run while it sat on proof-carrying aims for hundreds of
+        # turns. The aim is the one channel that persists as long as the aim
+        # does, so a proven example is visible every turn the agent pursues
+        # the aim it proves.
+        if aim_proof:
+            system_prompt += (f"A previously ACCEPTED answer for this aim: "
+                              f"\"{aim_proof}\" - producing answers of this "
+                              f"proven shape (with different words) is known "
+                              f"to work.\n")
     if suggestion:
         system_prompt += f"Suggested next action: {suggestion}\n"
     if ruled_out:
@@ -1226,6 +1257,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
 
     agent_name = agent['agent_name']
     current_aim = clean_text(agent['current_aim'])
+    aim_proof = clean_text(agent.get('aim_proof'), '')
     suggestion = clean_text(agent['suggestion'], '')
     persistence_count = agent['persistance_count']
     # How much the graph has been worth *this run*. Falls when a route it
@@ -1258,6 +1290,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
     if trail is not None:
         llm_service.reset_usage()
     verdict_src = OPINION   # upgraded to PROOF when a keeper settles it
+    proof_move = None       # the accepted move behind a PROOF verdict, if any
     move_guard_fired = 0
     stated_rule = ''
     inline_notes = []   # refutations spoken once into the conversation
@@ -1316,6 +1349,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
             logs.append(f"Fork chose the opening aim for {agent_name} "
                         f"({aim_source}): {current_aim}")
             aim_came_from = aim_source
+            aim_proof = proof_for(G, current_aim)
         elif path_result is not None:
             path, target_node, similarity = path_result
             # The next node on the path becomes our aim
@@ -1335,6 +1369,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                 f"(path to '{target_node}', similarity={similarity:.2f})"
             )
             aim_came_from = aim_source
+            aim_proof = proof_for(G, current_aim)
         else:
             # No useful path found – ask the LLM to generate a new aim
             new_subgoal, planned_action = generate_new_subgoal(
@@ -1347,6 +1382,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
             persistence_score = None
             logs.append(f"New aim for {agent_name}: {current_aim}")
             aim_came_from = aim_source
+            aim_proof = ''
 
     # ------------------------------------------------------------------
     # What the graph put into this turn's prompt. Recorded rather than
@@ -1420,7 +1456,8 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
         last_narration=last_narration,
         ruled_out=ruled_out,
         context_window=effective_window(agent, generation_vars),
-        rule_field=rule_field
+        rule_field=rule_field,
+        aim_proof=aim_proof
     )
 
     logger.info(f"Generating response for {agent_name}")
@@ -1458,6 +1495,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
 
         agent_df = ensure_text_columns(pd.DataFrame(agents_df))
         agent_df.at[agent_idx, 'current_aim'] = current_aim
+        agent_df.at[agent_idx, 'aim_proof'] = aim_proof
         agent_df.at[agent_idx, 'suggestion'] = suggestion
         agent_df.at[agent_idx, 'persistance_count'] = persistence_count
         agent_df.at[agent_idx, 'graph_trust'] = round(float(graph_trust), 4)
@@ -1550,10 +1588,18 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                 aim_status, rating, verdict_src = 'achieved', 7, PROOF
                 justification = "Task completed, confirmed by the keeper."
                 logs.append("ACHIEVED, confirmed by evidence")
+                try:
+                    proof_move = keeper.extract_move(response_text)
+                except Exception:                                  # noqa: BLE001
+                    proof_move = None
             elif advanced:
                 # rating stays below the Go threshold so this records as a
                 # step taken rather than an aim finished
                 aim_status, rating, verdict_src = 'progress', 5, PROOF
+                try:
+                    proof_move = keeper.extract_move(response_text)
+                except Exception:                                  # noqa: BLE001
+                    proof_move = None
                 justification = "Advanced, confirmed by the keeper: " + \
                     keeper.progress_note(after_history)
                 # Progress needs somewhere to go, or the branch cannot fire
@@ -1701,12 +1747,15 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                 annotate_aim(G, new_node, 'Go', reason=justification, rating=rating,
                              turn=turn_index, ruleset=agent.get('goal'),
                              enabled=generation_vars.get('graph_memory_mode') == 'graph',
-                             evidence=(verdict_src == PROOF))
+                             evidence=(verdict_src == PROOF),
+                             proof_move=(proof_move if verdict_src == PROOF
+                                         else None))
                 current_node = new_node
                 current_aim, aim_source, graph_hint, rejected = choose_aim(
                     G, current_node, agent['goal'], next_aim, generation_vars,
                     trust=graph_trust, notepad=notepad)
                 aim_came_from = aim_source
+                aim_proof = proof_for(G, current_aim)
                 graph_contribution += record_fork_cost(trail, generation_vars)
                 suggestion = graph_hint or (new_suggestion if current_aim else '')
                 persistence_count = 0
@@ -1732,12 +1781,15 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                 annotate_aim(G, new_node, 'Progress', reason=justification, rating=rating,
                              turn=turn_index, ruleset=agent.get('goal'),
                              enabled=generation_vars.get('graph_memory_mode') == 'graph',
-                             evidence=(verdict_src == PROOF))
+                             evidence=(verdict_src == PROOF),
+                             proof_move=(proof_move if verdict_src == PROOF
+                                         else None))
                 current_node = new_node
                 current_aim, aim_source, graph_hint, rejected = choose_aim(
                     G, current_node, agent['goal'], next_aim, generation_vars,
                     trust=graph_trust, notepad=notepad)
                 aim_came_from = aim_source
+                aim_proof = proof_for(G, current_aim)
                 graph_contribution += record_fork_cost(trail, generation_vars)
                 suggestion = graph_hint or new_suggestion
                 persistence_count = 0
@@ -1823,6 +1875,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
                         inline_notes.append(('narrator', note))
                         logs.append("Stated the refutation inline, once.")
                     current_aim = None
+                    aim_proof = ''
                     suggestion = ''
                     persistence_count = 0
                     persistence_score = None
@@ -1862,6 +1915,7 @@ def main(history, agents_df, settings, user_name, is_user, agent_mutes,
 
     agent_df = ensure_text_columns(pd.DataFrame(agents_df))
     agent_df.at[agent_idx, 'current_aim'] = current_aim
+    agent_df.at[agent_idx, 'aim_proof'] = aim_proof
     agent_df.at[agent_idx, 'suggestion'] = suggestion
     agent_df.at[agent_idx, 'persistance_count'] = persistence_count
     agent_df.at[agent_idx, 'graph_trust'] = round(float(graph_trust), 4)
