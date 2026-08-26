@@ -26,10 +26,11 @@ told which approaches have already been ruled out. Graphs can be saved, merged,
 and loaded into a different agent, so what one run learned is available to the
 next.
 
-GoalGraph has been in development since 2023. It was built in the Llama-2 era
-to stop local agents losing their goals and looping, moved to this repository
-in March 2025, and produced the measured demonstrations in
-docs/DEMONSTRATION.md in August 2026.
+The idea for GoalGraph was sketched in late 2022, prompted by the STaR paper
+(Zelikman et al., 2022), and the earliest surviving notebooks date from January
+2023. The system was built out in the Llama-2 era to stop local agents from
+losing their goals and looping, then moved to this repository in March 2025.
+The measured demonstrations in docs/DEMONSTRATION.md are from August 2026.
 
 There are two ways to use it:
 
